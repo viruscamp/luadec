@@ -136,28 +136,6 @@ LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int
 	return self;
 }
 
-int AddToLoopTree(Function* F, LoopItem* item){
-	if(item->body >= F->loop_ptr->body && item->end < F->loop_ptr->end){
-		//last item is parent, must be the first child
-		item->parent = F->loop_ptr;
-		F->loop_ptr->child = item;
-
-		F->loop_ptr = item;
-		return 1;
-	}
-	if(item->end < F->loop_ptr->body ){
-		//last item is brother, insert before it
-		item->parent = F->loop_ptr->parent;
-		F->loop_ptr->parent->child = item;
-		
-		item->next = F->loop_ptr;
-		F->loop_ptr->prev = item;
-
-		F->loop_ptr = item;
-		return 1;
-	}
-}
-
 int MatchLoopItem(LoopItem* item, LoopItem* match)
 {
 	return ((item->type == match->type)||(match->type == INT_MIN))
@@ -168,16 +146,63 @@ int MatchLoopItem(LoopItem* item, LoopItem* match)
 		&& ((item->next_code == match->next_code)||(match->next_code == INT_MIN));
 }
 
-IntListItem *NewIntListItem(int v)
-{	
+int AddToLoopTree(Function* F, LoopItem* item){
+	if ( item->body >= F->loop_ptr->body && item->end < F->loop_ptr->end){
+		//last item is parent, must be the first child
+		item->parent = F->loop_ptr;
+		F->loop_ptr->child = item;
+
+		F->loop_ptr = item;
+		return 1;
+	}
+	if ( item->end < F->loop_ptr->body ){
+		//last item is brother, insert before it
+		item->parent = F->loop_ptr->parent;
+		F->loop_ptr->parent->child = item;
+		
+		item->next = F->loop_ptr;
+		F->loop_ptr->prev = item;
+
+		F->loop_ptr = item;
+		return 1;
+	}
+	return 0;
+}
+
+void DeleteLoopTree(LoopItem* item){
+	LoopItem* next = item;
+	while (item){
+		if (item->child){
+			next = item->child;
+			item->child = NULL;
+		}else{
+			if (item->next){
+				next = item->next;
+				item->next = NULL;
+			}else{
+				next = item->parent;
+			}
+			free(item);
+		}
+		item = next;
+	}
+}
+
+void DeleteLoopTree2(LoopItem* item){
+	if (item == NULL) return;
+	DeleteLoopTree2(item->child);
+	DeleteLoopTree2(item->next);
+	free(item);
+}
+
+IntListItem *NewIntListItem(int v){
 	IntListItem* self = calloc(sizeof(IntListItem), 1);
 	((ListItem *) self)->next = NULL;
 	self->value = v;
 	return self;
 }
 
-int MatchIntListItem(IntListItem* item, IntListItem* match)
-{
+int MatchIntListItem(IntListItem* item, IntListItem* match){
 	return (item->value == match->value);
 }
 
@@ -634,11 +659,18 @@ void FlushBoolean(Function * F) {
 		char* test;
 		int endif;
 		int thenaddr;
-		LoopItem* witem = NewLoopItem(WHILE, INT_MIN, INT_MIN,thenaddr - 1, INT_MIN, endif -1);
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
+		LoopItem* walk = F->loop_ptr;
 		if (error) return;
-		if (FindInList(&(F->loop_tree),(ListItemCmpFn)MatchLoopItem,&witem)){
+		//search parent
+		while (walk){
+			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
+				break;
+			}
+			walk = walk->parent;
+		}
+		if (walk){
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
 			if (error) return;
 			StringBuffer_addPrintf(str, "while %s do", test);
@@ -653,7 +685,6 @@ void FlushBoolean(Function * F) {
 			RawAddStatement(F, str);
 			F->indent++;
 		}
-		free(witem);
 		StringBuffer_delete(str);
 	}
 	F->testpending = 0;
@@ -718,6 +749,13 @@ DecTableItem *NewTableItem(char *value, int num, char *key)
 	self->numeric = num;
 	self->key = luadec_strdup(key);
 	return self;
+}
+
+void DeleteTableItem(DecTableItem* item,void* dummy)
+{
+	free(item->value);
+	free(item->key);
+	free(item);
 }
 
 /*
@@ -791,6 +829,8 @@ void DeleteTable(DecTable * tbl)
 	/*
 	* TODO: delete values from table 
 	*/
+	LoopList(&(tbl->keyed),DeleteTableItem,NULL);
+	LoopList(&(tbl->numeric),DeleteTableItem,NULL);
 	free(tbl);
 }
 
@@ -1012,12 +1052,12 @@ Function *NewFunction(const Proto * f)
 	self->vpend = calloc(sizeof(VarStack), 1);
 	self->tpend = calloc(sizeof(IntSet), 1);
 
-	self->loop_tree = NewLoopItem(FUNC_ROOT,0,0,0,f->sizecode-1,f->sizecode);
+	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
-	self->repeats = calloc(sizeof(IntSet), 1);
-	self->repeats->mayRepeat = 1;
-	self->untils = calloc(sizeof(IntSet), 1);
+	//self->repeats = calloc(sizeof(IntSet), 1);
+	//self->repeats->mayRepeat = 1;
+	//self->untils = calloc(sizeof(IntSet), 1);
 	InitList(&(self->breaks));
 	self->do_opens = calloc(sizeof(IntSet), 1);
 	self->do_closes = calloc(sizeof(IntSet), 1);
@@ -1052,8 +1092,8 @@ void DeleteFunction(Function * self)
 	StringBuffer_delete(self->decompiledCode);
 	free(self->vpend);
 	free(self->tpend);
-	free(self->repeats);
-	free(self->untils);
+	//free(self->repeats);
+	//free(self->untils);
 	free(self->do_opens);
 	free(self->do_closes);
 	free(self);
@@ -1257,11 +1297,9 @@ void DeclareLocals(Function * F)
 				StringBuffer_add(rhs, GetR(F, r));
 				if (error) return;
 			} else {
-				if (!(locals > 0)) {
-					SET_ERROR(F,"Confused at declaration of local variable");
-					//return;
+				if (locals > 0){
+					StringBuffer_add(str, ", ");
 				}
-				StringBuffer_add(str, ", ");
 				StringBuffer_add(str, LOCAL(i));
 			}
 			CALL(r) = 0;
@@ -1272,6 +1310,9 @@ void DeclareLocals(Function * F)
 	}
 	if (locals > 0) {
 		StringBuffer_add(str, StringBuffer_getRef(rhs));
+		if (strcmp(StringBuffer_getRef(rhs)," = ") == 0){
+			StringBuffer_add(str,"nil");
+		}
 		AddStatement(F, str);
 		if (error) return;
 	}
@@ -1369,8 +1410,9 @@ void MakeIndex(StringBuffer * str, char* rstr, int self)
 				break;
 		}
 		rstr--;
-	} else
+	} else{
 		StringBuffer_addPrintf(str, "[%s]", rstr);
+	}
 }
 
 void FunctionHeader(Function * F) {
@@ -1504,8 +1546,11 @@ char* ProcessCode(const Proto * f, int indent)
 
 	char* output;
 
+	LoopItem* next_child;
+
 	List processed_jmps;
 	InitList(&processed_jmps);
+
 
 	errorStr = StringBuffer_new(NULL);
 
@@ -1560,9 +1605,10 @@ char* ProcessCode(const Proto * f, int indent)
 			if (dest < pc) {
 				int found = 0;
 				int x;
+				OpCode pc_1 = GET_OPCODE(code[pc-1]);
 
 				// TFORLOOP jump back
-				if(GET_OPCODE(code[pc-1])==OP_TFORLOOP){
+				if(pc_1 == OP_TFORLOOP){
 					LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
 					AddToLoopTree(F, item);
 					goto END_SEARCH;
@@ -1595,24 +1641,28 @@ char* ProcessCode(const Proto * f, int indent)
 				}
 
 				// REPEAT jump back
-				if ( (F->loop_ptr == NULL)
-					|| ((dest >= F->loop_ptr->body) && (dest != F->loop_ptr->start))){
-					OpCode pc_1 = GET_OPCODE(code[pc-1]);
-					if ( pc_1 == OP_EQ || pc_1 == OP_LE || pc_1 == OP_LT || pc_1 == OP_TEST || pc_1 == OP_TESTSET ){ 
-						AddToSet(F->repeats, dest + 1);
-						AddToSet(F->untils, pc);
+				if ( pc_1 == OP_EQ || pc_1 == OP_LE || pc_1 == OP_LT || pc_1 == OP_TEST || pc_1 == OP_TESTSET ){ 
+					// if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
+					// jump back may be 'until' or 'if', they are the same,
+					// but 'if' is more clear, so we skip making a loop to choose 'if'.
+					if ( !((F->loop_ptr->type == WHILE1 ) && (dest == F->loop_ptr->start))){
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
-					}else{
-						LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
-						AddToLoopTree(F, item);
+						//AddToSet(F->repeats, dest + 1);
+						//AddToSet(F->untils, pc);
 					}
+				}else{
+					LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
+					AddToLoopTree(F, item);
 				}
 END_SEARCH:
 				;
 			}
 		}
 	}
+
+	F->loop_ptr = F->loop_tree;
+	next_child = F->loop_tree->child;
 
 	for (pc = 0; pc < n; pc++) {
 		Instruction i = code[pc];
@@ -1622,18 +1672,20 @@ END_SEARCH:
 		int c = GETARG_C(i);
 		int bc = GETARG_Bx(i);
 		int sbc = GETARG_sBx(i);
+
+
 		F->pc = pc;
 
-		while(F->loop_ptr->child && pc >= F->loop_ptr->child->body){
-			F->loop_ptr = F->loop_ptr->child;
-		};
-		if(pc > F->loop_ptr->end){
-			if( F->loop_ptr->next == NULL || pc < F->loop_ptr->next->body){
-				F->loop_ptr = F->loop_ptr->parent;
-			}else{
-				F->loop_ptr = F->loop_ptr->next;
-			}
+		while (next_child && pc >= next_child->body){
+			F->loop_ptr = next_child;
+			next_child = F->loop_ptr->child;
 		}
+
+		if(pc > F->loop_ptr->end){
+			next_child = F->loop_ptr->next;
+			F->loop_ptr = F->loop_ptr->parent;
+		}
+
 
 		// nil optimization of Lua 5.1
 		if (pc == 0) {
@@ -1703,25 +1755,36 @@ END_SEARCH:
 			StringBuffer_prune(str);
 		}
 
+		/*
 		while (RemoveFromSet(F->repeats, F->pc + 1)) {
 			StringBuffer_set(str, "repeat");
 			TRY(AddStatement(F, str));
 			StringBuffer_prune(str);
 			F->indent++;
 		}
+		*/
 
-		{
-			LoopItem* wItem;
-			ListItem *walk = F->loop_tree.head;
-			while (walk) {
-				LoopItem* wItem = (LoopItem*)walk;
-				if(wItem->start == pc && wItem->body == pc){
+		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1) ){
+			LoopItem *walk = F->loop_ptr;
+
+			while (walk->parent && (walk->parent->body == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE1)){
+				walk = walk->parent;
+			};
+
+			while (1) {
+				if (walk->type == WHILE1){
 					StringBuffer_set(str, "while 1 do");
-					TRY(AddStatement(F,str));
-					StringBuffer_prune(str);
-					F->indent++;
+				}else if (walk->type == REPEAT){
+					StringBuffer_set(str, "repeat");
 				}
-				walk = walk->next;
+				TRY(AddStatement(F,str));
+				StringBuffer_prune(str);
+				F->indent++;
+				
+				if ( walk == F->loop_ptr ){
+					break;
+				}
+				walk = walk->child;
 			}
 		}
 
@@ -1845,14 +1908,9 @@ END_SEARCH:
 			  * Global Assignment statement. 
 			  */
 			  char *var = GLOBAL(bc);
-			  if (IS_TABLE(a)) {
-				  TRY(PrintTable(F, a, 0));
-			  }
-			  {
-				  char *astr;
-				  TRY(astr = GetR(F, a));
-				  TRY(Assign(F, var, astr, -1, 0, 0));
-			  }
+			  char *astr;
+			  TRY(astr = GetR(F, a));
+			  TRY(Assign(F, var, astr, -1, 0, 0));
 			  break;
 		  }
 	  case OP_SETUPVAL:
@@ -1861,14 +1919,9 @@ END_SEARCH:
 			  * Global Assignment statement. 
 			  */
 			  char *var = UPVALUE(b);// UP(b) is correct
-			  if (IS_TABLE(a)) {
-				  TRY(CloseTable(F, a));
-			  }
-			  {
-				  char *astr;
-				  TRY(astr = GetR(F, a));
-				  TRY(Assign(F, var, astr, -1, 0, 0));
-			  }
+			  char *astr;
+			  TRY(astr = GetR(F, a));
+			  TRY(Assign(F, var, astr, -1, 0, 0));
 			  break;
 		  }
 	  case OP_SETTABLE:
@@ -1990,8 +2043,6 @@ END_SEARCH:
 			  Instruction idest = code[dest - 1];
 			  IntListItem* foundInt = NULL;
 			  IntListItem* intItem = NewIntListItem(pc);
-			  LoopItem* foundWhile = NULL;
-			  LoopItem* whileItem = NewLoopItem(WHILE, INT_MIN, INT_MIN, INT_MIN, pc, INT_MIN);
 			  if (boolpending) {
 				  boolpending = 0;
 				  F->bools[F->nextBool]->dest = dest;
@@ -2004,7 +2055,7 @@ END_SEARCH:
 				  if (F->testpending) {
 					  F->testjump = dest;
 				  }
-				  if (RemoveFromSet(F->untils, F->pc)) {
+				  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {//RemoveFromSet(F->untils, F->pc
 					  int endif, thenaddr;
 					  char* test;
 					  LogicExp* exp;
@@ -2015,16 +2066,15 @@ END_SEARCH:
 					  RawAddStatement(F, str);
 					  free(test);
 				  }
-			  }else if (RemoveFromSet(F->untils, F->pc)) {
+			  /*}else if (RemoveFromSet(F->untils, F->pc)) { // never executed , we use 'while 1' instead of 'until false'
 				  StringBuffer_printf(str, "until false");
 				  F->indent--;
-				  RawAddStatement(F, str);
-			  }else if (foundInt = RemoveFindInList(&(F->breaks), MatchIntListItem, cast(ListItem*,intItem))){
+				  RawAddStatement(F, str);*/
+			  }else if (foundInt = RemoveFindInList(&(F->breaks), MatchIntListItem, cast(ListItem*,intItem))){ // break
 				  free(foundInt);
 				  StringBuffer_printf(str, "do break end");
 				  TRY(AddStatement(F, str));
-			  }else if (foundWhile = RemoveFindInList(&(F->loop_tree), MatchLoopItem, cast(LoopItem*,whileItem))){
-				  free(foundWhile);
+			  }else if (F->loop_ptr && F->loop_ptr->end == pc ){ // until jmp has been processed, tforloop has ignored the jmp, forloop does not have a jmp
 				  F->indent--;
 				  StringBuffer_printf(str, "end");
 				  TRY(AddStatement(F, str));
@@ -2176,7 +2226,6 @@ END_SEARCH:
 				  TRY(AddStatement(F, str));
 			  }
 			  free(intItem);
-			  free(whileItem);				
 			  break;
 		  }
 	  case OP_EQ:
@@ -2510,7 +2559,7 @@ END_SEARCH:
 				  StringBuffer_add(str, ProcessCode(f->p[c], F->indent));
 				  functionnum = cfnum;
 				  for (i = 0; i < F->indent; i++) {
-					  StringBuffer_add(str, "   ");
+					  StringBuffer_add(str, "  ");
 				  }
 				  StringBuffer_add(str, "end");
 				  if (F->indent == 0)
@@ -3017,28 +3066,30 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
 		  }
 		  break;
-	  case OP_TFORLOOP: {
-		  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
-		  sprintf(line,"R%d %d",a,c);
-		  if (c>=1) {
-			  sprintf(tmp2,"");
-			  for (l=a+3;l<a+c+2;l++) {
-				  sprintf(lend,"R%d,",l);
+	  case OP_TFORLOOP: 
+		  {
+			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
+			  sprintf(line,"R%d %d",a,c);
+			  if (c>=1) {
+				  sprintf(tmp2,"");
+				  for (l=a+3;l<a+c+2;l++) {
+					  sprintf(lend,"R%d,",l);
+					  strcat(tmp2,lend);
+				  }
+				  sprintf(lend,"R%d := ",a+c+2);
 				  strcat(tmp2,lend);
-			  }
-			  sprintf(lend,"R%d := ",a+c+2);
-			  strcat(tmp2,lend);
-		  } else {
-			  sprintf(tmp2,"R%d to top := ",a);
-		  } 
-		  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
-						}
-						break;
-	  case OP_FORPREP: {
-		  sprintf(line,"R%d %d",a,pc+sbc+1);
-		  sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
-					   }
-					   break;
+			  } else {
+				  sprintf(tmp2,"R%d to top := ",a);
+			  } 
+			  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
+		  }
+		  break;
+	  case OP_FORPREP: 
+		  {
+			  sprintf(line,"R%d %d",a,pc+sbc+1);
+			  sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
+		  }
+		  break;
 	  case OP_SETLIST:
 		  sprintf(line,"R%d %d %d",a,b,c);
 		  sprintf(lend,"R%d[(%d-1)*FPF+i] := R(%d+i), 1 <= i <= %d",a,c,a,b);
@@ -3058,7 +3109,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  default:
 		  break;
 		}
-		printf("%3d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,lend);
+		printf("%5d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,lend);
 	}
 	printf("\n\n");
 	if (f->sizep !=0) {
