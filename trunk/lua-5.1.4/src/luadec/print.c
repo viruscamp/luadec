@@ -43,7 +43,7 @@ StringBuffer *errorStr;
 */
 
 char* getupval(Function * F, int r) {
-	if (F->f->upvalues) {
+	if (F->f->upvalues && r < F->f->sizeupvalues) {
 		return (char*)getstr(F->f->upvalues[r]);
 	} else {
 		char* s = malloc(20);
@@ -899,8 +899,9 @@ char *PrintTable(Function * F, int r, int returnCopy)
 	if (error) {
 		return NULL;
 	}
-	if (returnCopy)
+	if (returnCopy){
 		result = StringBuffer_getCopy(str);
+	}
 	StringBuffer_delete(str);
 	CloseTable(F, r);
 	if (error) return NULL;
@@ -951,6 +952,8 @@ void AddToTable(Function* F, DecTable * tbl, char *value, char *key)
 void StartTable(Function * F, int r, int b, int c)
 {
 	DecTable *tbl = NewTable(r, F, b, c);
+	DecTable *oldtbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
+	DeleteTableItem(oldtbl,NULL);
 	AddToList(&(F->tables), (ListItem *) tbl);
 	F->Rtabl[r] = 1;
 	F->Rtabl[r] = 1;
@@ -1576,6 +1579,18 @@ char* ProcessCode(const Proto * f, int indent)
 
 	TRY(FunctionHeader(F));
 
+	if ( f->sizeupvalues > 0){
+		StringBuffer_set(str, "-- upvalues: ");
+		for (i = 0; i < f->sizeupvalues - 1; i++) {
+			StringBuffer_add(str,getupval(F,i));
+			StringBuffer_add(str," , ");
+		}
+		i = f->sizeupvalues - 1;
+		StringBuffer_add(str,getupval(F,i));
+		TRY(RawAddStatement(F, str));
+		StringBuffer_prune(str);
+	}
+
 	if ((f->is_vararg&1) && (f->is_vararg&2)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
 		F->freeLocal++;
@@ -1819,8 +1834,8 @@ END_SEARCH:
 			  */
 			  char *ctt = DecompileConstant(f, bc);
 			  TRY(Assign(F, REGISTER(a), ctt, a, 0, 1));
-			  break;
 			  free(ctt);
+			  break;
 		  }
 	  case OP_LOADBOOL:
 		  {
