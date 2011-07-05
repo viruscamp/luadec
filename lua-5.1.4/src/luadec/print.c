@@ -1118,7 +1118,12 @@ void DeclareLocals(Function * F)
 	* Those are declaration of parameters. 
 	*/
 	if (F->pc == 0) {
-		startparams = F->f->numparams + (F->f->is_vararg&2);
+		startparams = F->f->numparams;
+#ifdef LUA_COMPAT_VARARG
+		if ((F->f->is_vararg&2) && (functionnum!=0)) {
+			startparams++;
+		}
+#endif
 	}
 	str = StringBuffer_new("local ");
 	rhs = StringBuffer_new(" = ");
@@ -1510,11 +1515,13 @@ char* ProcessCode(const Proto * f, int indent)
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a; ixx++) {
 					TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
+					PENDING(ixx)=1;
 				}
 			} else if (o != OP_JMP) {
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a-1; ixx++) {
 					TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
+					PENDING(ixx)=1;
 				}
 			}
 		}
