@@ -32,9 +32,25 @@ struct Statement_ {
    int backpatch;
 };
 
-typedef struct WhileItem_ WhileItem;
-struct WhileItem_ {
-	ListItem super;
+typedef enum {
+	FUNC_ROOT;
+	WHILE;
+	WHILE1;
+	REPEAT;
+	FORLOOP;
+	TFORLOOP;
+} LoopType;
+
+typedef struct LoopItem_ LoopItem;
+
+struct LoopItem_ {
+	LoopItem* parent;
+	LoopItem* child;
+	LoopItem* prev;
+	LoopItem* next;
+
+	LoopType type;
+	int prep;
 	int start;
 	int body;
 	int end;
@@ -77,7 +93,8 @@ struct Function_ {
    /* Pending temp-registers */
    IntSet* tpend;
    /* Line number of detected constructs. */
-   List whiles;
+   LoopItem* loop_tree;
+   LoopItem* loop_ptr;
    IntSet* repeats;
    IntSet* untils;
    List breaks;
