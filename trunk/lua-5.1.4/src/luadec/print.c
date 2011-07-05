@@ -427,7 +427,7 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 
 	result = StringBuffer_getBuffer(str);
 	StringBuffer_delete(str);
-	DeleteLogicExp(exp);
+	//DeleteLogicExp(exp);
 	return result;
 }
 
@@ -2636,11 +2636,11 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  //ANoFrillsIntroToLua51VMInstructions.pdf is wrong
 		  sprintf(line,"%c%d %d",CC(a),CV(a),b);
 		  sprintf(lend,"");
-		  for (l=a; l<=a+b-3; l++) {
+		  for (l=a; l<a+b-2; l++) {
 			  sprintf(tmp,"R%d,", l);
 			  strcat(lend,tmp);
 		  }
-		  sprintf(tmp,"R%d", l);
+		  sprintf(tmp,"R%d", a+b-2);
 		  strcat(lend,tmp);
 		  strcat(lend," := ...");
 		  break;
@@ -2812,7 +2812,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(lend,"R%d",a+b-1);
 				  strcat(tmp,lend);
 			  } else if (b==0) {
-				  sprintf(tmp,"R%d,...",a+1);
+				  sprintf(tmp,"R%d to top",a+1);
 			  } else {
 				  sprintf(tmp,"");
 					}
@@ -2826,7 +2826,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(lend,"R%d := ",a+c-2);
 				  strcat(tmp2,lend);
 			  } else if (c==0) {
-				  sprintf(tmp2,"R%d,... := ",a);
+				  sprintf(tmp2,"R%d to top := ",a);
 			  } else {
 				  sprintf(tmp2,"");
 					}
@@ -2845,7 +2845,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(lend,"R%d",a+b-2);
 				  strcat(tmp,lend);
 			  } else if (b==0) {
-				  sprintf(tmp,"R%d,...",a);
+				  sprintf(tmp,"R%d to top",a);
 			  } else {
 				  sprintf(tmp,"");
 					}
@@ -2870,9 +2870,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(lend,"R%d := ",a+c+2);
 			  strcat(tmp2,lend);
 		  } else {
-			  sprintf(tmp2,"R%d,... := ",a);
+			  sprintf(tmp2,"R%d to top := ",a);
 		  } 
-		  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then begin PC = %d; R%d := R%d end",tmp2, a,a+1,a+2, a+3, dest, a+2, a+3);
+		  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+3);
 						}
 						break;
 	  case OP_FORPREP: {
@@ -2886,7 +2886,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;         
 	  case OP_CLOSE:
 		  sprintf(line,"R%d",a);
-		  sprintf(lend,"SAVE R%d,...",a);
+		  sprintf(lend,"SAVE R%d to top",a);
 		  break;
 	  case OP_CLOSURE:
 		  sprintf(line,"R%d %d",a,bc);
@@ -2908,7 +2908,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			if (strlen(name)==0) {
 				sprintf(n,"%d",pc+1);
 			} else {
-				sprintf(n,"%s.%d",name,pc+1);
+				sprintf(n,"%s_%d",name,pc+1);
 			}
 			printf("; Function #%s:\n",n);
 			printf(";\n");
