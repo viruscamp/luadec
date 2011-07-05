@@ -153,4 +153,7 @@ StringBuffer* PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_
 void AddStatement(Function * F, StringBuffer * str);
 void ShowState(Function * F);
 
+// self value DOT=0;SELF=1;TABLE=2;
+void MakeIndex(StringBuffer * str, char* rstr, int self);
+
 #endif

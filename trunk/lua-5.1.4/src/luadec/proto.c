@@ -20,7 +20,7 @@ char *DecompileString(const Proto * f, int n)
     int i;
     const unsigned char *s = svalue(&f->k[n]);
     int len = (&(&f->k[n])->value.gc->ts)->tsv.len;
-    char *ret = malloc(strlen(s) * 4 + 3);
+    char *ret = malloc(len * 4 + 3);
     int p = 0;
     ret[p++] = '"';
     for (i = 0; i < len; i++, s++) {
@@ -62,7 +62,7 @@ char *DecompileString(const Proto * f, int n)
             ret[p++] = '\\';
             break;
         default:
-            if (*s < 32 || *s > 127) {
+            if ((*s < 32 || *s > 127) && !( *s >= 0x40 && *s <= 0xFE ) ){
                char* pos = &(ret[p]);
                sprintf(pos, "\\%d", *s);
                p += strlen(pos);
