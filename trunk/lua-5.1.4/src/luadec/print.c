@@ -88,6 +88,14 @@ static int debug;
 static char* error;
 static int errorCode;
 
+int GetJmpAddr(Function* F, int addr){
+	int real_end = addr;
+	while(GET_OPCODE(F->f->code[real_end]) == OP_JMP){
+		real_end = GETARG_sBx(F->f->code[real_end]) + real_end + 1;
+	}
+	return real_end;	
+}
+
 void RawAddStatement(Function * F, StringBuffer * str);
 void DeclareLocal(Function * F, int ixx, char* value);
 
@@ -116,19 +124,36 @@ void PrintStatement(Statement * self, void* F_) {
 	StringBuffer_addPrintf(F->decompiledCode, "%s\n", self->code);
 }
 
-WhileItem *NewWhileItem(int start, int body, int end)
+WhileItem *NewWhileItem(int start, int body, int end, int next_code)
 {	
 	WhileItem* self = calloc(sizeof(WhileItem), 1);
 	((ListItem *) self)->next = NULL;
 	self->start = start;
 	self->body = body;
 	self->end = end;
+	self->next_code = next_code;
 	return self;
 }
 
 int MatchWhileItem(WhileItem* item, WhileItem* match)
 {
-	return ((item->body == match->body)|| (match->body == -1)) && ((item->end == match->end)||(match->end == -1));
+	return ((item->start == match->start)||(match->start == INT_MIN))
+		&& ((item->body == match->body)|| (match->body == INT_MIN)) 
+		&& ((item->end == match->end)||(match->end == INT_MIN))
+		&& ((item->next_code == match->next_code)||(match->next_code == INT_MIN));
+}
+
+IntListItem *NewIntListItem(int v)
+{	
+	IntListItem* self = calloc(sizeof(IntListItem), 1);
+	((ListItem *) self)->next = NULL;
+	self->value = v;
+	return self;
+}
+
+int MatchIntListItem(IntListItem* item, IntListItem* match)
+{
+	return (item->value == match->value);
 }
 
 LogicExp* MakeExpNode(BoolOp* boolOp) {
@@ -422,7 +447,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		if (*endif == 0) {
 			*endif = *thenaddr;
 		}
-	return first;
+		return first;
 }
 
 char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
@@ -507,9 +532,12 @@ int PeekEndifAddr(Function* F, int addr) {
 	return 0;
 }
 
+
 int GetEndifAddr(Function* F, int addr) {
 	Endif* at = F->nextEndif;
 	Endif* prev = NULL;
+
+	addr = GetJmpAddr(F,addr - 1) + 1;
 	while (at) {
 		if (at->addr == addr) {
 			if (prev)
@@ -524,20 +552,6 @@ int GetEndifAddr(Function* F, int addr) {
 		at = at->next;
 	}
 	return 0;
-}
-
-void BackpatchStatement(Function * F, char * code, int line) {
-	ListItem *walk = F->statements.head;
-	while (walk) {
-		Statement* stmt = (Statement*) walk;
-		walk = walk->next;
-		if (stmt->backpatch && stmt->line == line) {
-			free(stmt->code);
-			stmt->code = code;
-			return;
-		}
-	}
-	SET_ERROR(F,"Confused while interpreting a jump as a 'while'");
 }
 
 void RawAddStatement(Function * F, StringBuffer * str)
@@ -595,12 +609,14 @@ void FlushBoolean(Function * F) {
 		char* test;
 		int endif;
 		int thenaddr;
+		WhileItem witem;
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
-		WhileItem witem;
-		witem.body = thenaddr - 1;
-		witem.end = endif - 2;
 		if (error) return;
+		witem.start = INT_MIN;
+		witem.body = thenaddr - 1;
+		witem.end = INT_MIN;
+		witem.next_code = endif - 1;
 		if (FindInList(&(F->whiles),(ListItemCmpFn)MatchWhileItem,&witem)){
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
 			if (error) return;
@@ -913,8 +929,8 @@ void SetList(Function * F, int a, int b, int c)
 		if (error)
 			return;
 	}
-//	if (tbl->arraySize == 0 || (tbl->arraySize > 0 && tbl->numeric.size > fb2int(int2fb(tbl->arraySize)-1)))
-//		PrintTable(F, tbl->reg, 0);
+	//	if (tbl->arraySize == 0 || (tbl->arraySize > 0 && tbl->numeric.size > fb2int(int2fb(tbl->arraySize)-1)))
+	//		PrintTable(F, tbl->reg, 0);
 	if (error)
 		return;
 }
@@ -977,6 +993,7 @@ Function *NewFunction(const Proto * f)
 	self->repeats = calloc(sizeof(IntSet), 1);
 	self->repeats->mayRepeat = 1;
 	self->untils = calloc(sizeof(IntSet), 1);
+	InitList(&(self->breaks));
 	self->do_opens = calloc(sizeof(IntSet), 1);
 	self->do_closes = calloc(sizeof(IntSet), 1);
 	self->decompiledCode = StringBuffer_new(NULL);
@@ -1462,6 +1479,9 @@ char* ProcessCode(const Proto * f, int indent)
 
 	char* output;
 
+	List processed_jmps;
+	InitList(&processed_jmps);
+
 	errorStr = StringBuffer_new(NULL);
 
 	F = NewFunction(f);
@@ -1500,14 +1520,13 @@ char* ProcessCode(const Proto * f, int indent)
 		if (o == OP_JMP) {
 			int sbc = GETARG_sBx(i);
 			int dest = sbc + pc + 1;
+			IntListItem* intItem = NewIntListItem(pc);
+			if (FindInList(&processed_jmps, MatchIntListItem, cast(ListItem*,intItem)))
+				continue;
 			if (dest < pc) {
-				int real_end = pc + 1;
+				int real_end = GetJmpAddr(F,pc + 1);
 				int found = 0;
 				int x;
-
-				while(GET_OPCODE(code[real_end]) == OP_JMP){
-					real_end = GETARG_sBx(code[real_end]) + real_end + 1;
-				}
 
 				// TFORLOOP jump back
 				if(GET_OPCODE(code[pc-1])==OP_TFORLOOP)
@@ -1519,13 +1538,24 @@ char* ProcessCode(const Proto * f, int indent)
 					int x_dest = GETARG_sBx(xi) + x + 1;
 					if(xo == OP_JMP && x_dest == real_end){
 						OpCode x_1 = GET_OPCODE(code[x-1]);
-						// exclude BREAK
 						if ( x_1 == OP_EQ || x_1 == OP_LE || x_1 == OP_LT || x_1 == OP_TEST || x_1 == OP_TESTSET ){
-							WhileItem* item = NewWhileItem(dest, x + 1, pc);
-							AddToList(&(F->whiles), cast(ListItem*,item));
-							goto END_SEARCH;
+							if ( found == 0 ){
+								WhileItem* item = NewWhileItem(dest, x + 1, pc, real_end);
+								AddToList(&(F->whiles), cast(ListItem*,item));
+								found = 1;
+							}
+						}else{ // BREAK
+							intItem = NewIntListItem(x);
+							AddToList(&(F->breaks), cast(IntListItem*,intItem));
+							intItem = NULL;
 						}
+						intItem = NewIntListItem(x);
+						AddToList(&processed_jmps, cast(IntListItem*,intItem));
+						intItem = NULL;
 					}
+				}
+				if (found == 1){
+					goto END_SEARCH;
 				}
 
 				// REPEAT jump back
@@ -1534,7 +1564,7 @@ char* ProcessCode(const Proto * f, int indent)
 					AddToSet(F->untils, pc);
 				}
 
-				END_SEARCH:
+END_SEARCH:
 				;
 			}
 		} else if (o == OP_CLOSE) {
@@ -1612,7 +1642,7 @@ char* ProcessCode(const Proto * f, int indent)
 			StringBuffer_prune(str);
 		}
 
-		while (GetEndifAddr(F, pc+1)) {
+		while (GetEndifAddr(F, pc + 1)) {
 			StringBuffer_set(str, "end");
 			F->elseWritten = 0;
 			F->elsePending = 0;
@@ -1621,25 +1651,26 @@ char* ProcessCode(const Proto * f, int indent)
 			StringBuffer_prune(str);
 		}
 
-		{
-		WhileItem* found_while;
-		WhileItem witem;
-		witem.body = - 1;
-		witem.end = pc;
-		while (found_while = (WhileItem*)RemoveFindInList(&(F->whiles),(ListItemCmpFn)MatchWhileItem,&witem)) {
-			free(found_while);
-			StringBuffer_set(str, "end");
-			F->indent--;
-			TRY(AddStatement(F, str));
-			StringBuffer_prune(str);
-		}
-		}
-
-		while (RemoveFromSet(F->repeats, F->pc+1)) {
+		while (RemoveFromSet(F->repeats, F->pc + 1)) {
 			StringBuffer_set(str, "repeat");
 			TRY(AddStatement(F, str));
 			StringBuffer_prune(str);
 			F->indent++;
+		}
+
+		{
+			WhileItem* wItem;
+			ListItem *walk = F->whiles.head;
+			while (walk) {
+				WhileItem* wItem = (WhileItem*)walk;
+				if(wItem->start == pc && wItem->body == pc){
+					StringBuffer_set(str, "while 1 do");
+					TRY(AddStatement(F,str));
+					StringBuffer_prune(str);
+					F->indent++;
+				}
+				walk = walk->next;
+			}
 		}
 
 		StringBuffer_prune(str);
@@ -1905,6 +1936,10 @@ char* ProcessCode(const Proto * f, int indent)
 		  {
 			  int dest = sbc + pc + 2;
 			  Instruction idest = code[dest - 1];
+			  IntListItem* foundInt = NULL;
+			  IntListItem* intItem = NewIntListItem(pc);
+			  WhileItem* foundWhile = NULL;
+			  WhileItem* whileItem = NewWhileItem(INT_MIN, INT_MIN, pc, INT_MIN);
 			  if (boolpending) {
 				  boolpending = 0;
 				  F->bools[F->nextBool]->dest = dest;
@@ -1928,6 +1963,19 @@ char* ProcessCode(const Proto * f, int indent)
 					  RawAddStatement(F, str);
 					  free(test);
 				  }
+			  }else if (RemoveFromSet(F->untils, F->pc)) {
+				  StringBuffer_printf(str, "until false");
+				  F->indent--;
+				  RawAddStatement(F, str);
+			  }else if (foundInt = RemoveFindInList(&(F->breaks), MatchIntListItem, cast(ListItem*,intItem))){
+				  free(foundInt);
+				  StringBuffer_printf(str, "do break end");
+				  TRY(AddStatement(F, str));
+			  }else if (foundWhile = RemoveFindInList(&(F->whiles), MatchWhileItem, cast(WhileItem*,whileItem))){
+				  free(foundWhile);
+				  F->indent--;
+				  StringBuffer_printf(str, "end");
+				  TRY(AddStatement(F, str));
 			  }else if (GetEndifAddr(F, pc + 2)) {
 				  if (F->elseWritten) {
 					  F->indent--;
@@ -2007,12 +2055,12 @@ char* ProcessCode(const Proto * f, int indent)
 				  TRY(AddStatement(F, str));
 				  F->indent++;
 				  break;
-			  /*} else if (PeekSet(F->whiles, pc)) {
+				  /*} else if (PeekSet(F->whiles, pc)) {
 				  StringBuffer_printf(str, "while 1 do");
 				  TRY(AddStatement(F, str));
 				  MarkBackpatch(F);
 				  F->indent++;
-			  } else if (RemoveFromSet(F->whiles, dest - 2)) {
+				  } else if (RemoveFromSet(F->whiles, dest - 2)) {
 				  F->indent--;
 				  StringBuffer_printf(str, "end");
 				  TRY(AddStatement(F, str));
@@ -2075,7 +2123,8 @@ char* ProcessCode(const Proto * f, int indent)
 				  }
 				  TRY(AddStatement(F, str));
 			  }
-
+			  free(intItem);
+			  free(whileItem);				
 			  break;
 		  }
 	  case OP_EQ:
@@ -2396,8 +2445,8 @@ char* ProcessCode(const Proto * f, int indent)
 						  char names[20];
 						  sprintf(names,"upval_%d_%d",functionnum,i);
 						  f->p[c]->upvalues[i] = luaS_new(glstate, names);
-							}
-						}
+					  }
+				  }
 			  }
 
 			  /* upvalue determinition end */
@@ -2951,7 +3000,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  if (strlen(name)==0) {
 			  sprintf(lend,"R%d := closure(Function #%d)",a,bc+1);
 		  } else {
-			  sprintf(lend,"R%d := closure(Function #%s.%d)",a,name,bc+1);
+			  sprintf(lend,"R%d := closure(Function #%s_%d)",a,name,bc+1);
 		  }				
 		  break;
 	  default:
@@ -2964,9 +3013,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		for (pc=0; pc < f->sizep; pc++) {
 			char n[256];
 			if (strlen(name)==0) {
-				sprintf(n,"%d",pc+1);
+				sprintf(n,"%d",pc + 1);
 			} else {
-				sprintf(n,"%s_%d",name,pc+1);
+				sprintf(n,"%s_%d",name,pc + 1);
 			}
 			printf("; Function #%s:\n",n);
 			printf(";\n");
