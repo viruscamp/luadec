@@ -402,7 +402,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		if (*endif == 0) {
 			*endif = *thenaddr;
 		}
-		return first;
+	return first;
 }
 
 char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
@@ -1119,11 +1119,9 @@ void DeclareLocals(Function * F)
 	*/
 	if (F->pc == 0) {
 		startparams = F->f->numparams;
-#ifdef LUA_COMPAT_VARARG
-		if ((F->f->is_vararg&2) && (functionnum!=0)) {
+		if ((F->f->is_vararg&1) && (F->f->is_vararg&2)) {
 			startparams++;
 		}
-#endif
 	}
 	str = StringBuffer_new("local ");
 	rhs = StringBuffer_new(" = ");
@@ -1464,12 +1462,10 @@ char* ProcessCode(const Proto * f, int indent)
 
 	TRY(FunctionHeader(F));
 
-#ifdef LUA_COMPAT_VARARG
-	if ((f->is_vararg&2) && (functionnum!=0)) {
+	if ((f->is_vararg&1) && (f->is_vararg&2)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
 		F->freeLocal++;
 	}
-#endif
 
 	if (locals) {
 		for (i=F->freeLocal; i<f->maxstacksize; i++) {
