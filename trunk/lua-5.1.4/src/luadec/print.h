@@ -32,8 +32,17 @@ struct Statement_ {
    int backpatch;
 };
 
-typedef struct Function_ Function;
+typedef struct WhileItem_ WhileItem;
+struct WhileItem_ {
+	ListItem super;
+	int start;
+	int body;
+	int end;
+	int next_code;
+};
 
+
+typedef struct Function_ Function;
 struct Function_ {
    /* program counter during symbolic interpretation */
    int pc;
@@ -68,9 +77,10 @@ struct Function_ {
    /* Pending temp-registers */
    IntSet* tpend;
    /* Line number of detected constructs. */
-   IntSet* whiles;
+   List whiles;
    IntSet* repeats;
    IntSet* untils;
+   List breaks;
    /* Control of do/end blocks. */
    IntSet* do_opens;
    IntSet* do_closes;
@@ -128,6 +138,13 @@ struct Variable_ {
    ListItem super;
    char *name;
    int reg;
+};
+
+typedef struct IntListItem_ IntListItem;
+
+struct IntListItem_ {
+	ListItem super;
+	int value;
 };
 
 void SetR(Function * F, int r, StringBuffer * str, int prio);

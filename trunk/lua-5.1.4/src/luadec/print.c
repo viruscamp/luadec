@@ -52,6 +52,10 @@ char* getupval(Function * F, int r) {
 	}
 }
 
+char* luadec_strdup(const char * src){
+	return src?strdup(src):NULL;
+}
+
 #define GLOBAL(r) (char*)svalue(&f->k[r])
 #define UPVALUE(r) ( getupval(F,r) )
 #define REGISTER(r) F->R[r]
@@ -110,6 +114,21 @@ void PrintStatement(Statement * self, void* F_) {
 		StringBuffer_add(F->decompiledCode, "  ");
 	}
 	StringBuffer_addPrintf(F->decompiledCode, "%s\n", self->code);
+}
+
+WhileItem *NewWhileItem(int start, int body, int end)
+{	
+	WhileItem* self = calloc(sizeof(WhileItem), 1);
+	((ListItem *) self)->next = NULL;
+	self->start = start;
+	self->body = body;
+	self->end = end;
+	return self;
+}
+
+int MatchWhileItem(WhileItem* item, WhileItem* match)
+{
+	return ((item->body == match->body)|| (match->body == -1)) && ((item->end == match->end)||(match->end == -1));
 }
 
 LogicExp* MakeExpNode(BoolOp* boolOp) {
@@ -578,17 +597,16 @@ void FlushBoolean(Function * F) {
 		int thenaddr;
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
+		WhileItem witem;
+		witem.body = thenaddr - 1;
+		witem.end = endif - 2;
 		if (error) return;
-		if (endif < F->pc - 1) {
-			test = WriteBoolean(exp, &thenaddr, &endif, 1);
+		if (FindInList(&(F->whiles),(ListItemCmpFn)MatchWhileItem,&witem)){
+			test = WriteBoolean(exp, &thenaddr, &endif, 0);
 			if (error) return;
-			StringBuffer_printf(str, "while %s do", test);
-			/* verify this '- 2' */
-			BackpatchStatement(F, StringBuffer_getBuffer(str), endif - 2);
-			if (error) return;
-			F->indent--;
-			StringBuffer_add(str, "end");
+			StringBuffer_addPrintf(str, "while %s do", test);
 			RawAddStatement(F, str);
+			F->indent++;
 		} else {
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
 			if (error) return;
@@ -658,12 +676,9 @@ DecTableItem *NewTableItem(char *value, int num, char *key)
 {
 	DecTableItem *self = calloc(sizeof(DecTableItem), 1);
 	((ListItem *) self)->next = NULL;
-	self->value = strdup(value);
+	self->value = luadec_strdup(value);
 	self->numeric = num;
-	if (key)
-		self->key = strdup(key);
-	else
-		self->key = NULL;
+	self->key = luadec_strdup(key);
 	return self;
 }
 
@@ -675,7 +690,7 @@ void DeclarePendingLocals(Function * F);
 
 void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
 {
-	char* nsrc = src ? strdup(src) : NULL;
+	char* nsrc = luadec_strdup(src);
 
 	if (PENDING(reg)) {
 		if (guess_locals) {
@@ -683,7 +698,7 @@ void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
 		} else {
 			char *s;
 			SET_ERROR(F,"Overwrote pending register. Missing locals? Creating them");
-			s = strdup(REGISTER(reg));
+			s = luadec_strdup(REGISTER(reg));
 			DeclareLocal(F,reg,s);
 		}
 		return;
@@ -724,7 +739,7 @@ void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
 		REGISTER(reg) = nsrc;
 		AddToSet(F->tpend, reg);
 	} else {
-		AddToVarStack(F->vpend, strdup(dest), nsrc, reg);
+		AddToVarStack(F->vpend, luadec_strdup(dest), nsrc, reg);
 	}
 }
 
@@ -913,7 +928,7 @@ void UnsetPending(Function * F, int r)
 			} else {
 				char *s;
 				SET_ERROR(F,"Confused about usage of registers, missing locals? Creating them");
-				s = strdup(REGISTER(r));
+				s = luadec_strdup(REGISTER(r));
 				DeclareLocal(F,r,s);
 			}
 			return;
@@ -958,7 +973,7 @@ Function *NewFunction(const Proto * f)
 	self->f = f;
 	self->vpend = calloc(sizeof(VarStack), 1);
 	self->tpend = calloc(sizeof(IntSet), 1);
-	self->whiles = calloc(sizeof(IntSet), 1);
+	InitList(&(self->whiles));
 	self->repeats = calloc(sizeof(IntSet), 1);
 	self->repeats->mayRepeat = 1;
 	self->untils = calloc(sizeof(IntSet), 1);
@@ -995,7 +1010,6 @@ void DeleteFunction(Function * self)
 	StringBuffer_delete(self->decompiledCode);
 	free(self->vpend);
 	free(self->tpend);
-	free(self->whiles);
 	free(self->repeats);
 	free(self->untils);
 	free(self->do_opens);
@@ -1029,7 +1043,7 @@ void DeclareVariable(Function * F, const char *name, int reg)
 	F->Rvar[reg] = 1;
 	if (F->R[reg])
 		free(F->R[reg]);
-	F->R[reg] = strdup(name);
+	F->R[reg] = luadec_strdup(name);
 	F->Rprio[reg] = 0;
 	UnsetPending(F, reg);
 	if (error) return;
@@ -1419,7 +1433,7 @@ void DeclarePendingLocals(Function * F) {
 				maxnum ++;
 			}
 			for (i = 0; i< maxnum; i++) {
-				char* s = strdup(REGISTER(nums[i]));
+				char* s = luadec_strdup(REGISTER(nums[i]));
 				GetR(F,nums[i]);
 				DeclareLocal(F,nums[i],s);
 			}
@@ -1485,16 +1499,43 @@ char* ProcessCode(const Proto * f, int indent)
 		OpCode o = GET_OPCODE(i);
 		if (o == OP_JMP) {
 			int sbc = GETARG_sBx(i);
-			int dest = sbc + pc;
+			int dest = sbc + pc + 1;
 			if (dest < pc) {
-				if (dest+2 > 0
-					&& GET_OPCODE(code[dest]) == OP_JMP
-					&& !PeekSet(F->whiles, dest)) {
-						AddToSet(F->whiles, dest);
-				} else if (GET_OPCODE(code[dest]) != OP_FORPREP) {
-					AddToSet(F->repeats, dest+2);
+				int real_end = pc + 1;
+				int found = 0;
+				int x;
+
+				while(GET_OPCODE(code[real_end]) == OP_JMP){
+					real_end = GETARG_sBx(code[real_end]) + real_end + 1;
+				}
+
+				// TFORLOOP jump back
+				if(GET_OPCODE(code[pc-1])==OP_TFORLOOP)
+					goto END_SEARCH;
+				// WHILE jump back
+				for(x = pc - 1; x > dest; x--){
+					Instruction xi = code[x];
+					OpCode xo = GET_OPCODE(xi);
+					int x_dest = GETARG_sBx(xi) + x + 1;
+					if(xo == OP_JMP && x_dest == real_end){
+						OpCode x_1 = GET_OPCODE(code[x-1]);
+						// exclude BREAK
+						if ( x_1 == OP_EQ || x_1 == OP_LE || x_1 == OP_LT || x_1 == OP_TEST || x_1 == OP_TESTSET ){
+							WhileItem* item = NewWhileItem(dest, x + 1, pc);
+							AddToList(&(F->whiles), cast(ListItem*,item));
+							goto END_SEARCH;
+						}
+					}
+				}
+
+				// REPEAT jump back
+				if (GET_OPCODE(code[dest]) != OP_FORPREP) {
+					AddToSet(F->repeats, dest + 1);
 					AddToSet(F->untils, pc);
 				}
+
+				END_SEARCH:
+				;
 			}
 		} else if (o == OP_CLOSE) {
 			int a = GETARG_A(i);
@@ -1578,6 +1619,20 @@ char* ProcessCode(const Proto * f, int indent)
 			F->indent--;
 			TRY(AddStatement(F, str));
 			StringBuffer_prune(str);
+		}
+
+		{
+		WhileItem* found_while;
+		WhileItem witem;
+		witem.body = - 1;
+		witem.end = pc;
+		while (found_while = (WhileItem*)RemoveFindInList(&(F->whiles),(ListItemCmpFn)MatchWhileItem,&witem)) {
+			free(found_while);
+			StringBuffer_set(str, "end");
+			F->indent--;
+			TRY(AddStatement(F, str));
+			StringBuffer_prune(str);
+		}
 		}
 
 		while (RemoveFromSet(F->repeats, F->pc+1)) {
@@ -1769,7 +1824,7 @@ char* ProcessCode(const Proto * f, int indent)
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  TRY(bstr = GetR(F, b));
 
-			  bstr = strdup(bstr);
+			  bstr = luadec_strdup(bstr);
 
 			  TRY(Assign(F, REGISTER(a+1), bstr, a+1, PRIORITY(b), 0));
 
@@ -1929,7 +1984,7 @@ char* ProcessCode(const Proto * f, int indent)
 							  TRY(DeclareVariable(F, vname[i-1], a + 2 + i));
 						  }
 					  } else {
-						  vname[i-1] = strdup(F->R[a+2+i]);
+						  vname[i-1] = luadec_strdup(F->R[a+2+i]);
 					  }
 					  F->internal[a+2+i] = 1;
 				  }
@@ -1952,7 +2007,7 @@ char* ProcessCode(const Proto * f, int indent)
 				  TRY(AddStatement(F, str));
 				  F->indent++;
 				  break;
-			  } else if (PeekSet(F->whiles, pc)) {
+			  /*} else if (PeekSet(F->whiles, pc)) {
 				  StringBuffer_printf(str, "while 1 do");
 				  TRY(AddStatement(F, str));
 				  MarkBackpatch(F);
@@ -1966,8 +2021,8 @@ char* ProcessCode(const Proto * f, int indent)
 				  int boola = GETARG_A(code[pc+1]);
 				  char* test;
 				  /* skip */
-				  char* ra = strdup(REGISTER(boola));
-				  char* rb = strdup(ra);
+				  char* ra = luadec_strdup(REGISTER(boola));
+				  char* rb = luadec_strdup(ra);
 				  F->bools[F->nextBool]->op1 = ra;
 				  F->bools[F->nextBool]->op2 = rb;
 				  F->bools[F->nextBool]->op = OP_TESTSET;
@@ -2062,18 +2117,18 @@ char* ProcessCode(const Proto * f, int indent)
 			  }
 
 			  if (!IS_VARIABLE(cmpa)) {
-				  ra = strdup(REGISTER(cmpa));
+				  ra = luadec_strdup(REGISTER(cmpa));
 				  TRY(rb = GetR(F, cmpb));
-				  rb = strdup(rb);
+				  rb = luadec_strdup(rb);
 				  PENDING(cmpa) = 0;
 			  } else {
 				  TRY(ra = GetR(F, cmpa));
-				  ra = strdup(ra);
+				  ra = luadec_strdup(ra);
 				  if (cmpa != cmpb) {
 					  TRY(rb = GetR(F, cmpb));
-					  rb = strdup(rb);
+					  rb = luadec_strdup(rb);
 				  } else
-					  rb = strdup(ra);
+					  rb = luadec_strdup(ra);
 			  }
 			  F->bools[F->nextBool]->op1 = ra;
 			  F->bools[F->nextBool]->op2 = rb;
@@ -2259,7 +2314,7 @@ char* ProcessCode(const Proto * f, int indent)
 					  TRY(DeclareVariable(F, idxname, a + 3));
 				  }
 			  } else {
-				  idxname = strdup(F->R[a+3]);
+				  idxname = luadec_strdup(F->R[a+3]);
 			  }
 			  DeclarePendingLocals(F);
 			  /*
@@ -2270,7 +2325,7 @@ char* ProcessCode(const Proto * f, int indent)
 
 
 
-			  initial = strdup(initial);
+			  initial = luadec_strdup(initial);
 			  step = atoi(REGISTER(a + 2));
 			  stepLen = strlen(REGISTER(a + 2));
 			  //   findSign = strrchr(initial, '-');
@@ -2742,7 +2797,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_JMP:
 		  {
-			  int dest = sbc + pc + 2;
+			  int dest = sbc + pc + 1;
 			  sprintf(line, "%d",dest);
 			  sprintf(lend, "PC := %d",dest);
 		  }
@@ -2751,7 +2806,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_LT:
 	  case OP_LE:
 		  {
-			  int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
+			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
 			  sprintf(tmp,"R%d",b);
 			  sprintf(tmp2,"R%d",c);
@@ -2770,7 +2825,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_TEST:
 		  {
-			  int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
+			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"%c%d %d",CC(a),CV(a),c);
 			  sprintf(tmp,"R%d",a);
 			  if (IS_CONSTANT(a)) {
@@ -2785,7 +2840,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_TESTSET: 
 		  {
-			  int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
+			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"%c%d %c%d %d",CC(a),CV(a),CC(b),CV(b),c);
 			  sprintf(tmp,"R%d",a);
 			  sprintf(tmp2,"R%d",b);
@@ -2857,12 +2912,12 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_FORLOOP:
 		  {
-			  sprintf(line,"R%d %d",a,pc+sbc+2);
-			  sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+2,a+3,a);
+			  sprintf(line,"R%d %d",a,pc+sbc+1);
+			  sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
 		  }
 		  break;
 	  case OP_TFORLOOP: {
-		  int dest = GETARG_sBx(f->code[pc+1]) + pc+1 + 2;
+		  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 		  sprintf(line,"R%d %d",a,c);
 		  if (c>=1) {
 			  sprintf(tmp2,"");
@@ -2875,12 +2930,12 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  } else {
 			  sprintf(tmp2,"R%d to top := ",a);
 		  } 
-		  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+3);
+		  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
 						}
 						break;
 	  case OP_FORPREP: {
-		  sprintf(line,"R%d %d",a,pc+sbc+2);
-		  sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+2);
+		  sprintf(line,"R%d %d",a,pc+sbc+1);
+		  sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
 					   }
 					   break;
 	  case OP_SETLIST:
@@ -2902,7 +2957,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  default:
 		  break;
 		}
-		printf("%3d [-]: %-9s %-13s; %s\n",pc+1,luaP_opnames[o],line,lend);
+		printf("%3d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,lend);
 	}
 	printf("\n\n");
 	if (f->sizep !=0) {
