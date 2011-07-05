@@ -90,6 +90,10 @@ static int errorCode;
 
 int GetJmpAddr(Function* F, int addr){
 	int real_end = addr;
+	if(real_end >= F->f->sizecode){
+		real_end = F->f->sizecode ;
+		return real_end;
+	}
 	while(GET_OPCODE(F->f->code[real_end]) == OP_JMP){
 		real_end = GETARG_sBx(F->f->code[real_end]) + real_end + 1;
 	}
