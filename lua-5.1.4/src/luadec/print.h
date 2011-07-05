@@ -33,12 +33,12 @@ struct Statement_ {
 };
 
 typedef enum {
-	FUNC_ROOT;
-	WHILE;
-	WHILE1;
-	REPEAT;
-	FORLOOP;
-	TFORLOOP;
+	FUNC_ROOT,
+	WHILE,
+	WHILE1,
+	REPEAT,
+	FORLOOP,
+	TFORLOOP
 } LoopType;
 
 typedef struct LoopItem_ LoopItem;
@@ -95,9 +95,9 @@ struct Function_ {
    /* Line number of detected constructs. */
    LoopItem* loop_tree;
    LoopItem* loop_ptr;
-   IntSet* repeats;
-   IntSet* untils;
    List breaks;
+   //IntSet* repeats;
+   //IntSet* untils;
    /* Control of do/end blocks. */
    IntSet* do_opens;
    IntSet* do_closes;
