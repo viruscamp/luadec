@@ -74,6 +74,7 @@ char* getupval(Function * F, int r) {
 #define IsMain(f)	(f->linedefined==0)
 #define fb2int(x)	(luaO_fb2int(x))
 #define int2fb(x)	(luaO_int2fb(x))
+#define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define SET_ERROR(F,e) { StringBuffer_printf(errorStr," -- DECOMPILER ERROR: %s\n", (e)); RawAddStatement((F),errorStr); }
 /*  error = e; errorCode = __LINE__; */ /*if (debug) { printf("DECOMPILER ERROR: %s\n", e);  }*/
@@ -1196,7 +1197,7 @@ void DeclareLocals(Function * F)
 			} else {
 				if (!(locals > 0)) {
 					SET_ERROR(F,"Confused at declaration of local variable");
-					return;
+					//return;
 				}
 				StringBuffer_add(str, ", ");
 				StringBuffer_add(str, LOCAL(i));
@@ -1319,11 +1320,11 @@ void FunctionHeader(Function * F) {
 		int i;
 		StringBuffer_addPrintf(str, "(");
 		for (i = 0; i < f->numparams - 1; i++){
-			//StringBuffer_addPrintf(str, "%s, ", LOCAL(i));
-			StringBuffer_addPrintf(str, "l_%d_%d, ", functionnum, i);
+			StringBuffer_addPrintf(str, "%s, ", LOCAL(i));
+			//StringBuffer_addPrintf(str, "l_%d_%d, ", functionnum, i);
 		}
-		//StringBuffer_addPrintf(str, "%s", LOCAL(i));
-		StringBuffer_addPrintf(str, "l_%d_%d", functionnum, i);
+		StringBuffer_addPrintf(str, "%s", LOCAL(i));
+		//StringBuffer_addPrintf(str, "l_%d_%d", functionnum, i);
 		if (f->is_vararg)
 			StringBuffer_add(str, ", ...");
 		StringBuffer_addPrintf(str, ")");
@@ -1452,9 +1453,9 @@ char* ProcessCode(const Proto * f, int indent)
 	* Function parameters are stored in registers from 0 on.  
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = malloc(10);
-		//sprintf(x,"%s",LOCAL(i));
-		sprintf(x,"l_%d_%d",functionnum, i);
+		char* x = malloc(MAX(10,strlen(LOCAL(i))+1));
+		sprintf(x,"%s",LOCAL(i));
+		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
 		IS_VARIABLE(i) = 1;
 	}
