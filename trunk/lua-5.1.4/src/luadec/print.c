@@ -124,47 +124,51 @@ void PrintStatement(Statement * self, void* F_) {
 	StringBuffer_addPrintf(F->decompiledCode, "%s\n", self->code);
 }
 
-LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code)
-{	
+LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code){	
 	LoopItem* self = calloc(sizeof(LoopItem), 1);
+
+	self->parent = NULL;
+	self->child = NULL;
+	self->prev = NULL;
+	self->next = NULL;
+
 	self->type = type;
 	self->prep = prep;
 	self->start = start;
 	self->body = body;
 	self->end = end;
 	self->next_code = next_code;
+
 	return self;
 }
 
-int MatchLoopItem(LoopItem* item, LoopItem* match)
-{
+int MatchLoopItem(LoopItem* item, LoopItem* match){
 	return ((item->type == match->type)||(match->type == INT_MIN))
-		&& ((item->prep == match->prep)|| (match->prep == INT_MIN)) 
+		&& ((item->prep == match->prep)||(match->prep == INT_MIN))
 		&& ((item->start == match->start)||(match->start == INT_MIN))
-		&& ((item->body == match->body)|| (match->body == INT_MIN)) 
+		&& ((item->body == match->body)||(match->body == INT_MIN))
 		&& ((item->end == match->end)||(match->end == INT_MIN))
 		&& ((item->next_code == match->next_code)||(match->next_code == INT_MIN));
 }
 
 int AddToLoopTree(Function* F, LoopItem* item){
-	if ( item->body >= F->loop_ptr->body && item->end < F->loop_ptr->end){
-		//last item is parent, must be the first child
-		item->parent = F->loop_ptr;
-		F->loop_ptr->child = item;
+	while (F->loop_ptr){
+		if ( item->body >= F->loop_ptr->body && item->end < F->loop_ptr->end){
+			//find parent , then insert as the first child
+			item->parent = F->loop_ptr;
+			item->next = F->loop_ptr->child;
+			item->prev = NULL;
+			item->child = NULL;
 
-		F->loop_ptr = item;
-		return 1;
-	}
-	if ( item->end < F->loop_ptr->body ){
-		//last item is brother, insert before it
-		item->parent = F->loop_ptr->parent;
-		F->loop_ptr->parent->child = item;
-		
-		item->next = F->loop_ptr;
-		F->loop_ptr->prev = item;
-
-		F->loop_ptr = item;
-		return 1;
+			if ( F->loop_ptr->child){
+				F->loop_ptr->child->prev = item;
+			}
+			F->loop_ptr->child = item;
+			F->loop_ptr = item;
+			return 1;
+		}else{
+			F->loop_ptr = F->loop_ptr->parent;
+		}
 	}
 	return 0;
 }
@@ -263,11 +267,10 @@ StringBuffer* PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev)
 			op = opstr(exp->op);
 		if ((exp->op != OP_TEST) && (exp->op != OP_TESTSET)) {
 			StringBuffer_addPrintf(str, "%s %s %s", exp->op1, op, exp->op2);
-		} else {
-			if (op) 
-				StringBuffer_addPrintf(str, "%s %s", op, exp->op2);
-			else 
-				StringBuffer_addPrintf(str, "%s", exp->op2);
+		} else if (op) {
+			StringBuffer_addPrintf(str, "%s %s", op, exp->op2);
+		}else {
+			StringBuffer_addPrintf(str, "%s", exp->op2);
 		}
 	}
 	return str;
@@ -963,8 +966,8 @@ void SetList(Function * F, int a, int b, int c)
 	int i;
 	//DecTable *tbl = (DecTable *) LastItem(&(F->tables));
 	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
-	if (tbl->reg != a) {
-		SET_ERROR(F,"Unhandled construct in list");
+	if (tbl == NULL || tbl->reg != a) {
+		SET_ERROR(F,"Unhandled construct in list (SETLIST)");
 		return;
 	}
 	if (b == 0) {
@@ -1628,11 +1631,11 @@ char* ProcessCode(const Proto * f, int indent)
 							}
 						}else{ // BREAK
 							intItem = NewIntListItem(x);
-							AddToList(&(F->breaks), cast(IntListItem*,intItem));
+							AddToList(&(F->breaks), cast(ListItem*,intItem));
 							intItem = NULL;
 						}
 						intItem = NewIntListItem(x);
-						AddToList(&processed_jmps, cast(IntListItem*,intItem));
+						AddToList(&processed_jmps, cast(ListItem*,intItem));
 						intItem = NULL;
 					}
 				}
@@ -2478,7 +2481,7 @@ END_SEARCH:
 			  initial = luadec_strdup(initial);
 			  step = atoi(REGISTER(a + 2));
 			  stepLen = strlen(REGISTER(a + 2));
-			  //   findSign = strrchr(initial, '-');
+			  // findSign = strrchr(initial, '-');
 
 			  // if (findSign) {
 			  //    initial[strlen(initial) - stepLen - 3] = '\0';
@@ -2817,15 +2820,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
 		  if (b) {
 			  if (c) {
-				  sprintf(lend,"%c%d := %s",CC(a),CV(a),"true; PC := %d",pc+2);
+				  sprintf(lend,"%c%d := true; PC := %d",CC(a),CV(a),pc+2);
 			  } else {
-				  sprintf(lend,"%c%d := %s",CC(a),CV(a),"true");
+				  sprintf(lend,"%c%d := true",CC(a),CV(a));
 			  }
 		  } else {
 			  if (c) {
-				  sprintf(lend,"%c%d := %s",CC(a),CV(a),"false; PC := %d",pc+2);
+				  sprintf(lend,"%c%d := false; PC := %d",CC(a),CV(a),pc+2);
 			  } else {
-				  sprintf(lend,"%c%d := %s",CC(a),CV(a),"false");
+				  sprintf(lend,"%c%d := false",CC(a),CV(a));
 			  }
 		  }
 		  break;
@@ -2874,7 +2877,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_SETUPVAL:
 		  sprintf(line,"%c%d U%d",CC(a),CV(a),b);
-		  sprintf(lend,"U%d := %cd",b, CC(a),CV(a));
+		  sprintf(lend,"U%d := %c%d",b, CC(a),CV(a));
 		  break;
 	  case OP_SETTABLE:
 		  sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
@@ -2996,15 +2999,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(tmp2,"R%d",b);
 			  if (IS_CONSTANT(a)) {
 				  sprintf(tmp,"%s",DecompileConstant(f,a-256));
-				 }
+			  }
 			  if (IS_CONSTANT(b)) {
 				  sprintf(tmp2,"%s",DecompileConstant(f,b-256));
-				 }
+			  }
 			  if (c) {
 				  sprintf(lend,"if %s then PC := %d else %s := %s",tmp2,dest,tmp,tmp2);
 			  } else {
 				  sprintf(lend,"if not %s then PC := %d else %s := %s",tmp2,dest,tmp,tmp2);
-				 }
+			  }
 		  }
 		  break;
 	  case OP_CALL:
