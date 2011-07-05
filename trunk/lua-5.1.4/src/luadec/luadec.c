@@ -71,7 +71,7 @@ static void usage(const char* message, const char* arg)
 		"  -d       output information for debugging the decompiler\n"
 		"  -dis     don't decompile, just disassemble\n"
 		"  -f num   decompile only num-th function (0=main block)\n"
-		"  -nf num  decompile only specific nested function, using -pn option to get available num\n"
+		"  -nf num  decompile only specific nested function, use -pn option to get available num\n"
 		"  -dn      disable nested functions being decompiled\n"
 		"  -pn      print nested functions structure and exit\n"
 		"  -l LDS   declare locals as defined by LDS\n"

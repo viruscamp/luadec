@@ -2464,26 +2464,30 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 	char* startstr = funcnumstr;
 	char* endstr;
 
+	functionnum = 0;
+
 	c = atoi(startstr);
-	if ( c < 0 || c > f->sizep ){
-		fprintf(stderr,"No such function num, function num is from %d to %d.\n",0,f->sizep);
+	if ( c < 0 || c > cf->sizep ){
+		fprintf(stderr,"No such nested function num, use -pn option to get available num.\n");
 		return;
 	}
-	if ( c > 0 && c <= f->sizep )
-		f = f->code[c-1];
+	if ( c > 0 && c <= cf->sizep ){
+		cf = cf->p[c-1];
+		functionnum = c;
+	}
 	endstr = strchr(startstr,'_');
 	startstr=endstr+1;
 
-	do{
+	while( !(endstr == NULL) ){
 		c = atoi(startstr);
-		if ( c < 1 || c > f->sizep  ){
-			fprintf(stderr,"No such function num, function num is from %d to %d.\n",0,f->sizep);
+		if ( c < 1 || c > cf->sizep  ){
+			fprintf(stderr,"No such nested function num, use -pn option to get available num.\n");
 			return;
 		}
-		f=f->p[c-1];
+		cf = cf->p[c-1];
 		endstr = strchr(startstr,'_');
 		startstr=endstr+1;
-	}while( !(endstr == NULL) );
+	}
 
 	uvn = cf->nups;
 
@@ -2506,8 +2510,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 	debug = dflag;
 
 
-	printf("DecompiledFunction_%d = function",funcnumstr);
-	functionnum = 0;
+	printf("DecompiledFunction_%s = function",funcnumstr);
 	code = ProcessCode(cf, 0);
 	printf("%send\n", code);
 	free(code);
