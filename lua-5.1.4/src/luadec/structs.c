@@ -65,6 +65,28 @@ ListItem *FindInList(List * list, ListItemCmpFn cmp, const void *sample) {
    return NULL;
 }
 
+ListItem *RemoveFindInList(List * list, ListItemCmpFn cmp, const void *sample) {
+	ListItem *prev = NULL;
+	ListItem *walk = list->head;
+	while (walk) {
+		if (cmp(walk, sample)){
+			if (prev != NULL){
+				prev->next = walk->next;
+			}else{
+				list->head = walk->next;
+			}
+			if ( list->tail == walk ){
+				list->tail = prev;
+			}
+			list->size--;
+			return walk;
+		}
+		prev = walk;
+		walk = walk->next;
+	}
+	return NULL;
+}
+
 int AddToSet(IntSet * set, int a) {
    int i;
    if (! set->mayRepeat) {

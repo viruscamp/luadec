@@ -44,6 +44,7 @@ ListItem* LastItem(List* list);
 ListItem* PopFromList(List* list);
 void LoopList(List* list, ListItemFn fn, void* param);
 ListItem* FindInList(List* list, ListItemCmpFn cmp, const void *sample);
+ListItem* RemoveFindInList(List* list, ListItemCmpFn cmp, const void *sample);
 int AddToSet(IntSet* set, int a);
 int PeekSet(IntSet* set, int a);
 int PopSet(IntSet* set);

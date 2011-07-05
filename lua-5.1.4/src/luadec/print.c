@@ -743,7 +743,8 @@ void DeleteTable(DecTable * tbl)
 
 void CloseTable(Function * F, int r)
 {
-	DecTable *tbl = (DecTable *) PopFromList(&(F->tables));
+	//DecTable *tbl = (DecTable *) PopFromList(&(F->tables));
+	DecTable *tbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
 	if (tbl->reg != r) {
 		SET_ERROR(F,"Unhandled construct in table");
 		return;
@@ -755,12 +756,15 @@ void CloseTable(Function * F, int r)
 char *PrintTable(Function * F, int r, int returnCopy)
 {
 	char *result = NULL;
-	StringBuffer *str = StringBuffer_new("{");
-	DecTable *tbl =
-		(DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,
-		&r);
 	int numerics = 0;
-	DecTableItem *item = (DecTableItem *) tbl->numeric.head;
+	DecTableItem *item;
+	StringBuffer *str = StringBuffer_new("{");
+	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
+	if (tbl == NULL) {
+		F->Rtabl[r] = 0;
+		return F->R[r];
+	}
+	item = (DecTableItem *) tbl->numeric.head;
 	if (item) {
 		if (item->value[strlen(item->value)-1] == '}')
 			StringBuffer_add(str, "\n");
@@ -842,7 +846,7 @@ void AddToTable(Function* F, DecTable * tbl, char *value, char *key)
 	// FIXME: should work with arrays, too
 	//( tbl->keyed.size > fb2int(int2fb(tbl->keyedSize)-1)) && tbl->keyed.size <= tbl->keyedSize )
 	if (tbl->keyedSize == tbl->used && tbl->arraySize == 0) {
-		PrintTable(F, tbl->reg, 0);
+		//PrintTable(F, tbl->reg, 0);
 		if (error)
 			return;
 	}
@@ -864,7 +868,8 @@ void StartTable(Function * F, int r, int b, int c)
 void SetList(Function * F, int a, int b, int c)
 {
 	int i;
-	DecTable *tbl = (DecTable *) LastItem(&(F->tables));
+	//DecTable *tbl = (DecTable *) LastItem(&(F->tables));
+	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
 	if (tbl->reg != a) {
 		SET_ERROR(F,"Unhandled construct in list");
 		return;
@@ -893,8 +898,8 @@ void SetList(Function * F, int a, int b, int c)
 		if (error)
 			return;
 	}
-	if (tbl->arraySize == 0 || (tbl->arraySize > 0 && tbl->numeric.size > fb2int(int2fb(tbl->arraySize)-1)))
-		PrintTable(F, tbl->reg, 0);
+//	if (tbl->arraySize == 0 || (tbl->arraySize > 0 && tbl->numeric.size > fb2int(int2fb(tbl->arraySize)-1)))
+//		PrintTable(F, tbl->reg, 0);
 	if (error)
 		return;
 }
@@ -920,7 +925,7 @@ void UnsetPending(Function * F, int r)
 
 int SetTable(Function * F, int a, char *bstr, char *cstr)
 {
-	DecTable *tbl = (DecTable *) LastItem(&(F->tables));
+	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
 	if ((!tbl) || (tbl->reg != a)) {
 		/*
 		* SetTable is not being applied to the table being generated. (This
@@ -931,7 +936,8 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 		return 0;
 	}
 	AddToTable(F, tbl, cstr, bstr);
-	if (error) return 0;
+	if (error)
+		return 0;
 	return 1;
 }
 
