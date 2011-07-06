@@ -237,7 +237,7 @@ LogicExp* MakeExpChain(int dest) {
 	node->prev = NULL;
 	node->op1 = NULL;
 	node->op2 = NULL;
-	node->neg = NULL;
+	node->neg = 0;
 	node->dest = dest;
 	node->is_chain = 1;
 	return node;
@@ -836,8 +836,8 @@ void DeleteTable(DecTable * tbl)
 	/*
 	* TODO: delete values from table 
 	*/
-	LoopList(&(tbl->keyed),DeleteTableItem,NULL);
-	LoopList(&(tbl->numeric),DeleteTableItem,NULL);
+	LoopList(&(tbl->keyed),(ListItemFn)DeleteTableItem,NULL);
+	LoopList(&(tbl->numeric),(ListItemFn)DeleteTableItem,NULL);
 	free(tbl);
 }
 
@@ -957,7 +957,7 @@ void StartTable(Function * F, int r, int b, int c)
 {
 	DecTable *tbl = NewTable(r, F, b, c);
 	DecTable *oldtbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
-	DeleteTableItem(oldtbl,NULL);
+	//DeleteTableItem(oldtbl,NULL);
 	AddToList(&(F->tables), (ListItem *) tbl);
 	F->Rtabl[r] = 1;
 	F->Rtabl[r] = 1;
@@ -1051,7 +1051,6 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 Function *NewFunction(const Proto * f)
 {
 	Function *self;
-	int i;
 
 	/*
 	* calloc, to ensure all parameters are 0/NULL 
@@ -1220,8 +1219,8 @@ void DeclareLocals(Function * F)
 	int i;
 	int locals;
 	int internalLocals = 0;
-	int loopstart;
-	int loopvars;
+	//int loopstart;
+	//int loopvars;
 	int loopconvert;
 	StringBuffer *str;
 	StringBuffer *rhs;
@@ -1241,7 +1240,7 @@ void DeclareLocals(Function * F)
 	locals = 0;
 	if (F->pc != 0) {
 		for (i=startparams; i < F->f->maxstacksize; i++) {
-			if (localdeclare[functionnum][i]==F->pc) {
+			if (functionnum >=0 && functionnum < 255 && localdeclare[functionnum][i]==F->pc) {
 				char* name;
 				int r = i;
 				name = malloc(10);
@@ -1622,7 +1621,7 @@ char* ProcessCode(const Proto * f, int indent)
 			AddToLoopTree(F, item);
 		}else if(o == OP_JMP) {
 			IntListItem* intItem = NewIntListItem(pc);
-			if (FindInList(&processed_jmps, MatchIntListItem, cast(ListItem*,intItem)))
+			if (FindInList(&processed_jmps, (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem)))
 				continue;
 			if (dest < pc) {
 				int found = 0;
@@ -2092,7 +2091,7 @@ END_SEARCH:
 				  StringBuffer_printf(str, "until false");
 				  F->indent--;
 				  RawAddStatement(F, str);*/
-			  }else if (foundInt = RemoveFindInList(&(F->breaks), MatchIntListItem, cast(ListItem*,intItem))){ // break
+			  }else if ((foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem))) != NULL){ // break
 				  free(foundInt);
 				  StringBuffer_printf(str, "do break end");
 				  TRY(AddStatement(F, str));
@@ -2114,13 +2113,13 @@ END_SEARCH:
 				  * generic 'for' 
 				  */
 				  int i;
-				  int step;
+				  //int step;
 				  char *generator;
 				  char *control;
 				  char *state;
-				  char *variables[20];
+				  //char *variables[20];
 				  char* vname[40];
-				  int stepLen;
+				  //int stepLen;
 
 				  a = GETARG_A(idest);
 				  c = GETARG_C(idest);
@@ -2179,16 +2178,6 @@ END_SEARCH:
 				  TRY(AddStatement(F, str));
 				  F->indent++;
 				  break;
-				  /*} else if (PeekSet(F->whiles, pc)) {
-				  StringBuffer_printf(str, "while 1 do");
-				  TRY(AddStatement(F, str));
-				  MarkBackpatch(F);
-				  F->indent++;
-				  } else if (RemoveFromSet(F->whiles, dest - 2)) {
-				  F->indent--;
-				  StringBuffer_printf(str, "end");
-				  TRY(AddStatement(F, str));
-				  /* end while 1 */
 			  } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 				  int boola = GETARG_A(code[pc+1]);
 				  char* test;
@@ -2455,7 +2444,7 @@ END_SEARCH:
 			  int step;
 			  char *idxname;
 			  char *initial;
-			  char *findSign;
+			  //char *findSign;
 			  char *a1str;
 			  char *endstr;
 			  int stepLen;
@@ -2684,11 +2673,11 @@ void luaU_decompile(const Proto * f, int dflag)
 
 void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 {
-	int i,c,n=f->sizep;
+	int i,c=f->sizep;
 	char* code;
 
 	int uvn;
-	int cfnum = functionnum;
+	//int cfnum = functionnum;
 
 	Proto* cf = f;
 	char* startstr = funcnumstr;
@@ -2750,11 +2739,11 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 
 void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 {
-	int i,c,n=f->sizep;
+	int i,c=f->sizep;
 	char* code;
 
 	int uvn;
-	int cfnum = functionnum;
+	//int cfnum = functionnum;
 
 	if ( functions > f->sizep ){
 		fprintf(stderr,"No such function num, function num is from %d to %d.\n",0,f->sizep);
@@ -2801,7 +2790,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	char tmp[MAXCONSTSIZE+128];
 	char tmp2[MAXCONSTSIZE+128];
 	Proto* f = fwork;
-	int pc,l,l2,l3;
+	int pc,l;
 	if (functions!=0) {
 		f = fwork->p[functions-1];
 	}
@@ -2824,8 +2813,8 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		int sbc = GETARG_sBx(i);
 		char line[100];
 		char lend[MAXCONSTSIZE+128];
-		sprintf(line,"");
-		sprintf(lend,"");
+		sprintf(line,"%s","");
+		sprintf(lend,"%s","");
 		switch (o) {
 	  case OP_MOVE:
 		  sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
@@ -2853,7 +2842,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_LOADNIL:
 		  sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
-		  sprintf(lend,"");
+		  sprintf(lend,"%s","");
 		  for (l=a; l<=b; l++) {
 			  sprintf(tmp,"R%d := ", l);
 			  strcat(lend,tmp);
@@ -2865,7 +2854,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  //R(A), R(A+1), ..., R(A+B-2) = vararg
 		  //ANoFrillsIntroToLua51VMInstructions.pdf is wrong
 		  sprintf(line,"%c%d %d",CC(a),CV(a),b);
-		  sprintf(lend,"");
+		  sprintf(lend,"%s","");
 		  for (l=a; l<a+b-2; l++) {
 			  sprintf(tmp,"R%d,", l);
 			  strcat(lend,tmp);
@@ -3034,7 +3023,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  {
 			  sprintf(line,"R%d %d %d",a,b,c);
 			  if (b>=2) {
-				  sprintf(tmp,"");
+				  sprintf(tmp,"%s","");
 				  for (l=a+1;l<a+b-1;l++) {
 					  sprintf(lend,"R%d,",l);
 					  strcat(tmp,lend);
@@ -3044,11 +3033,11 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  } else if (b==0) {
 				  sprintf(tmp,"R%d to top",a+1);
 			  } else {
-				  sprintf(tmp,"");
+				  sprintf(tmp,"%s","");
 					}
 
 			  if (c>=2) {
-				  sprintf(tmp2,"");
+				  sprintf(tmp2,"%s","");
 				  for (l=a;l<a+c-2;l++) {
 					  sprintf(lend,"R%d,",l);
 					  strcat(tmp2,lend);
@@ -3058,7 +3047,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  } else if (c==0) {
 				  sprintf(tmp2,"R%d to top := ",a);
 			  } else {
-				  sprintf(tmp2,"");
+				  sprintf(tmp2,"%s","");
 					}
 			  sprintf(lend,"%sR%d(%s)",tmp2,a,tmp);
 		  }
@@ -3067,7 +3056,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  {
 			  sprintf(line,"R%d %d",a,b);
 			  if (b>=2) {
-				  sprintf(tmp,"");
+				  sprintf(tmp,"%s","");
 				  for (l=a;l<a+b-2;l++) {
 					  sprintf(lend,"R%d,",l);
 					  strcat(tmp,lend);
@@ -3077,7 +3066,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  } else if (b==0) {
 				  sprintf(tmp,"R%d to top",a);
 			  } else {
-				  sprintf(tmp,"");
+				  sprintf(tmp,"%s","");
 					}
 			  sprintf(lend,"return %s",tmp);
 		  }
@@ -3090,10 +3079,10 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  break;
 	  case OP_TFORLOOP: 
 		  {
-			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
+			  //int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"R%d %d",a,c);
 			  if (c>=1) {
-				  sprintf(tmp2,"");
+				  sprintf(tmp2,"%s","");
 				  for (l=a+3;l<a+c+2;l++) {
 					  sprintf(lend,"R%d,",l);
 					  strcat(tmp2,lend);

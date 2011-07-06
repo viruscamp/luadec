@@ -1,6 +1,3 @@
-
-//#include <vld.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +22,7 @@
 
 #define	OUTPUT		"luadec.out"	/* default output file */
 
-#define VERSION "2.0 UNICODE"
+#define VERSION "2.1 UNICODE"
 
 static int debugging=0;			/* debug decompiler? */
 static int functions=0;			/* dump functions separately? */
@@ -33,7 +30,6 @@ static char* funcnumstr=NULL;
 int disnested=0;			    /* don't decompile nested functions? */
 static int printfuncnum=0;      /* print function nums? */
 static int dumping=1;			/* dump bytecodes? */
-static int stripping=0;			/* strip debug information? */
 static int disassemble=0;  /* disassemble? */
 int locals=0;			/* strip debug information? */
 int localdeclare[255][255];
@@ -247,7 +243,7 @@ static int doargs(int argc, char* argv[])
 		else if (IS("-nf")){
 			i++;
 			if (argv[i]==NULL || *argv[i]==0) {
-				usage("`-f' needs an argument",NULL);
+				usage("`-nf' needs an argument",NULL);
 			} else {
 				funcnumstr=argv[i];
 			}
@@ -284,8 +280,6 @@ static int doargs(int argc, char* argv[])
 			lds2=1;
 		else if (IS("-dg"))			/* parse only */
 			guess_locals=0;
-		else if (IS("-s"))			/* strip debug information */
-			stripping=1;
 		else if (IS("-v"))			/* show version */
 		{
 			printf("LuaDec "VERSION"\n");
@@ -407,10 +401,10 @@ int main(int argc, char* argv[])
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; This file has been disassembled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu)\n");
+		printf("; Disassembled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu) and viruscamp \n");
 		printf("; Command line was: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu)\n");
+		printf("-- Decompiled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu) and viruscamp \n");
 		printf("-- Command line was: ");
 	}
 	for (i=1; i<oargc; i++) {
@@ -447,7 +441,7 @@ int main(int argc, char* argv[])
 	}
 	else {
 		if (disassemble) {
-			sprintf(tmp,"");
+			sprintf(tmp,"%s","");
 			luaU_disassemble(f,debugging,0,tmp);
 		} else {
 			luaU_decompile(f, debugging);
