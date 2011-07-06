@@ -30,6 +30,7 @@ static char* funcnumstr=NULL;
 int disnested=0;			    /* don't decompile nested functions? */
 static int printfuncnum=0;      /* print function nums? */
 static int dumping=1;			/* dump bytecodes? */
+static int stripping=0;			/* strip debug information? */
 static int disassemble=0;  /* disassemble? */
 int locals=0;			/* strip debug information? */
 int localdeclare[255][255];
@@ -74,6 +75,7 @@ static void usage(const char* message, const char* arg)
 		"  -l2 LDS2 declare locals as defined by LDS2\n"
 		"  -dg      disable built-in local guessing\n"
 		"  -pg      don't run just print out the LDS2 string used\n"
+		"  -s       strip compiled code before decompiling\n"
 		"  -a       always declare all register as locals\n"
 		"  --       stop handling options\n", progname);
 	exit(EXIT_FAILURE);
@@ -280,6 +282,8 @@ static int doargs(int argc, char* argv[])
 			lds2=1;
 		else if (IS("-dg"))			/* parse only */
 			guess_locals=0;
+		else if (IS("-s"))			/* strip debug information */
+			stripping=1;
 		else if (IS("-v"))			/* show version */
 		{
 			printf("LuaDec "VERSION"\n");
@@ -396,6 +400,9 @@ int main(int argc, char* argv[])
 		printFuncStructure(f," ");
 		lua_close(L);
 		return 0;
+	}
+	if (stripping) {
+		strip(L,f);
 	}
 	if (guess_locals) {
 		luaU_guess_locals(f,0);
