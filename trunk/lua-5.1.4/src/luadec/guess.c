@@ -466,4 +466,5 @@ int luaU_guess_locals(Proto * f, int main) {
 	for (i=0; i<f->sizep; i++) {
 		luaU_guess_locals(f->p[i],main+i+1);
 	}
+	return 1;
 }
