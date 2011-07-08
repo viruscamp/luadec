@@ -94,6 +94,10 @@ int GetJmpAddr(Function* F, int addr){
 		real_end = F->f->sizecode ;
 		return real_end;
 	}
+	if(real_end < 0){
+		real_end = -1;
+		return real_end;
+	}
 	while(GET_OPCODE(F->f->code[real_end]) == OP_JMP){
 		real_end = GETARG_sBx(F->f->code[real_end]) + real_end + 1;
 	}
@@ -760,9 +764,11 @@ DecTableItem *NewTableItem(char *value, int num, char *key)
 
 void DeleteTableItem(DecTableItem* item,void* dummy)
 {
-	free(item->value);
-	free(item->key);
-	free(item);
+	if(item != NULL){
+		free(item->value);
+		free(item->key);
+		free(item);
+	}
 }
 
 /*
@@ -901,19 +907,18 @@ char *PrintTable(Function * F, int r, int returnCopy)
 	PENDING(r) = 0;
 	Assign(F, REGISTER(r), StringBuffer_getRef(str), r, 0, 0);
 	if (error) {
-		return NULL;
-	}
-	if (returnCopy){
+		result = NULL;
+	}else if (returnCopy){
 		result = StringBuffer_getCopy(str);
 	}
 	StringBuffer_delete(str);
 	CloseTable(F, r);
-	if (error) return NULL;
+	//if (error) return NULL;
 	return result;
 }
 
 
-DecTable *NewTable(int r, Function * F, int b, int c) // Lua5.1 specific
+DecTable *NewTable(int r, Function * F, int b, int c, int pc) // Lua5.1 specific
 {
 	DecTable *self = calloc(sizeof(DecTable), 1);
 	((ListItem *) self)->next = NULL;
@@ -924,6 +929,7 @@ DecTable *NewTable(int r, Function * F, int b, int c) // Lua5.1 specific
 	self->F = F;
 	self->arraySize = fb2int(b);
 	self->keyedSize = fb2int(c); //1<<c;
+	self->pc = pc;
 	PENDING(r) = 1;
 	return self;
 }
@@ -953,12 +959,23 @@ void AddToTable(Function* F, DecTable * tbl, char *value, char *key)
 	}
 }
 
-void StartTable(Function * F, int r, int b, int c)
+void StartTable(Function * F, int r, int b, int c, int pc)
 {
-	DecTable *tbl = NewTable(r, F, b, c);
+	DecTable *tbl = NewTable(r, F, b, c, pc);
+	/*
 	DecTable *oldtbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
-	//DeleteTableItem(oldtbl,NULL);
-	AddToList(&(F->tables), (ListItem *) tbl);
+	if(oldtbl != NULL){
+		// should not happen ,because PrintTable removed the DecTable
+		// previous RemoveFindInList is not necessary
+		// but it happened sometimes, why?
+		StringBuffer* str = StringBuffer_new("");
+		StringBuffer_printf(str,"Unhandled OP_NEWTABLE PC=%d R=%d", oldtbl->pc, r);
+		SET_ERROR(F,StringBuffer_getRef(str));
+		StringBuffer_delete(str);
+		DeleteTableItem(oldtbl,NULL);
+	}
+	*/
+	AddToListHead(&(F->tables), (ListItem *) tbl);
 	F->Rtabl[r] = 1;
 	F->Rtabl[r] = 1;
 	if (b == 0 && c == 0) {
@@ -1969,7 +1986,7 @@ END_SEARCH:
 		  }
 	  case OP_NEWTABLE:
 		  {
-			  TRY(StartTable(F, a, b, c));
+			  TRY(StartTable(F, a, b, c, pc));
 			  break;
 		  }
 	  case OP_SELF:

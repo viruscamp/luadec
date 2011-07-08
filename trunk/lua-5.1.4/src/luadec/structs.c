@@ -11,11 +11,23 @@ void InitList(List * list) {
 }
 
 void AddToList(List * list, ListItem * item) {
+   if (list==NULL || item==NULL)
+	   return;
    if (list->tail)
       list->tail->next = item;
    if (!list->head)
       list->head = item;
    list->tail = item;
+   list->size++;
+}
+
+void AddToListHead(List * list, ListItem * item) {
+   if (list==NULL || item==NULL)
+	   return;
+   item->next = list->head;
+   list->head = item;
+   if (!list->tail)
+	   list->tail = item;
    list->size++;
 }
 
