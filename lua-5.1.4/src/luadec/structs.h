@@ -40,6 +40,7 @@ struct VarStack_ {
 
 void InitList(List* list);
 void AddToList(List* list, ListItem* item);
+void AddToListHead(List* list, ListItem* item);
 ListItem* LastItem(List* list);
 ListItem* PopFromList(List* list);
 void LoopList(List* list, ListItemFn fn, void* param);

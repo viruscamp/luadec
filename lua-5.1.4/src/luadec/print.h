@@ -146,6 +146,7 @@ struct DecTable_ {
    int keyedSize;
    int arraySize;
    int used;
+   int pc;
    Function *F;
 };
 
