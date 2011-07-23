@@ -898,7 +898,7 @@ char *PrintTable(Function * F, int r, int returnCopy)
 				StringBuffer_add(str, ", ");
 			if (item->value[strlen(item->value)-1] == '}')
 				StringBuffer_add(str, "\n");
-			MakeIndex(str,item->key,2);
+			MakeIndex(F,str,item->key,TABLE);
 			StringBuffer_addPrintf(str, " = %s", item->value);
 			item = (DecTableItem *) item->super.next;
 		}
@@ -1365,14 +1365,21 @@ char* PrintFunction(Function * F)
 * ------------------------------------------------------------------------- 
 */
 
-static char *operators[22] =
-{ " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ", " ",
-"+", "-", "*", "/", "%", "^", "-", "not ", "#", ".." // Lua5.1 specific
-};
+static char *operators[22] = {
+		" ", " ", " ", " ", " ",
+		" ", " ", " ", " ", " ",
+		" ", " ","+", "-", "*",
+		"/", "%", "^", "-", "not ",
+		"#", ".."
+}; // Lua5.1 specific
 
-static int priorities[22] =
-{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-4, 4, 3, 3, 3, 1, 2, 2, 2, 5 };  // Lua5.1 specific
+static int priorities[22] = {
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 4, 4, 3,
+		3, 3, 1, 2, 2,
+		2, 5
+}; // Lua5.1 specific
 
 char *RegisterOrConstant(Function * F, int r)
 {
@@ -1400,9 +1407,31 @@ int luadec_isalnum(int ch) {
 	return ( ch>='0' && ch<='9' ) || ( ch>='a' && ch<='z' ) || ( ch>='A' && ch<='Z' );
 }
 
-// self value DOT=0;SELF=1;TABLE=2;
-void MakeIndex(StringBuffer * str, char* rstr, int self)
+const int numofkeywords = 21;
+const char* keywords[] = {
+	"and", "break", "do", "else", "elseif",
+	"end", "false", "for", "function", "if",
+	"in", "local", "nil", "not", "or",
+	"repeat", "return", "then", "true", "until",
+	"while"
+};
+
+/* type: DOT=0,SELF=1,TABLE=2
+ * input and output
+ * rstr  "a"  " a"    "not"    a
+ * SELF  :a   ERROR   ERROR    ERROR
+ * DOT   .a   [" a"]  ["not"]  [a]
+ * TABLE  a   [" a"}  ["not"]  [a]
+ */
+void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type)
 {
+	int len = strlen(rstr);
+	char lastchar = rstr[len - 1];
+	rstr[len - 1] = '\0';
+	StringBuffer* rawrstrbuff = StringBuffer_new((rstr + 1));
+	char* rawrstr = StringBuffer_getRef(rawrstrbuff);
+	rstr[len - 1] = lastchar;
+
 	int dot = 0;
 	/*
 	* see if index can be expressed without quotes 
@@ -1410,7 +1439,6 @@ void MakeIndex(StringBuffer * str, char* rstr, int self)
 	if (rstr[0] == '\"') {
 		if (luadec_isalpha(rstr[1]) || rstr[1] == '_') {
 			char *at;
-			int len = strlen(rstr);
 			dot = 1;
 			for (at = rstr + 1; at < rstr + len - 1; at++) {
 				if (!luadec_isalnum(*at) && *at != '_') {
@@ -1418,27 +1446,37 @@ void MakeIndex(StringBuffer * str, char* rstr, int self)
 					break;
 				}
 			}
+			int i;
+			for (i = 0; i < numofkeywords; i++){
+				if(strcmp(keywords[i],rawrstr) == 0){
+					dot = 0;
+					break;
+				}
+			}
 		}
 	}
-	if (dot) {
-		rstr++;
-		rstr[strlen(rstr) - 1] = '\0';
-		switch (self) {
-			// self value DOT=0;SELF=1;TABLE=2;
-			case 1:
-				StringBuffer_addPrintf(str, ":%s", rstr);
+	if (dot == 1) {
+		switch (type) {
+			// type value DOT=0;SELF=1;TABLE=2;
+			case SELF:
+				StringBuffer_addPrintf(str, ":%s", rawrstr);
 				break;
-			case 0:
-				StringBuffer_addPrintf(str, ".%s", rstr);
+			case DOT:
+				StringBuffer_addPrintf(str, ".%s", rawrstr);
 				break;
-			case 2:
-				StringBuffer_addPrintf(str, "%s", rstr);
+			case TABLE:
+				StringBuffer_addPrintf(str, "%s", rawrstr);
 				break;
 		}
-		rstr--;
 	} else{
 		StringBuffer_addPrintf(str, "[%s]", rstr);
+		if (type == SELF){
+			StringBuffer_printf(rawrstrbuff,"[%s] should be a SELF Operator",rstr);
+			SET_ERROR(F,StringBuffer_getRef(rawrstrbuff));
+		}
 	}
+
+	StringBuffer_delete(rawrstrbuff);
 }
 
 void FunctionHeader(Function * F) {
@@ -1679,15 +1717,32 @@ char* ProcessCode(const Proto * f, int indent)
 				}
 
 				// REPEAT jump back
-				if ( pc_1 == OP_EQ || pc_1 == OP_LE || pc_1 == OP_LT || pc_1 == OP_TEST || pc_1 == OP_TESTSET ){ 
-					// if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
-					// jump back may be 'until' or 'if', they are the same,
-					// but 'if' is more clear, so we skip making a loop to choose 'if'.
+				if ( pc_1 == OP_EQ || pc_1 == OP_LE || pc_1 == OP_LT || pc_1 == OP_TEST || pc_1 == OP_TESTSET ){
+					/***
+					 * if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
+					 * jump back may be 'until' or 'if', they are the same,
+					 * but 'if' is more clear, so we skip making a loop to choose 'if'.
+					 * see the lua code:
+					local a,b,c,f
+
+					while 1 do
+					  repeat
+					    f(b)
+					  until c
+					  f(a)
+					end
+
+					while 1 do
+					  f(b)
+					  if c then
+						f(a)
+					  end
+					end
+					 */
+
 					if ( !((F->loop_ptr->type == WHILE1 ) && (dest == F->loop_ptr->start))){
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
-						//AddToSet(F->repeats, dest + 1);
-						//AddToSet(F->untils, pc);
 					}
 				}else{
 					LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
@@ -1714,16 +1769,15 @@ END_SEARCH:
 
 		F->pc = pc;
 
-		while (next_child && pc >= next_child->body){
-			F->loop_ptr = next_child;
-			next_child = F->loop_ptr->child;
-		}
-
 		if(pc > F->loop_ptr->end){
 			next_child = F->loop_ptr->next;
 			F->loop_ptr = F->loop_ptr->parent;
 		}
 
+		while (next_child && pc >= next_child->body){
+			F->loop_ptr = next_child;
+			next_child = F->loop_ptr->child;
+		}
 
 		// nil optimization of Lua 5.1
 		if (pc == 0) {
@@ -1792,15 +1846,6 @@ END_SEARCH:
 			TRY(AddStatement(F, str));
 			StringBuffer_prune(str);
 		}
-
-		/*
-		while (RemoveFromSet(F->repeats, F->pc + 1)) {
-			StringBuffer_set(str, "repeat");
-			TRY(AddStatement(F, str));
-			StringBuffer_prune(str);
-			F->indent++;
-		}
-		*/
 
 		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1) ){
 			LoopItem *walk = F->loop_ptr;
@@ -1935,7 +1980,7 @@ END_SEARCH:
 			  } else {
 				  StringBuffer_set(str, bstr);
 			  }
-			  MakeIndex(str, cstr, 0);
+			  MakeIndex(F, str, cstr, DOT);
 			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
 			  free(cstr);
 			  break;
@@ -1977,7 +2022,7 @@ END_SEARCH:
 				  * if failed, just output an assignment 
 				  */
 				  StringBuffer_set(str, REGISTER(a));
-				  MakeIndex(str, bstr, 0);
+				  MakeIndex(F, str, bstr, DOT);
 				  TRY(Assign(F, StringBuffer_getRef(str), cstr, -1, 0, 0));
 			  }
 			  free(bstr);
@@ -2003,7 +2048,7 @@ END_SEARCH:
 			  TRY(Assign(F, REGISTER(a+1), bstr, a+1, PRIORITY(b), 0));
 
 			  StringBuffer_set(str, bstr);
-			  MakeIndex(str, cstr, 1);
+			  MakeIndex(F, str, cstr, SELF);
 			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
 			  free(bstr);
 			  free(cstr);
