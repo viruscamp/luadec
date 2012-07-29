@@ -3040,9 +3040,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(tmp2,"%s",DecompileConstant(f,c-256));
 				 }
 			  if (a) {
-				  sprintf(lend,"if %s %s %s then PC := %d",tmp,opstr(o),tmp2,dest);
+				  sprintf(lend,"if %s %s %s then PC := %d else PC := %d",tmp,invopstr(o),tmp2,pc+2,dest);
 			  } else {
-				  sprintf(lend,"if %s %s %s then PC := %d",tmp,invopstr(o),tmp2,dest);
+				  sprintf(lend,"if %s %s %s then PC := %d else PC := %d",tmp,opstr(o),tmp2,pc+2,dest);
 				 }
 		  }
 		  break;
@@ -3055,9 +3055,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(tmp,"%s",DecompileConstant(f,a-256));
 				 }
 			  if (c) {
-				  sprintf(lend,"if %s then PC := %d",tmp,dest);
+				  sprintf(lend,"if not %s then PC := %d else PC := %d",tmp,pc+2,dest);
 			  } else {
-				  sprintf(lend,"if not %s then PC := %d",tmp,dest);
+				  sprintf(lend,"if %s then PC := %d else PC := %d",tmp,pc+2,dest);
 				 }
 		  }
 		  break;
@@ -3074,9 +3074,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  sprintf(tmp2,"%s",DecompileConstant(f,b-256));
 			  }
 			  if (c) {
-				  sprintf(lend,"if %s then PC := %d else %s := %s",tmp2,dest,tmp,tmp2);
+				  sprintf(lend,"if %s then %s := %s ; PC := %d else PC := %d",tmp2,tmp,tmp2,pc+2,dest);
 			  } else {
-				  sprintf(lend,"if not %s then PC := %d else %s := %s",tmp2,dest,tmp,tmp2);
+				  sprintf(lend,"if not %s then %s := %s ; PC := %d else PC := %d",tmp2,tmp,tmp2,pc+2,dest);
 			  }
 		  }
 		  break;
