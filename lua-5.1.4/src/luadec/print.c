@@ -30,8 +30,9 @@ extern int locals;
 extern int localdeclare[255][255];
 extern int functionnum;
 extern int disnested;			/* don't decompile nested functions? */
-extern lua_State* glstate;
+extern int func_check;           /* compile decompiled function and compare */
 extern int guess_locals;
+extern lua_State* glstate;
 
 char* error_nil = "ERROR_nil";
 char* nilstr = "nil";
@@ -39,7 +40,7 @@ char* upvalue = "upvaluexxxxxxxxx";
 StringBuffer *errorStr;
 
 /*
-* ------------------------------------------------------------------------- 
+* -------------------------------------------------------------------------
 */
 
 char* getupval(Function * F, int r) {
@@ -101,7 +102,7 @@ int GetJmpAddr(Function* F, int addr){
 	while(GET_OPCODE(F->f->code[real_end]) == OP_JMP){
 		real_end = GETARG_sBx(F->f->code[real_end]) + real_end + 1;
 	}
-	return real_end;	
+	return real_end;
 }
 
 void RawAddStatement(Function * F, StringBuffer * str);
@@ -132,7 +133,7 @@ void PrintStatement(Statement * self, void* F_) {
 	StringBuffer_addPrintf(F->decompiledCode, "%s\n", self->code);
 }
 
-LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code){	
+LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code){
 	LoopItem* self = calloc(sizeof(LoopItem), 1);
 
 	self->parent = NULL;
@@ -634,7 +635,7 @@ void RawAddStatement(Function * F, StringBuffer * str)
 			int added = 0;
 			Statement* stmt = cast(Statement*, F->statements.head);
 			Statement* prev = NULL;
-			Statement* newst; 
+			Statement* newst;
 			while (stmt) {
 				if (!added) {
 					if (stmt->line >= lpc) {
@@ -749,7 +750,7 @@ void FlushElse(Function* F) {
 }
 
 /*
-* ------------------------------------------------------------------------- 
+* -------------------------------------------------------------------------
 */
 
 DecTableItem *NewTableItem(char *value, int num, char *key)
@@ -772,7 +773,7 @@ void DeleteTableItem(DecTableItem* item,void* dummy)
 }
 
 /*
-* ------------------------------------------------------------------------- 
+* -------------------------------------------------------------------------
 */
 
 void DeclarePendingLocals(Function * F);
@@ -840,7 +841,7 @@ int MatchTable(DecTable * tbl, int *name)
 void DeleteTable(DecTable * tbl)
 {
 	/*
-	* TODO: delete values from table 
+	* TODO: delete values from table
 	*/
 	LoopList(&(tbl->keyed),(ListItemFn)DeleteTableItem,NULL);
 	LoopList(&(tbl->numeric),(ListItemFn)DeleteTableItem,NULL);
@@ -1062,7 +1063,7 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 }
 
 /*
-* ------------------------------------------------------------------------- 
+* -------------------------------------------------------------------------
 */
 
 Function *NewFunction(const Proto * f)
@@ -1070,7 +1071,7 @@ Function *NewFunction(const Proto * f)
 	Function *self;
 
 	/*
-	* calloc, to ensure all parameters are 0/NULL 
+	* calloc, to ensure all parameters are 0/NULL
 	*/
 	self = calloc(sizeof(Function), 1);
 	InitList(&(self->statements));
@@ -1100,7 +1101,7 @@ void DeleteFunction(Function * self)
 	int i;
 	LoopList(&(self->statements), (ListItemFn) DeleteStatement, NULL);
 	/*
-	* clean up registers 
+	* clean up registers
 	*/
 	for (i = 0; i < MAXARG_A; i++) {
 		if (self->R[i])
@@ -1224,7 +1225,7 @@ void ReleaseLocals(Function * F) {
 			}
 			F->Rvar[r] = 0;
 			F->Rprio[r] = 0;
-			if (!F->ignore_for_variables && !F->released_local) 
+			if (!F->ignore_for_variables && !F->released_local)
 				F->released_local = F->f->locvars[i].startpc;
 		}
 	}
@@ -1244,7 +1245,7 @@ void DeclareLocals(Function * F)
 	char *names[MAXARG_A];
 	int startparams = 0;
 	/*
-	* Those are declaration of parameters. 
+	* Those are declaration of parameters.
 	*/
 	if (F->pc == 0) {
 		startparams = F->f->numparams;
@@ -1299,7 +1300,7 @@ void DeclareLocals(Function * F)
 			// handle TFOR loops
 			if (GET_OPCODE(instr) == OP_JMP) {
 				Instruction n2 = F->f->code[F->pc+1+GETARG_sBx(instr)];
-				//fprintf(stderr,"3 %d\n",F->pc+1+GETARG_sBx(instr));	 
+				//fprintf(stderr,"3 %d\n",F->pc+1+GETARG_sBx(instr));
 				//fprintf(stderr,"4 %s %d\n",luaP_opnames[GET_OPCODE(n2)], F->pc+GETARG_sBx(instr));
 				if (GET_OPCODE(n2) == OP_TFORLOOP) {
 					F->f->locvars[i].startpc = F->pc+1;
@@ -1362,7 +1363,7 @@ char* PrintFunction(Function * F)
 }
 
 /*
-* ------------------------------------------------------------------------- 
+* -------------------------------------------------------------------------
 */
 
 static char *operators[22] = {
@@ -1434,7 +1435,7 @@ void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type)
 
 	int dot = 0;
 	/*
-	* see if index can be expressed without quotes 
+	* see if index can be expressed without quotes
 	*/
 	if (rstr[0] == '\"') {
 		if (luadec_isalpha(rstr[1]) || rstr[1] == '_') {
@@ -1590,14 +1591,43 @@ void DeclarePendingLocals(Function * F) {
 	StringBuffer_delete(str);
 }
 
-char* ProcessCode(const Proto * f, int indent)
+Proto* combine(lua_State* L, int n);
+char* ProcessCode(const Proto * f, int indent, int func_checking);
+
+int FunctionCheck(const Proto * f, int indent){
+    lua_State* L;
+    Proto* fnew;
+    char* decompiled = ProcessCode(f, indent, 1);
+    L=lua_open();
+    if (luaL_loadstring(L, decompiled)!=0){
+        //TODO check fail compile fail
+        free(decompiled);
+        return -1;
+    }else{
+        fnew = combine(L, 1);
+        if( !IsMain(f)){
+            f = f->p[1];
+        }
+        free(decompiled);
+        return CompareProto(f, fnew);
+    }
+}
+
+int CompareProto(const Proto* f1, const Proto* f2){
+    return 0;
+}
+
+char* ProcessCode(const Proto * f, int indent, int func_checking)
 {
+    if( func_check == 1 && func_checking == 0){
+        FunctionCheck(f, indent);
+    }
 	int i = 0;
 
 	int ignoreNext = 0;
 
 	/*
-	* State variables for the boolean operations. 
+	* State variables for the boolean operations.
 	*/
 	int boolpending = 0;
 
@@ -1624,7 +1654,7 @@ char* ProcessCode(const Proto * f, int indent)
 	error = NULL;
 
 	/*
-	* Function parameters are stored in registers from 0 on.  
+	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
 		char* x = malloc(MAX(10,strlen(LOCAL(i))+1));
@@ -1635,10 +1665,12 @@ char* ProcessCode(const Proto * f, int indent)
 	}
 	F->freeLocal = f->numparams;
 
-	TRY(FunctionHeader(F));
-
 	if ( f->sizeupvalues > 0){
-		StringBuffer_set(str, "-- upvalues: ");
+        if ( func_checking == 1){
+            StringBuffer_set(str, "local ");
+        }else{
+            StringBuffer_set(str, "-- upvalues: ");
+        }
 		for (i = 0; i < f->sizeupvalues - 1; i++) {
 			StringBuffer_add(str,getupval(F,i));
 			StringBuffer_add(str," , ");
@@ -1648,6 +1680,12 @@ char* ProcessCode(const Proto * f, int indent)
 		TRY(RawAddStatement(F, str));
 		StringBuffer_prune(str);
 	}
+
+	if ( !IsMain(f) && func_checking == 1){
+        TRY(RawAddStatement(F, "function"));
+	}
+
+	TRY(FunctionHeader(F));
 
 	if ((f->is_vararg&1) && (f->is_vararg&2)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
@@ -1801,7 +1839,7 @@ END_SEARCH:
 		}
 
 		/*
-		* Disassembler info 
+		* Disassembler info
 		*/
 		if (debug) {
 			fprintf(stddebug, "----------------------------------------------\n");
@@ -1863,7 +1901,7 @@ END_SEARCH:
 				TRY(AddStatement(F,str));
 				StringBuffer_prune(str);
 				F->indent++;
-				
+
 				if ( walk == F->loop_ptr ){
 					break;
 				}
@@ -1887,7 +1925,7 @@ END_SEARCH:
 			  if (error)
 				  goto errorHandler;
 			  /*
-			  * Copy from one register to another 
+			  * Copy from one register to another
 			  */
 			  TRY(Assign(F, REGISTER(a), bstr, a, PRIORITY(b), 1));
 			  break;
@@ -1895,7 +1933,7 @@ END_SEARCH:
 	  case OP_LOADK:
 		  {
 			  /*
-			  * Constant. Store it in register. 
+			  * Constant. Store it in register.
 			  */
 			  char *ctt = DecompileConstant(f, bc);
 			  TRY(Assign(F, REGISTER(a), ctt, a, 0, 1));
@@ -1907,7 +1945,7 @@ END_SEARCH:
 			  if ((F->nextBool == 0) || (c==0)) {
 				  /*
 				  * assign boolean constant
-				  */ 
+				  */
 				  if (PENDING(a)) {
 					  // some boolean constructs overwrite pending regs :(
 					  TRY(UnsetPending(F, a));
@@ -1916,7 +1954,7 @@ END_SEARCH:
 			  } else {
 				  /*
 				  * assign boolean value
-				  */ 
+				  */
 				  char *test;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
@@ -1931,7 +1969,7 @@ END_SEARCH:
 		  {
 			  int i;
 			  /*
-			  * Read nil into register. 
+			  * Read nil into register.
 			  */
 			  for(i = a; i <= b; i++) {
 				  TRY(Assign(F, REGISTER(i), "nil", i, 0, 1));
@@ -1942,7 +1980,7 @@ END_SEARCH:
 		  {
 			  int i;
 			  /*
-			  * Read ... into register. 
+			  * Read ... into register.
 			  */
 			  if (b==0) {
 				  TRY(Assign(F, REGISTER(a), "...", a, 0, 1));
@@ -1962,7 +2000,7 @@ END_SEARCH:
 	  case OP_GETGLOBAL:
 		  {
 			  /*
-			  * Read global into register. 
+			  * Read global into register.
 			  */
 			  TRY(Assign(F, REGISTER(a), GLOBAL(bc), a, 0, 1));
 			  break;
@@ -1970,7 +2008,7 @@ END_SEARCH:
 	  case OP_GETTABLE:
 		  {
 			  /*
-			  * Read table entry into register. 
+			  * Read table entry into register.
 			  */
 			  char *bstr, *cstr;
 			  TRY(cstr = RegisterOrConstant(F, c));
@@ -1988,7 +2026,7 @@ END_SEARCH:
 	  case OP_SETGLOBAL:
 		  {
 			  /*
-			  * Global Assignment statement. 
+			  * Global Assignment statement.
 			  */
 			  char *var = GLOBAL(bc);
 			  char *astr;
@@ -1999,7 +2037,7 @@ END_SEARCH:
 	  case OP_SETUPVAL:
 		  {
 			  /*
-			  * Global Assignment statement. 
+			  * Global Assignment statement.
 			  */
 			  char *var = UPVALUE(b);// UP(b) is correct
 			  char *astr;
@@ -2014,12 +2052,12 @@ END_SEARCH:
 			  TRY(bstr = RegisterOrConstant(F, b));
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  /*
-			  * first try to add into a table 
+			  * first try to add into a table
 			  */
 			  TRY(settable = SetTable(F, a, bstr, cstr));
 			  if (!settable) {
 				  /*
-				  * if failed, just output an assignment 
+				  * if failed, just output an assignment
 				  */
 				  StringBuffer_set(str, REGISTER(a));
 				  MakeIndex(F, str, bstr, DOT);
@@ -2037,7 +2075,7 @@ END_SEARCH:
 	  case OP_SELF:
 		  {
 			  /*
-			  * Read table entry into register. 
+			  * Read table entry into register.
 			  */
 			  char *bstr, *cstr;
 			  TRY(cstr = RegisterOrConstant(F, c));
@@ -2172,7 +2210,7 @@ END_SEARCH:
 				  F->elseStart = pc + 2;
 			  }else if (GET_OPCODE(idest) == OP_TFORLOOP) {
 				  /*
-				  * generic 'for' 
+				  * generic 'for'
 				  */
 				  int i;
 				  //int step;
@@ -2205,7 +2243,7 @@ END_SEARCH:
 								  if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-1]) == OP_TFORLOOP) {
 									  f->locvars[i2].endpc -= 1;
 								  }
-								  if (loopvars==3+i) {											
+								  if (loopvars==3+i) {
 									  vname[i-1] = LOCAL(i2);
 									  break;
 								  }
@@ -2370,7 +2408,7 @@ END_SEARCH:
 		  {
 			  /*
 			  * Function call. The CALL opcode works like this:
-			  * R(A),...,R(A+F-2) := R(A)(R(A+1),...,R(A+B-1)) 
+			  * R(A),...,R(A+F-2) := R(A)(R(A+1),...,R(A+B-1))
 			  */
 			  int i, limit, self;
 			  char* astr;
@@ -2401,7 +2439,7 @@ END_SEARCH:
 			  for (i = a + 1; i < limit; i++) {
 				  char *ireg;
 				  TRY(ireg = GetR(F, i));
-				  if(strcmp(ireg,".end") == 0) 
+				  if(strcmp(ireg,".end") == 0)
 					  break;
 				  if (self && i == a+1)
 					  continue;
@@ -2436,7 +2474,7 @@ END_SEARCH:
 		  {
 			  /*
 			  * Return call. The RETURN opcode works like this: return
-			  * R(A),...,R(A+B-2) 
+			  * R(A),...,R(A+B-2)
 			  */
 			  int i, limit;
 
@@ -2500,7 +2538,7 @@ END_SEARCH:
 	  case OP_FORPREP: //Lua5.1 specific. TODO: CHECK
 		  {
 			  /*
-			  * numeric 'for' 
+			  * numeric 'for'
 			  */
 			  int i;
 			  int step;
@@ -2513,7 +2551,7 @@ END_SEARCH:
 			  F->intspos++;
 			  TRY(initial = GetR(F, a));
 			  TRY(endstr = GetR(F, a+2));
-			  TRY(a1str = GetR(F, a+1));			 
+			  TRY(a1str = GetR(F, a+1));
 
 			  if (!IS_VARIABLE(a+3)) {
 				  int loopvars = 0;
@@ -2525,7 +2563,7 @@ END_SEARCH:
 						  if (GET_OPCODE(F->f->code[f->locvars[i].endpc-1]) == OP_FORLOOP) {
 							  f->locvars[i].endpc -=1;
 						  }
-						  if (loopvars==4) {											
+						  if (loopvars==4) {
 							  idxname = LOCAL(i);
 							  break;
 						  }
@@ -2543,7 +2581,7 @@ END_SEARCH:
 			  /*
 			  * if A argument for FORLOOP is not a known variable,
 			  * it was declared in the 'for' statement. Look for
-			  * its name in the locals table. 
+			  * its name in the locals table.
 			  */
 
 
@@ -2567,7 +2605,7 @@ END_SEARCH:
 			  }
 
 			  /*
-			  * Every numeric 'for' declares 4 variables. 
+			  * Every numeric 'for' declares 4 variables.
 			  */
 			  F->internal[a] = 1;
 			  F->internal[a + 1] = 1;
@@ -2592,7 +2630,7 @@ END_SEARCH:
 	  case OP_CLOSURE:
 		  {
 			  /*
-			  * Function. 
+			  * Function.
 			  */
 			  int i;
 			  int uvn;
@@ -2624,12 +2662,14 @@ END_SEARCH:
 			  }
 
 			  /* upvalue determinition end */
-			  if (disnested)
+			  if ( func_checking == 1){
+                  StringBuffer_printf(str, "function() end ");
+			  }else if (disnested)
 				  StringBuffer_printf(str, "DecompiledFunction_%d",c+1);
 			  else{
 				  StringBuffer_set(str, "function");
 				  functionnum = c+1;
-				  StringBuffer_add(str, ProcessCode(f->p[c], F->indent));
+				  StringBuffer_add(str, ProcessCode(f->p[c], F->indent, 0));
 				  functionnum = cfnum;
 				  for (i = 0; i < F->indent; i++) {
 					  StringBuffer_add(str, "  ");
@@ -2706,7 +2746,7 @@ errorHandler:
 	printf("ERRORHANDLER\n");
 	{
 		char *copy;
-		Statement *stmt; 
+		Statement *stmt;
 		StringBuffer_printf(str, "--[[ DECOMPILER ERROR %d: %s ]]", errorCode, error);
 		copy = StringBuffer_getCopy(str);
 		stmt = NewStatement(copy, F->pc, F->indent);
@@ -2726,7 +2766,7 @@ void luaU_decompile(const Proto * f, int dflag)
 	char* code;
 	debug = dflag;
 	functionnum = 0;
-	code = ProcessCode(f, 0);
+	code = ProcessCode(f, 0, 0);
 	printf("%s\n", code);
 	free(code);
 	fflush(stdout);
@@ -2749,7 +2789,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 
 	c = atoi(startstr);
 	if ( c < 0 || c > cf->sizep ){
-		fprintf(stderr,"No such nested function num, use -pn option to get available num.\n");
+		fprintf(stderr,"No such nested function num : %s , use -pn option to get available num.\n", funcnumstr);
 		return;
 	}
 	if ( c > 0 && c <= cf->sizep ){
@@ -2762,7 +2802,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 	while( !(endstr == NULL) ){
 		c = atoi(startstr);
 		if ( c < 1 || c > cf->sizep  ){
-			fprintf(stderr,"No such nested function num, use -pn option to get available num.\n");
+			fprintf(stderr,"No such nested function num : %s , use -pn option to get available num.\n",funcnumstr);
 			return;
 		}
 		cf = cf->p[c-1];
@@ -2792,7 +2832,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 
 
 	printf("DecompiledFunction_%s = function",funcnumstr);
-	code = ProcessCode(cf, 0);
+	code = ProcessCode(cf, 0, 0);
 	printf("%send\n", code);
 	free(code);
 	fflush(stdout);
@@ -2837,7 +2877,7 @@ void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 
 	printf("DecompiledFunction_%d = function",functions);
 	functionnum = i+1;
-	code = ProcessCode(f->p[i], 0);
+	code = ProcessCode(f->p[i], 0, 0);
 	printf("%send\n", code);
 	free(code);
 	fflush(stdout);
@@ -2883,7 +2923,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  sprintf(lend,"%c%d := %c%d",CC(a),CV(a),CC(b),CV(b));
 		  break;
 	  case OP_LOADK:
-		  sprintf(line,"%c%d K%d",CC(a),CV(a),bc);		  
+		  sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 		  sprintf(lend,"%c%d := %s",CC(a),CV(a),DecompileConstant(f,bc));
 		  break;
 	  case OP_LOADBOOL:
@@ -2912,7 +2952,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  strcat(lend,"nil");
 		  break;
 	  case OP_VARARG:
-		  //VARARG A B 
+		  //VARARG A B
 		  //R(A), R(A+1), ..., R(A+B-2) = vararg
 		  //ANoFrillsIntroToLua51VMInstructions.pdf is wrong
 		  sprintf(line,"%c%d %d",CC(a),CV(a),b);
@@ -3003,7 +3043,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_LEN:
 		  sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
 		  if (IS_CONSTANT(b)) {
-			  sprintf(lend,"R%d := %s %s",a,operators[o],DecompileConstant(f,b-256));				 
+			  sprintf(lend,"R%d := %s %s",a,operators[o],DecompileConstant(f,b-256));
 		  } else {
 			  sprintf(lend,"R%d := %s R%d",a,operators[o],b);
 		  }
@@ -3061,7 +3101,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				 }
 		  }
 		  break;
-	  case OP_TESTSET: 
+	  case OP_TESTSET:
 		  {
 			  int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"%c%d %c%d %d",CC(a),CV(a),CC(b),CV(b),c);
@@ -3139,7 +3179,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
 		  }
 		  break;
-	  case OP_TFORLOOP: 
+	  case OP_TFORLOOP:
 		  {
 			  //int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 			  sprintf(line,"R%d %d",a,c);
@@ -3153,11 +3193,11 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 				  strcat(tmp2,lend);
 			  } else {
 				  sprintf(tmp2,"R%d to top := ",a);
-			  } 
+			  }
 			  sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
 		  }
 		  break;
-	  case OP_FORPREP: 
+	  case OP_FORPREP:
 		  {
 			  sprintf(line,"R%d %d",a,pc+sbc+1);
 			  sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
@@ -3166,7 +3206,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_SETLIST:
 		  sprintf(line,"R%d %d %d",a,b,c);
 		  sprintf(lend,"R%d[(%d-1)*FPF+i] := R(%d+i), 1 <= i <= %d",a,c,a,b);
-		  break;         
+		  break;
 	  case OP_CLOSE:
 		  sprintf(line,"R%d",a);
 		  sprintf(lend,"SAVE R%d to top",a);
@@ -3177,7 +3217,7 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(lend,"R%d := closure(Function #%d)",a,bc+1);
 		  } else {
 			  sprintf(lend,"R%d := closure(Function #%s_%d)",a,name,bc+1);
-		  }				
+		  }
 		  break;
 	  default:
 		  break;

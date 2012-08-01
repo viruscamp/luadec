@@ -11,6 +11,7 @@
 #include "lopcodes.h"
 #include "lstring.h"
 #include "lundump.h"
+#include "print.h"
 
 #ifndef LUA_DEBUG
 #define luaB_opentests(L)
@@ -27,7 +28,6 @@
 static int debugging=0;			/* debug decompiler? */
 static int functions=0;			/* dump functions separately? */
 static char* funcnumstr=NULL;
-int disnested=0;			    /* don't decompile nested functions? */
 static int printfuncnum=0;      /* print function nums? */
 static int dumping=1;			/* dump bytecodes? */
 static int stripping=0;			/* strip debug information? */
@@ -35,18 +35,15 @@ static int disassemble=0;  /* disassemble? */
 int locals=0;			/* strip debug information? */
 int localdeclare[255][255];
 int functionnum;
-static int lds2=0;
+int disnested=0;            /* don't decompile nested functions? */
+int func_check=0;            /* compile decompiled function and compare */
 int guess_locals=1;
-char* LDS2;
 lua_State* glstate;
+static int lds2=0;
+char* LDS2;
 static char Output[]={ OUTPUT };	/* default output file name */
 static const char* output=Output;	/* output file name */
 static const char* progname=PROGNAME;	/* actual program name */
-
-void luaU_decompile(const Proto * f, int lflag);
-void luaU_decompileFunctions(const Proto * f, int lflag, int functions);
-void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr);
-void luaU_disassemble(const Proto* f, int dflag, int functions, char* name);
 
 static void fatal(const char* message)
 {
@@ -63,6 +60,7 @@ static void usage(const char* message, const char* arg)
 	fprintf(stderr,
 		"LuaDec by Hisham Muhammad\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
+		" by VirusCamp (http://code.google.com/p/luadec)\n"
 		"usage: %s [options] [filename].  Available options are:\n"
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"
@@ -187,7 +185,7 @@ int LocalsLoad(const char* text) {
 		switch (text[c]) {
 			case ',':
 				if (n!=0) {
-					localdeclare[f][i] = atoi(number);					
+					localdeclare[f][i] = atoi(number);
 				}
 				i++;
 				n=0;
@@ -209,7 +207,7 @@ int LocalsLoad(const char* text) {
 		c++;
 	}
 	if (n!=0) {
-		localdeclare[f][i] = atoi(number);					
+		localdeclare[f][i] = atoi(number);
 	}
 
 	return 1;
@@ -250,7 +248,7 @@ static int doargs(int argc, char* argv[])
 				funcnumstr=argv[i];
 			}
 		}
-		else if (IS("-dn")) 
+		else if (IS("-dn"))
 			disnested=1;
 		else if (IS("-pn"))
 			printfuncnum=1;
@@ -306,11 +304,11 @@ static Proto* toproto(lua_State* L, int i)
 	return c->l.p;
 }
 
-static Proto* combine(lua_State* L, int n)
+Proto* combine(lua_State* L, int n)
 {
 	if (n==1) {
 		int i;
-		Proto* f = toproto(L,-1); 
+		Proto* f = toproto(L,-1);
 		if (LDS2) {
 			Inject(f,0);
 			for (i=0; i<f->sizep; i++) {
@@ -408,10 +406,10 @@ int main(int argc, char* argv[])
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu) and viruscamp \n");
+		printf("; Disassembled using luadec " VERSION "\n");
 		printf("; Command line was: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION " by sztupy (http://winmo.sztupy.hu) and viruscamp \n");
+		printf("-- Decompiled using luadec " VERSION "\n");
 		printf("-- Command line was: ");
 	}
 	for (i=1; i<oargc; i++) {
