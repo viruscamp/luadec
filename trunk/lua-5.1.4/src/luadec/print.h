@@ -2,6 +2,7 @@
 #define PRINT_H
 
 #include "structs.h"
+#include "StringBuffer.h"
 
 typedef struct BoolOp_ BoolOp;
 
@@ -194,5 +195,10 @@ typedef enum {
 	TABLE=2
 } IndexType;
 void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type);
+
+void luaU_decompile(const Proto * f, int lflag);
+void luaU_decompileFunctions(const Proto * f, int lflag, int functions);
+void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr);
+void luaU_disassemble(const Proto* f, int dflag, int functions, char* name);
 
 #endif
