@@ -75,6 +75,7 @@ static void usage(const char* message, const char* arg)
 		"  -pg      don't run just print out the LDS2 string used\n"
 		"  -s       strip compiled code before decompiling\n"
 		"  -a       always declare all register as locals\n"
+		"  -fc      compile decompiled function and compare\n"
 		"  --       stop handling options\n", progname);
 	exit(EXIT_FAILURE);
 }
@@ -286,7 +287,8 @@ static int doargs(int argc, char* argv[])
 		{
 			printf("LuaDec "VERSION"\n");
 			if (argc==2) exit(EXIT_SUCCESS);
-		}
+		}else if (IS("-fc"))
+            func_check=1;
 		else					/* unknown option */
 			usage("unrecognized option `%s'",argv[i]);
 	}

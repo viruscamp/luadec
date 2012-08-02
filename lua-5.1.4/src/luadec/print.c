@@ -1601,6 +1601,7 @@ int FunctionCheck(const Proto * f, int indent){
     L=lua_open();
     if (luaL_loadstring(L, decompiled)!=0){
         //TODO check fail compile fail
+        fprintf(stderr, "compare fail, cannot compile");
         free(decompiled);
         return -1;
     }else{
@@ -1615,6 +1616,17 @@ int FunctionCheck(const Proto * f, int indent){
 
 int CompareProto(const Proto* f1, const Proto* f2){
     return 0;
+}
+
+int listUpvalues(Function *F, StringBuffer *str){
+    int i = 0;
+    for (i = 0; i < F->f->sizeupvalues - 1; i++) {
+        StringBuffer_add(str,getupval(F,i));
+        StringBuffer_add(str," , ");
+    }
+    i = F->f->sizeupvalues - 1;
+    StringBuffer_add(str,getupval(F,i));
+    return F->f->sizeupvalues;
 }
 
 char* ProcessCode(const Proto * f, int indent, int func_checking)
@@ -1671,21 +1683,27 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
         }else{
             StringBuffer_set(str, "-- upvalues: ");
         }
-		for (i = 0; i < f->sizeupvalues - 1; i++) {
-			StringBuffer_add(str,getupval(F,i));
-			StringBuffer_add(str," , ");
-		}
-		i = f->sizeupvalues - 1;
-		StringBuffer_add(str,getupval(F,i));
-		TRY(RawAddStatement(F, str));
-		StringBuffer_prune(str);
+        listUpvalues(F, str);
 	}
 
-	if ( !IsMain(f) && func_checking == 1){
-        TRY(RawAddStatement(F, "function"));
+	if( !IsMain(f)){
+        if ( func_checking == 1){
+            if ( f->sizeupvalues > 0){
+                TRY(RawAddStatement(F, str));
+            }
+            TRY(RawAddStatement(F, "function _func_to_check_"));
+            TRY(FunctionHeader(F));
+        }else{
+            TRY(FunctionHeader(F));
+            if ( f->sizeupvalues > 0){
+                TRY(RawAddStatement(F, str));
+            }
+        }
 	}
 
-	TRY(FunctionHeader(F));
+	if ( f->sizeupvalues > 0){
+        StringBuffer_prune(str);
+	}
 
 	if ((f->is_vararg&1) && (f->is_vararg&2)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
@@ -2730,6 +2748,11 @@ END_SEARCH:
 		StringBuffer_set(str," -- WARNING: missing end command somewhere! Added here");
 		TRY(AddStatement(F, str));
 		F->indent--;
+		StringBuffer_set(str, "end");
+		TRY(AddStatement(F, str));
+	}
+
+	if( !IsMain(f) && func_checking){
 		StringBuffer_set(str, "end");
 		TRY(AddStatement(F, str));
 	}
