@@ -1594,38 +1594,44 @@ void DeclarePendingLocals(Function * F) {
 Proto* combine(lua_State* L, int n);
 char* ProcessCode(const Proto * f, int indent, int func_checking);
 
-int FunctionCheck(const Proto * f, int indent){
+int FunctionCheck(const Proto * f, int indent, StringBuffer *str){
     lua_State* L;
     Proto* fnew;
+    int check_result;
     char* decompiled = ProcessCode(f, indent, 1);
     L=lua_open();
     if (luaL_loadstring(L, decompiled)!=0){
         //TODO check fail compile fail
-        fprintf(stderr, "--compare fail, cannot compile\n");
-        free(decompiled);
-        return -1;
+        StringBuffer_set(str, "--check fail : cannot compile");
+        check_result = -1;
     }else{
         fnew = combine(L, 1);
-        if( !IsMain(fnew)){
-            fnew = fnew->p[1];
+        if( !IsMain(f)){
+            fnew = fnew->p[0];
         }
-        free(decompiled);
-        return CompareProto(f, fnew);
+        check_result = CompareProto(f, fnew, str);
     }
+    lua_close(L);
+    free(decompiled);
+    if(check_result == 0){
+        StringBuffer_set(str, "-- check ok");
+    }
+    return check_result;
 }
 
-int CompareProto(const Proto* f1, const Proto* f2){
+int CompareProto(const Proto* f1, const Proto* f2, StringBuffer *str){
+    StringBuffer_set(str, "-- check fail :");
     int diff = 0;
     if(f1->numparams != f2->numparams){
-        fprintf(stderr, "--compare result : no , different params size\n");
+        StringBuffer_add(str, " different params size; ");
         diff = 1;
     }
     if(f1->sizeupvalues != f2->sizeupvalues){
-        fprintf(stderr, "--compare result : no , different upvalues size\n");
+        StringBuffer_add(str, " different upvalues size;");
         diff = 1;
     }
     if(f1->sizecode != f2->sizecode){
-        fprintf(stderr, "--compare result : no , different code size\n");
+        StringBuffer_add(str, " different code size;");
         diff = 1;
     }
     return diff;
@@ -1659,7 +1665,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
     TRY(FunctionHeader(F));
 
 	if ( f->sizeupvalues > 0){
-        StringBuffer_set(str, "_function_use_upvalues_as_params(");
+        StringBuffer_set(str, "_function_use_upvalues_as_params_(");
         listUpvalues(F, str);
         StringBuffer_add(str, ")");
         TRY(RawAddStatement(F, str));
@@ -1686,9 +1692,6 @@ int listUpvalues(Function *F, StringBuffer *str){
 
 char* ProcessCode(const Proto * f, int indent, int func_checking)
 {
-    if( func_check == 1 && func_checking == 0){
-        FunctionCheck(f, indent);
-    }
 	int i = 0;
 
 	int ignoreNext = 0;
@@ -1756,10 +1759,12 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
             }
         }
 	}
+    StringBuffer_prune(str);
 
-	if ( f->sizeupvalues > 0){
-        StringBuffer_prune(str);
-	}
+	if( func_check == 1 && func_checking == 0){
+        int func_check_result = FunctionCheck(f, indent, str);
+        TRY(RawAddStatement(F, str));
+    }
 
 	if ((f->is_vararg&1) && (f->is_vararg&2)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
