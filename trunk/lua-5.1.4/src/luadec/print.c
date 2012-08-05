@@ -1601,13 +1601,13 @@ int FunctionCheck(const Proto * f, int indent){
     L=lua_open();
     if (luaL_loadstring(L, decompiled)!=0){
         //TODO check fail compile fail
-        fprintf(stderr, "compare fail, cannot compile");
+        fprintf(stderr, "--compare fail, cannot compile\n");
         free(decompiled);
         return -1;
     }else{
         fnew = combine(L, 1);
-        if( !IsMain(f)){
-            f = f->p[1];
+        if( !IsMain(fnew)){
+            fnew = fnew->p[1];
         }
         free(decompiled);
         return CompareProto(f, fnew);
@@ -1615,7 +1615,62 @@ int FunctionCheck(const Proto * f, int indent){
 }
 
 int CompareProto(const Proto* f1, const Proto* f2){
-    return 0;
+    int diff = 0;
+    if(f1->numparams != f2->numparams){
+        fprintf(stderr, "--compare result : no , different params size\n");
+        diff = 1;
+    }
+    if(f1->sizeupvalues != f2->sizeupvalues){
+        fprintf(stderr, "--compare result : no , different upvalues size\n");
+        diff = 1;
+    }
+    if(f1->sizecode != f2->sizecode){
+        fprintf(stderr, "--compare result : no , different code size\n");
+        diff = 1;
+    }
+    return diff;
+}
+
+char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
+{
+	int i = 0;
+	Function *F;
+	StringBuffer *str = StringBuffer_new(NULL);
+	int baseIndent = indent;
+    char* output;
+	errorStr = StringBuffer_new(NULL);
+
+	F = NewFunction(f);
+	F->indent = indent;
+	error = NULL;
+
+	/*
+	* Function parameters are stored in registers from 0 on.
+	*/
+	for (i = 0; i < f->numparams; i++) {
+		char* x = malloc(MAX(10,strlen(LOCAL(i))+1));
+		sprintf(x,"%s",LOCAL(i));
+		//sprintf(x,"l_%d_%d",functionnum, i);
+		TRY(DeclareVariable(F, x, i));
+		IS_VARIABLE(i) = 1;
+	}
+	F->freeLocal = f->numparams;
+
+    TRY(FunctionHeader(F));
+
+	if ( f->sizeupvalues > 0){
+        StringBuffer_set(str, "_function_use_upvalues_as_params(");
+        listUpvalues(F, str);
+        StringBuffer_add(str, ")");
+        TRY(RawAddStatement(F, str));
+	}
+
+errorHandler:
+	output = PrintFunction(F);
+	DeleteFunction(F);
+	StringBuffer_delete(str);
+	//StringBuffer_delete(errorStr);
+	return output;
 }
 
 int listUpvalues(Function *F, StringBuffer *str){
@@ -1691,7 +1746,8 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
             if ( f->sizeupvalues > 0){
                 TRY(RawAddStatement(F, str));
             }
-            TRY(RawAddStatement(F, "function _func_to_check_"));
+            StringBuffer_set(str, "function _function_to_compare_");
+            TRY(RawAddStatement(F, str));
             TRY(FunctionHeader(F));
         }else{
             TRY(FunctionHeader(F));
@@ -2681,10 +2737,19 @@ END_SEARCH:
 
 			  /* upvalue determinition end */
 			  if ( func_checking == 1){
-                  StringBuffer_printf(str, "function() end ");
-			  }else if (disnested)
-				  StringBuffer_printf(str, "DecompiledFunction_%d",c+1);
-			  else{
+                  StringBuffer_set(str, "function");
+				  functionnum = c+1;
+				  StringBuffer_add(str, PrintFunctionOnlyParamsAndUpvalues(f->p[c], F->indent));
+				  functionnum = cfnum;
+				  for (i = 0; i < F->indent; i++) {
+					  StringBuffer_add(str, "  ");
+				  }
+				  StringBuffer_add(str, "end");
+				  if (F->indent == 0)
+					  StringBuffer_add(str, "\n");
+			  }else if (disnested){
+				  StringBuffer_printf(str, "_decompied_function_%d_",c+1);
+			  }else{
 				  StringBuffer_set(str, "function");
 				  functionnum = c+1;
 				  StringBuffer_add(str, ProcessCode(f->p[c], F->indent, 0));
