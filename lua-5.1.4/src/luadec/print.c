@@ -2806,7 +2806,7 @@ END_SEARCH:
 
 			  if (!f->p[c]->upvalues) {
 				  f->p[c]->sizeupvalues = uvn;
-				  f->p[c]->upvalues = malloc(uvn * sizeof(TString*));
+				  f->p[c]->upvalues = luaM_newvector(glstate,uvn,TString*);
 
 				  for (i=0; i<uvn; i++) {
 					  if (GET_OPCODE(code[pc+i+1]) == OP_MOVE) {
@@ -2997,7 +2997,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 
 	if (!cf->upvalues) {
 		cf->sizeupvalues = uvn;
-		cf->upvalues = malloc(uvn * sizeof(TString*));
+		cf->upvalues = luaM_newvector(glstate,uvn,TString*);
 
 		for (i=0; i<uvn; i++) {
 			char names[10];
@@ -3042,7 +3042,7 @@ void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 
 	if (!f->p[c]->upvalues) {
 		f->p[c]->sizeupvalues = uvn;
-		f->p[c]->upvalues = malloc(uvn * sizeof(TString*));
+		f->p[c]->upvalues = luaM_newvector(glstate,uvn,TString*);
 
 		for (i=0; i<uvn; i++) {
 			char names[10];

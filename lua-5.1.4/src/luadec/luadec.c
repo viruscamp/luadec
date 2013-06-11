@@ -151,7 +151,7 @@ int Inject(Proto * fp, int functionnum) {
 	}
 
 	if (fp->sizelocvars>0) {
-		fp->locvars = malloc(fp->sizelocvars * sizeof(LocVar));
+		fp->locvars = luaM_newvector(glstate,fp->sizelocvars,LocVar);
 		for (i=0; i<fp->sizelocvars;i++) {
 			char names[10];
 			sprintf(names,"l_%d_%d",functionnum,i+fp->numparams);
