@@ -1,4 +1,5 @@
 /* luadec, based on luac */
+#include "common.h"
 
 #include "structs.h"
 
@@ -65,6 +66,18 @@ void LoopList(List * list, ListItemFn fn, void* param) {
       walk = walk->next;
       fn(save, param);
    }
+}
+
+void DeleteList(List * list) {
+   ListItem *walk = list->head;
+   while (walk) {
+      ListItem *save = walk;
+      walk = walk->next;
+      free(save);
+   }
+   list->head = NULL;
+   list->tail = NULL;
+   list->size = 0;
 }
 
 ListItem *FindInList(List * list, ListItemCmpFn cmp, const void *sample) {
