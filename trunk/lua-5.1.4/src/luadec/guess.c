@@ -448,7 +448,7 @@ int luaU_guess_locals(Proto * f, int main) {
 		}
 		f->sizelocvars = length;
 		if (f->sizelocvars>0) {
-			f->locvars = malloc(f->sizelocvars * sizeof(LocVar));
+			f->locvars = luaM_newvector(glstate,f->sizelocvars,LocVar);
 			list = &list_begin;
 			length = 0;
 			while (list->next != NULL) {
