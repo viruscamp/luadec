@@ -1,3 +1,4 @@
+#include "common.h"
 
 #include "StringBuffer.h"
 
@@ -11,18 +12,6 @@
 #endif
 
 #define MAX(a,b) (((a)>(b))?(a):(b))
-
-/*{
-
-#define STRINGBUFFER_BLOCK 256
-
-typedef struct StringBuffer_ {
-   char* buffer;
-   int bufferSize;
-   int usedSize;
-} StringBuffer;
-
-}*/
 
 StringBuffer* StringBuffer_new(char* data) {
    StringBuffer* this = (StringBuffer*) malloc(sizeof(StringBuffer));

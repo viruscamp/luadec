@@ -1,4 +1,5 @@
 /* luadec, based on luac */
+#include "common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

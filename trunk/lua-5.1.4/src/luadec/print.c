@@ -1,4 +1,5 @@
 /* luadec, based on luac */
+#include "common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -219,14 +220,18 @@ int MatchIntListItem(IntListItem* item, IntListItem* match){
 	return (item->value == match->value);
 }
 
+void DeleteIntListItem(IntListItem* item, void * dummy){
+	free(item);
+}
+
 LogicExp* MakeExpNode(BoolOp* boolOp) {
 	LogicExp* node = cast(LogicExp*, malloc(sizeof(LogicExp)));
 	node->parent = NULL;
 	node->subexp = NULL;
 	node->next = NULL;
 	node->prev = NULL;
-	node->op1 = boolOp->op1;
-	node->op2 = boolOp->op2;
+	node->op1 = luadec_strdup(boolOp->op1);
+	node->op2 = luadec_strdup(boolOp->op2);
 	node->op = boolOp->op;
 	node->dest = boolOp->dest;
 	node->neg = boolOp->neg;
@@ -248,10 +253,40 @@ LogicExp* MakeExpChain(int dest) {
 	return node;
 }
 
-void DeleteLogicExp(LogicExp* exp) {
+/**
+LogicExp* CopyLogicExp(LogicExp* ptr){
+	if(ptr){
+		LogicExp* node = cast(LogicExp*, malloc(sizeof(LogicExp)));
+		node->parent = ptr->parent;
+		node->subexp = ptr->subexp;
+		node->next = ptr->next;
+		node->prev = ptr->prev;
+		node->op1 = luadec_strdup(ptr->op1);
+		node->op2 = luadec_strdup(ptr->op2);
+		node->neg = ptr->neg;
+		node->dest = ptr->dest;
+		node->is_chain = ptr->is_chain;
+		return node;
+	}else{
+		return NULL;
+	}
+}
+
+void DeleteLogicExp(LogicExp* exp){
 	if (exp) {
-		DeleteLogicExp(exp->subexp);
-		DeleteLogicExp(exp->next);
+		if(exp->op1)
+			free(exp->op1);
+		if(exp->op2)
+			free(exp->op2);
+		free(exp);
+	}
+}
+**/
+
+void DeleteLogicExpTree(LogicExp* exp) {
+	if (exp) {
+		DeleteLogicExpTree(exp->subexp);
+		DeleteLogicExpTree(exp->next);
 		if(exp->op1)
 			free(exp->op1);
 		if(exp->op2)
@@ -260,20 +295,21 @@ void DeleteLogicExp(LogicExp* exp) {
 	}
 }
 
-StringBuffer* PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev) {
+void PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev) {
 	if (exp->subexp) {
 		StringBuffer_addChar(str, '(');
-		str = PrintLogicExp(str, exp->dest, exp->subexp, inv, rev);
+		PrintLogicExp(str, exp->dest, exp->subexp, inv, rev);
 		StringBuffer_addChar(str, ')');
 	} else {
 		char *op;
 		int cond = exp->neg;
 		if (inv) cond = !cond;
 		if (rev) cond = !cond;
-		if (cond)
+		if (cond) {
 			op = invopstr(exp->op);
-		else
+		}else{
 			op = opstr(exp->op);
+		}
 		if ((exp->op != OP_TEST) && (exp->op != OP_TESTSET)) {
 			StringBuffer_addPrintf(str, "%s %s %s", exp->op1, op, exp->op2);
 		} else if (op) {
@@ -282,25 +318,22 @@ StringBuffer* PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev)
 			StringBuffer_addPrintf(str, "%s", exp->op2);
 		}
 	}
-	return str;
 }
 
-StringBuffer* PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_, int rev) {
+void PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_, int rev) {
 	int inv = inv_;
-	if (!str)
-		str = StringBuffer_new(NULL);
 	while (exp->next) {
 		char* op;
 		int cond = exp->dest > dest;
 		inv = cond ? inv_ : !inv_;
-		str = PrintLogicItem(str, exp, inv, rev);
+		PrintLogicItem(str, exp, inv, rev);
 		exp = exp->next;
 		if (inv_) cond = !cond;
 		if (rev) cond = !cond;
 		op = cond ? "and" : "or";
 		StringBuffer_addPrintf(str, " %s ", op);
 	}
-	return PrintLogicItem(str, exp, inv_, rev);
+	PrintLogicItem(str, exp, inv_, rev);
 }
 
 void TieAsNext(LogicExp* curr, LogicExp* item) {
@@ -495,14 +528,15 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 	if (first->is_chain)
 		first = first->subexp;
 	for (i = last+1; i < F->nextBool; i++){
-		//if (F->bools[i-last-1])
-		//free(F->bools[i-last-1]);
-		F->bools[i-last-1] = F->bools[i];
+		if( i-last-1 != i){
+			DeleteBoolOp(F->bools[i-last-1]);
+			F->bools[i-last-1] = F->bools[i];
+			F->bools[i] = NULL;
+		}
 	}
 	if (!F->bools[0]){
-		F->bools[0] = calloc(sizeof(BoolOp), 1);
-		F->bools[0]->op1 = NULL;
-		F->bools[0]->op2 = NULL;
+		DeleteBoolOp(F->bools[0]);
+		F->bools[0] = NewBoolOp();
 	}
 	F->nextBool -= last + 1;
 	if (endif)
@@ -513,26 +547,26 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 }
 
 char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
-	char* result;
-	StringBuffer* str;
+	char* result = NULL;
+	StringBuffer* str = StringBuffer_new(NULL);
 
 	if (exp) {
-		str = PrintLogicExp(NULL, *thenaddr, exp, 0, test);
+		PrintLogicExp(str, *thenaddr, exp, 0, test);
 		if (test && endif && *endif == 0) {
 			//SET_ERROR(F,"Unhandled construct in boolean test");
 			result = malloc(30);
 			sprintf(result," --UNHANDLEDCONTRUCT-- ");
-			//StringBuffer_delete(str);
-			return result;
+			goto ERROR_HANDLER;
 		}
 	} else {
 		result = malloc(30);
 		sprintf(result,"error_maybe_false");
-		return result;
+		goto ERROR_HANDLER;
 	}
 
-
 	result = StringBuffer_getBuffer(str);
+
+ERROR_HANDLER:
 	StringBuffer_delete(str);
 	//DeleteLogicExp(exp);
 	return result;
@@ -674,7 +708,8 @@ void FlushBoolean(Function * F) {
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
 		LoopItem* walk = F->loop_ptr;
-		if (error) return;
+		if (error) 
+			goto ERROR_HANDLER;
 		//search parent
 		while (walk){
 			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
@@ -684,20 +719,30 @@ void FlushBoolean(Function * F) {
 		}
 		if (walk){
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
-			if (error) return;
+			if (error) 
+				goto ERROR_HANDLER;
 			StringBuffer_addPrintf(str, "while %s do", test);
+			free(test);
 			RawAddStatement(F, str);
 			F->indent++;
 		} else {
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
-			if (error) return;
+			if (error) 
+				goto ERROR_HANDLER;
 			StoreEndifAddr(F, endif);
 			StringBuffer_addPrintf(str, "if %s then", test);
+			free(test);
 			F->elseWritten = 0;
 			RawAddStatement(F, str);
 			F->indent++;
 		}
 		StringBuffer_delete(str);
+		DeleteLogicExpTree(exp);
+		continue;
+ERROR_HANDLER:
+		StringBuffer_delete(str);
+		//DeleteLogicExpTree(exp);
+		return;
 	}
 	F->testpending = 0;
 }
@@ -1063,11 +1108,51 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 }
 
 /*
+*	Boolop Functions
+*/
+
+BoolOp* NewBoolOp(){
+	BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
+	value->op1 = NULL;
+	value->op2 = NULL;
+	return value;
+}
+
+void DeleteBoolOp(BoolOp* ptr){
+	if(ptr){
+		if(ptr->op1){
+			free(ptr->op1);
+		}
+		if(ptr->op2){
+			free(ptr->op2);
+		}
+		free(ptr);
+	}
+}
+
+BoolOp* CopyBoolOp(const BoolOp* ptr){
+	if(ptr){
+		BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
+		value->op1 = luadec_strdup(ptr->op1);
+		value->op2 = luadec_strdup(ptr->op2);
+		value->dest = ptr->dest;
+		value->neg = ptr->neg;
+		value->op = ptr->op;
+		value->pc = ptr->pc;
+		value->super = value->super;
+		return value;
+	}else{
+		return NULL;
+	}
+}
+
+/*
 * -------------------------------------------------------------------------
 */
 
 Function *NewFunction(const Proto * f)
 {
+	int i;
 	Function *self;
 
 	/*
@@ -1089,9 +1174,12 @@ Function *NewFunction(const Proto * f)
 	self->do_opens = calloc(sizeof(IntSet), 1);
 	self->do_closes = calloc(sizeof(IntSet), 1);
 	self->decompiledCode = StringBuffer_new(NULL);
-	self->bools[0] = calloc(sizeof(BoolOp), 1);
-	self->bools[0]->op1 = NULL;
-	self->bools[0]->op2 = NULL;
+
+	for(i=0; i< MAXARG_A; i++){
+		self->bools[i] = NULL;
+	}
+	self->bools[0] = NewBoolOp();
+	
 	self->intspos = 0;
 	return self;
 }
@@ -1104,23 +1192,18 @@ void DeleteFunction(Function * self)
 	* clean up registers
 	*/
 	for (i = 0; i < MAXARG_A; i++) {
-		if (self->R[i])
+		if (self->R[i]){
 			free(self->R[i]);
-#if 0
-		if (self->bools[i]){
-			if(self->bools[i]->op1)
-				free(self->bools[i]->op1);
-			if(self->bools[i]->op2)
-				free(self->bools[i]->op2);
-			free(self->bools[i]);
 		}
-#endif
+		DeleteBoolOp(self->bools[i]);
+		self->bools[i] = NULL;
 	}
 	StringBuffer_delete(self->decompiledCode);
 	free(self->vpend);
 	free(self->tpend);
 	//free(self->repeats);
 	//free(self->untils);
+	DeleteLoopTree(self->loop_tree);
 	free(self->do_opens);
 	free(self->do_closes);
 	free(self);
@@ -1426,14 +1509,19 @@ const char* keywords[] = {
  */
 void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type)
 {
-	int len = strlen(rstr);
-	char lastchar = rstr[len - 1];
+	int len, dot, i;
+	char lastchar;
+	char* rawrstr;
+	StringBuffer* rawrstrbuff;
+
+	len = strlen(rstr);
+	lastchar = rstr[len - 1];
 	rstr[len - 1] = '\0';
-	StringBuffer* rawrstrbuff = StringBuffer_new((rstr + 1));
-	char* rawrstr = StringBuffer_getRef(rawrstrbuff);
+	rawrstrbuff = StringBuffer_new((rstr + 1));
+	rawrstr = StringBuffer_getRef(rawrstrbuff);
 	rstr[len - 1] = lastchar;
 
-	int dot = 0;
+	dot = 0;
 	/*
 	* see if index can be expressed without quotes
 	*/
@@ -1447,7 +1535,6 @@ void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type)
 					break;
 				}
 			}
-			int i;
 			for (i = 0; i < numofkeywords; i++){
 				if(strcmp(keywords[i],rawrstr) == 0){
 					dot = 0;
@@ -1620,19 +1707,19 @@ int FunctionCheck(const Proto * f, int indent, StringBuffer *str){
 }
 
 int CompareProto(const Proto* f1, const Proto* f2, StringBuffer *str){
-    StringBuffer_set(str, "-- check fail :");
     int diff = 0;
+	StringBuffer_set(str, "-- check fail :");
     if(f1->numparams != f2->numparams){
-        StringBuffer_add(str, " different params size; ");
         diff = 1;
+        StringBuffer_add(str, " different params size;");
     }
     if(f1->sizeupvalues != f2->sizeupvalues){
+		diff = 1;
         StringBuffer_add(str, " different upvalues size;");
-        diff = 1;
     }
     if(f1->sizecode != f2->sizecode){
+		diff = 1;
         StringBuffer_add(str, " different code size;");
-        diff = 1;
     }
     return diff;
 }
@@ -1644,7 +1731,6 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
 	StringBuffer *str = StringBuffer_new(NULL);
 	int baseIndent = indent;
     char* output;
-	errorStr = StringBuffer_new(NULL);
 
 	F = NewFunction(f);
 	F->indent = indent;
@@ -1675,7 +1761,6 @@ errorHandler:
 	output = PrintFunction(F);
 	DeleteFunction(F);
 	StringBuffer_delete(str);
-	//StringBuffer_delete(errorStr);
 	return output;
 }
 
@@ -1715,9 +1800,6 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 	List processed_jmps;
 	InitList(&processed_jmps);
 
-
-	errorStr = StringBuffer_new(NULL);
-
 	F = NewFunction(f);
 	F->indent = indent;
 	F->pc = 0;
@@ -1732,6 +1814,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
 		IS_VARIABLE(i) = 1;
+		free(x);
 	}
 	F->freeLocal = f->numparams;
 
@@ -1793,8 +1876,12 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			AddToLoopTree(F, item);
 		}else if(o == OP_JMP) {
 			IntListItem* intItem = NewIntListItem(pc);
-			if (FindInList(&processed_jmps, (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem)))
+			if (FindInList(&processed_jmps, (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem))){
+				free(intItem);
 				continue;
+			}
+			free(intItem);
+			intItem = NULL;
 			if (dest < pc) {
 				int found = 0;
 				int x;
@@ -1820,13 +1907,12 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 								found = 1;
 							}
 						}else{ // BREAK
-							intItem = NewIntListItem(x);
+							IntListItem* intItem = NewIntListItem(x);
 							AddToList(&(F->breaks), cast(ListItem*,intItem));
-							intItem = NULL;
+	
 						}
 						intItem = NewIntListItem(x);
 						AddToList(&processed_jmps, cast(ListItem*,intItem));
-						intItem = NULL;
 					}
 				}
 				if (found == 1){
@@ -1870,6 +1956,7 @@ END_SEARCH:
 			}
 		}
 	}
+	DeleteList(&processed_jmps);
 
 	F->loop_ptr = F->loop_tree;
 	next_child = F->loop_tree->child;
@@ -2241,17 +2328,17 @@ END_SEARCH:
 		  {
 			  int dest = sbc + pc + 2;
 			  Instruction idest = code[dest - 1];
-			  IntListItem* foundInt = NULL;
 			  IntListItem* intItem = NewIntListItem(pc);
+			  IntListItem* foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem));
+			  free(intItem);
 			  if (boolpending) {
 				  boolpending = 0;
 				  F->bools[F->nextBool]->dest = dest;
 				  F->nextBool++;
-				  //if(F->bools[F->nextBool])
-				  //free(F->bools[F->nextBool]);
-				  F->bools[F->nextBool] = calloc(sizeof(BoolOp), 1);
-				  F->bools[F->nextBool]->op1 = NULL;
-				  F->bools[F->nextBool]->op2 = NULL;
+				  if(F->bools[F->nextBool]){
+					DeleteBoolOp(F->bools[F->nextBool]);
+				  }
+				  F->bools[F->nextBool] = NewBoolOp();
 				  if (F->testpending) {
 					  F->testjump = dest;
 				  }
@@ -2270,7 +2357,7 @@ END_SEARCH:
 				  StringBuffer_printf(str, "until false");
 				  F->indent--;
 				  RawAddStatement(F, str);*/
-			  }else if ((foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem))) != NULL){ // break
+			  }else if (foundInt != NULL){ // break
 				  free(foundInt);
 				  StringBuffer_printf(str, "do break end");
 				  TRY(AddStatement(F, str));
@@ -2371,11 +2458,10 @@ END_SEARCH:
 				  F->testpending = a+1;
 				  F->bools[F->nextBool]->dest = dest;
 				  F->nextBool++;
-				  //if(F->bools[F->nextBool])
-				  //free(F->bools[F->nextBool]);
-				  F->bools[F->nextBool] = calloc(sizeof(BoolOp), 1);
-				  F->bools[F->nextBool]->op1 = NULL;
-				  F->bools[F->nextBool]->op2 = NULL;
+				  if(F->bools[F->nextBool]){
+					DeleteBoolOp(F->bools[F->nextBool]);
+				  }
+				  F->bools[F->nextBool] = NewBoolOp();
 				  F->testjump = dest;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
@@ -2415,7 +2501,6 @@ END_SEARCH:
 				  }
 				  TRY(AddStatement(F, str));
 			  }
-			  free(intItem);
 			  break;
 		  }
 	  case OP_EQ:
@@ -2649,12 +2734,11 @@ END_SEARCH:
 					  }
 				  }
 				  if (idxname == NULL) {
-					  idxname = malloc(2);
-					  sprintf(idxname,"i");
+					  idxname = "i";
 					  TRY(DeclareVariable(F, idxname, a + 3));
 				  }
 			  } else {
-				  idxname = luadec_strdup(F->R[a+3]);
+				  idxname = F->R[a+3];
 			  }
 			  DeclarePendingLocals(F);
 			  /*
@@ -2665,7 +2749,7 @@ END_SEARCH:
 
 
 
-			  initial = luadec_strdup(initial);
+			  //initial = luadec_strdup(initial);
 			  step = atoi(REGISTER(a + 2));
 			  stepLen = strlen(REGISTER(a + 2));
 			  // findSign = strrchr(initial, '-');
@@ -2679,8 +2763,7 @@ END_SEARCH:
 					  idxname, initial, a1str);
 			  } else {
 				  StringBuffer_printf(str, "for %s = %s, %s, %s do",
-					  idxname, initial,
-					  a1str, REGISTER(a + 2));
+					  idxname, initial, a1str, REGISTER(a + 2));
 			  }
 
 			  /*
@@ -2755,9 +2838,12 @@ END_SEARCH:
 			  }else if (disnested){
 				  StringBuffer_printf(str, "_decompied_function_%d_",c+1);
 			  }else{
+				  char* code = NULL;
 				  StringBuffer_set(str, "function");
 				  functionnum = c+1;
-				  StringBuffer_add(str, ProcessCode(f->p[c], F->indent, 0));
+				  code = ProcessCode(f->p[c], F->indent, 0);
+				  StringBuffer_add(str, code);
+				  free(code);
 				  functionnum = cfnum;
 				  for (i = 0; i < F->indent; i++) {
 					  StringBuffer_add(str, "  ");
@@ -2832,7 +2918,6 @@ END_SEARCH:
 	DeleteFunction(F);
 
 	StringBuffer_delete(str);
-	//StringBuffer_delete(errorStr);
 	return output;
 
 errorHandler:
@@ -2850,7 +2935,6 @@ errorHandler:
 	DeleteFunction(F);
 	error = NULL;
 	StringBuffer_delete(str);
-	//StringBuffer_delete(errorStr);
 	return output;
 }
 
@@ -2859,7 +2943,9 @@ void luaU_decompile(const Proto * f, int dflag)
 	char* code;
 	debug = dflag;
 	functionnum = 0;
+	errorStr = StringBuffer_new(NULL);
 	code = ProcessCode(f, 0, 0);
+	StringBuffer_delete(errorStr);
 	printf("%s\n", code);
 	free(code);
 	fflush(stdout);
@@ -2925,7 +3011,9 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 
 
 	printf("DecompiledFunction_%s = function",funcnumstr);
+	errorStr = StringBuffer_new(NULL);
 	code = ProcessCode(cf, 0, 0);
+	StringBuffer_delete(errorStr);
 	printf("%send\n", code);
 	free(code);
 	fflush(stdout);
@@ -2970,7 +3058,9 @@ void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 
 	printf("DecompiledFunction_%d = function",functions);
 	functionnum = i+1;
+	errorStr = StringBuffer_new(NULL);
 	code = ProcessCode(f->p[i], 0, 0);
+	StringBuffer_delete(errorStr);
 	printf("%send\n", code);
 	free(code);
 	fflush(stdout);

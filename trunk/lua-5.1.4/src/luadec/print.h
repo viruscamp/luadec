@@ -184,8 +184,12 @@ struct LogicExp_ {
    int neg;
 };
 
-StringBuffer* PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev);
-StringBuffer* PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_, int rev_);
+LogicExp* MakeExpNode(BoolOp* boolOp);
+LogicExp* MakeExpChain(int dest);
+void DeleteLogicExpTree(LogicExp* root);
+void PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev);
+void PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_, int rev_);
+
 void AddStatement(Function * F, StringBuffer * str);
 void ShowState(Function * F);
 
@@ -200,5 +204,9 @@ void luaU_decompile(const Proto * f, int lflag);
 void luaU_decompileFunctions(const Proto * f, int lflag, int functions);
 void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr);
 void luaU_disassemble(const Proto* f, int dflag, int functions, char* name);
+
+BoolOp* NewBoolOp();
+void DeleteBoolOp(BoolOp* ptr);
+BoolOp* CopyBoolOp(const BoolOp* ptr);
 
 #endif

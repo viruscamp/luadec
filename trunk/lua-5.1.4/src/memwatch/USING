@@ -1,0 +1,213 @@
+Using memwatch
+==============
+
+What is it?
+
+	Memwatch is primarily a memory leak detector for C. Besides
+	detecting leaks, it can do a bunch of other stuff, but lets
+	stay to the basics. If you _really_ want to know all the
+	gory details, you should check out the header file,
+	memwatch.h, and the source code. It's actually got some
+	comments! (Whoa, what a concept!)
+
+How do I get the latest version?
+
+	http://www.linkdata.se/sourcecode.html
+	ftp://ftp.linkdata.se/pub/memwatch/
+
+How does it work?
+
+	Using the C preprocessor, memwatch replaces all your
+	programs calls to ANSI C memory allocation functions with
+	calls to it's own functions, which keeps a record of all
+	allocations.
+
+	Memwatch is very unobtrusive; unless the define MEMWATCH is
+	defined, memwatch removes all traces of itself from the
+	code (using the preprocessor).
+
+	Memwatch normally writes it's data to the file
+	memwatch.log, but this can be overridden; see the section
+	on I/O, later.
+
+Can I use it for my C++ sources?
+
+	You can, but it's not recommended. C++ allows individual
+	classes to have their own memory management, and the
+	preprocessor approach used by memwatch can cause havoc
+	with such class declarations if improperly used.
+
+	If you have no such classes, or have them but still want
+	to test it, you can give it a try.
+
+	First, re-enable the C++ support code in memwatch.
+	If you can't find it, you probably shouldn't be using
+	it. Then, in your source code, after including ALL
+	header files:
+
+		#define new mwNew
+		#define delete mwDelete
+
+	This will cause calls to new and delete in that source file 
+	to be directed to memwatch. Also, be sure to read all the
+	text in memwatch.h regarding C++ support.
+
+Is this stuff thread-safe?
+
+	I doubt it. As of version 2.66, there is rudimentary support
+	for threads, if you happen to be using Win32 or if you have
+	pthreads. Define WIN32 or MW_PTHREADS to signify this fact.
+	
+	This will cause a global mutex to be created, and memwatch
+	will lock it when accessing the global memory chain, but it's
+	still far from certified threadsafe.
+	
+Initialization and cleanup
+
+	In order to do it's work in a timely fashion, memwatch
+	needs to do some startup and cleanup work. mwInit()
+	initializes memwatch and mwTerm() terminates it. Memwatch
+	can auto-initialize, and will do so if you don't call
+	mwInit() yourself. If this is the case, memwatch will use
+	atexit() to register mwTerm() to the atexit-queue.
+
+	The auto-init technique has a caveat; if you are using
+	atexit() yourself to do cleanup work, memwatch may
+	terminate before your program is done. To be on the safe
+	side, use mwInit() and mwTerm().
+
+	mwInit() and mwTerm() is nestable, so you can call mwInit()
+	several times, requiring mwTerm() to be called an equal
+	number of times to terminate memwatch.
+
+	In case of the program aborting in a controlled way, you
+	may want to call mwAbort() instead of mwTerm(). mwAbort()
+	will terminate memwatch even if there are outstanding calls
+	to mwTerm().
+
+I/O operations
+
+	During normal operations, memwatch creates a file named
+	memwatch.log. Sometimes, memwatch.log can't be created;
+	then memwatch tries to create files name memwatNN.log,
+	where NN is between 01 and 99. If that fails, no log will
+	be produced.
+
+	If you can't use a file log, or don't want to, no worry.
+	Just call mwSetOutFunc() with the address of a "void
+	func(int c)" function, and all output will be directed
+	there, character by character.
+
+	Memwatch also has an Abort/Retry/Ignore handler that is
+	used when an ASSERT or VERIFY fails. The default handler
+	does no I/O, but automatically aborts the program. You can
+	use any handler you want; just send the address of a "int
+	func(const char*)" to mwSetAriFunc(). For more details on
+	that, see memwatch.h.
+
+TRACE/ASSERT/VERIFY macros
+
+	Memwatch defines (if not already defined) the macros TRACE,
+	ASSERT and VERIFY. If you are already using macros with
+	these names, memwatch 2.61 and later will not override
+	them. Memwatch 2.61 and later will also always define the
+	macros mwTRACE, mwASSERT and mwVERIFY, so you can use these
+	to make sure you're talking to memwatch. Versions prior
+	to 2.61 will *OVERRIDE* existing TRACE, ASSERT and VERIFY.
+
+	To make sure that existing TRACE, ASSERT and VERIFY macros
+	are preserved, you can define MW_NOTRACE, MW_NOASSERT and
+	MW_NOVERIFY. All versions of memwatch will abide by these.
+
+How slow can you go?
+
+	Memwatch slows things down. Large allocations aren't
+	affected so that you can measure it, but small allocations
+	that would utilize a compilers small-allocator function
+	suddenly cannot, and so gets slowed down alot. As a worst
+	case, expect it to be 3-5 times slower.
+
+	Free'ing gets hit worse, I'm afraid, as memwatch checks
+	a lot of stuff when freeing. Expect it to be 5-7 times
+	slower, no matter what the size of the allocation.
+
+Stress-testing the application
+
+	You can simulate low-memory conditions using mwLimit().
+	mwLimit() takes the maximum number of bytes to be
+	allocated; when the limit is hit, allocation requests will
+	fail, and a "limit" message will be logged.
+
+	If you hit a real low-memory situation, memwatch logs that
+	too. Memwatch itself has some reserve memory tucked away so
+	it should continue running even in the worst conditions.
+
+Hunting down wild writes and other Nasty Things
+
+	Wild writes are usually caused by using pointers that arent
+	initialized, or that were initialized, but then the memory
+	they points to is moved or freed. The best way to avoid
+	these kind of problems is to ALWAYS initialize pointers to
+	NULL, and after freeing a memory buffer, setting all
+	pointers that pointed to it to NULL.
+
+	To aid in tracking down uninitialized pointers memwatch
+	zaps all memory with certain values. Recently allocated
+	memory (unless calloc'd, of course), contains 0xFE.
+	Recently freed memory contains 0xFD. So if your program
+	crashes when using memwatch and not without memwatch, it's
+	most likely because you are not initializing your allocated
+	buffers, or using the buffers after they've been freed.
+
+	In the event that a wild pointer should damage memwatch's
+	internal data structures, memwatch employs checksums,
+	multiple copies of some values, and can also repair it's
+	own data structures.
+
+	If you are a paranoid person, and as programmer you should
+	be, you can use memwatch's mwIsReadAddr() and
+	mwIsSafeAddr() functions to check the accessibility of
+	memory. These are implemented for both ANSI C systems and
+	Win32 systems. Just put an mwASSERT() around the check and
+	forget about it.
+
+Can I help?
+
+	Well, sure. For instance, I like memwatch to compile
+	without any warnings or errors. If you are using an ANSI C
+	compliant compiler, and are getting warnings or errors,
+	please mail me the details and instructions on how to fix
+	them, if you can.
+
+	Another thing you can do if you decide to use memwatch is
+	to mail me the name of the project(s) (and URL, if any),
+	hardware and operating system, compiler and what user
+	(organization). I will then post this info on the list of
+	memwatch users.
+	(http://www.linkdata.se/memwatchusers.html)
+
+Top five problems using memwatch
+
+	5.  Passed a non-memwatch allocated pointer to memwatch's
+		free(). Symtom: Causes an erroneous "WILD free" log
+		entry to appear. Cure: Either include memwatch.h for
+		the file that allocates, or use mwFree_() to free it.
+
+	4.  Relied on auto-initialization when using atexit().
+		Symptom: Causes incorrect "unfreed" and "WILD free"
+		messages. Cure: Use mwInit() and mwTerm().
+
+	3.  Forgot to include memwatch.h in all files. Symptom:
+		Tends to generate "WILD free" and "unfreed" messages.
+		Cure: Make sure to include memwatch.h!
+
+	2.  No write permissions in currect directory. Symptom:
+		Seems like memwatch 'just aint working'. Cure: Use
+		mwSetOutFunc() to redirect output.
+
+	...and the number one problem is...
+
+	1.  Didn't define MEMWATCH when compiling. Symptom:
+		Memwatch dutifully disables itself. Cure: Try adding
+		-DMEMWATCH to the command line.
+
