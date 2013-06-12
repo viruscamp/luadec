@@ -186,7 +186,9 @@ struct LogicExp_ {
 
 LogicExp* MakeExpNode(BoolOp* boolOp);
 LogicExp* MakeExpChain(int dest);
-void DeleteLogicExpTree(LogicExp* root);
+LogicExp* FindLogicExpTreeRoot(LogicExp* exp);
+void DeleteLogicExpSubTree(LogicExp* exp);
+void DeleteLogicExpTree(LogicExp* exp);
 void PrintLogicItem(StringBuffer* str, LogicExp* exp, int inv, int rev);
 void PrintLogicExp(StringBuffer* str, int dest, LogicExp* exp, int inv_, int rev_);
 
