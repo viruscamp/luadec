@@ -253,27 +253,18 @@ LogicExp* MakeExpChain(int dest) {
 	return node;
 }
 
-/**
-LogicExp* CopyLogicExp(LogicExp* ptr){
-	if(ptr){
-		LogicExp* node = cast(LogicExp*, malloc(sizeof(LogicExp)));
-		node->parent = ptr->parent;
-		node->subexp = ptr->subexp;
-		node->next = ptr->next;
-		node->prev = ptr->prev;
-		node->op1 = luadec_strdup(ptr->op1);
-		node->op2 = luadec_strdup(ptr->op2);
-		node->neg = ptr->neg;
-		node->dest = ptr->dest;
-		node->is_chain = ptr->is_chain;
-		return node;
-	}else{
-		return NULL;
+LogicExp* FindLogicExpTreeRoot(LogicExp* exp){
+	LogicExp* curr = exp;
+	while (curr->parent) {
+		curr = curr->parent;
 	}
+	return curr;
 }
 
-void DeleteLogicExp(LogicExp* exp){
+void DeleteLogicExpSubTree(LogicExp* exp) {
 	if (exp) {
+		DeleteLogicExpSubTree(exp->subexp);
+		DeleteLogicExpSubTree(exp->next);
 		if(exp->op1)
 			free(exp->op1);
 		if(exp->op2)
@@ -281,17 +272,11 @@ void DeleteLogicExp(LogicExp* exp){
 		free(exp);
 	}
 }
-**/
 
 void DeleteLogicExpTree(LogicExp* exp) {
 	if (exp) {
-		DeleteLogicExpTree(exp->subexp);
-		DeleteLogicExpTree(exp->next);
-		if(exp->op1)
-			free(exp->op1);
-		if(exp->op2)
-			free(exp->op2);
-		free(exp);
+		LogicExp* root = FindLogicExpTreeRoot(exp);
+		DeleteLogicExpSubTree(root);
 	}
 }
 
