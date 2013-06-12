@@ -525,8 +525,9 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 			curr = curr->parent;
 		}
 	}
-	if (first->is_chain)
+	if (first->is_chain){
 		first = first->subexp;
+	}
 	for (i = last+1; i < F->nextBool; i++){
 		if( i-last-1 != i){
 			DeleteBoolOp(F->bools[i-last-1]);
@@ -539,11 +540,10 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		F->bools[0] = NewBoolOp();
 	}
 	F->nextBool -= last + 1;
-	if (endif)
-		if (*endif == 0) {
-			*endif = *thenaddr;
-		}
-		return first;
+	if (endif && *endif == 0) {
+		*endif = *thenaddr;
+	}
+	return first;
 }
 
 char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
@@ -556,19 +556,18 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 			//SET_ERROR(F,"Unhandled construct in boolean test");
 			result = malloc(30);
 			sprintf(result," --UNHANDLEDCONTRUCT-- ");
-			goto ERROR_HANDLER;
+			goto WriteBoolean_CLEAR_HANDLER1;
 		}
 	} else {
 		result = malloc(30);
 		sprintf(result,"error_maybe_false");
-		goto ERROR_HANDLER;
+		goto WriteBoolean_CLEAR_HANDLER1;
 	}
-
 	result = StringBuffer_getBuffer(str);
 
-ERROR_HANDLER:
+WriteBoolean_CLEAR_HANDLER1:
 	StringBuffer_delete(str);
-	//DeleteLogicExp(exp);
+
 	return result;
 }
 
@@ -576,15 +575,20 @@ void FlushElse(Function* F);
 
 char* OutputBoolean(Function* F, int* endif, int test) {
 	int thenaddr;
-	char* result;
-	LogicExp* exp;
+	char* result = NULL;
+	LogicExp* exp = NULL;
 
 	FlushElse(F);
-	if (error) return NULL;
+	if (error) goto OutputBoolean_CLEAR_HANDLER1;
 	exp = MakeBoolean(F, endif, &thenaddr);
+	if (error) goto OutputBoolean_CLEAR_HANDLER1;
+	result = WriteBoolean(exp, &thenaddr, endif, test);	
+	if (error) goto OutputBoolean_CLEAR_HANDLER1;
+
+OutputBoolean_CLEAR_HANDLER1:
+	if (exp) DeleteLogicExpTree(exp);
 	if (error) return NULL;
-	result = WriteBoolean(exp, &thenaddr, endif, test);
-	if (error) return NULL;
+
 	return result;
 }
 
@@ -702,14 +706,12 @@ void RawAddStatement(Function * F, StringBuffer * str)
 void FlushBoolean(Function * F) {
 	FlushElse(F);
 	while (F->nextBool > 0) {
-		char* test;
-		int endif;
-		int thenaddr;
+		int endif, thenaddr;
+		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
 		LoopItem* walk = F->loop_ptr;
-		if (error) 
-			goto ERROR_HANDLER;
+		if (error) goto FlushBoolean_CLEAR_HANDLER1;
 		//search parent
 		while (walk){
 			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
@@ -717,32 +719,25 @@ void FlushBoolean(Function * F) {
 			}
 			walk = walk->parent;
 		}
+		test = WriteBoolean(exp, &thenaddr, &endif, 0);
+		if (error) goto FlushBoolean_CLEAR_HANDLER1;
 		if (walk){
-			test = WriteBoolean(exp, &thenaddr, &endif, 0);
-			if (error) 
-				goto ERROR_HANDLER;
 			StringBuffer_addPrintf(str, "while %s do", test);
-			free(test);
 			RawAddStatement(F, str);
 			F->indent++;
 		} else {
-			test = WriteBoolean(exp, &thenaddr, &endif, 0);
-			if (error) 
-				goto ERROR_HANDLER;
 			StoreEndifAddr(F, endif);
 			StringBuffer_addPrintf(str, "if %s then", test);
-			free(test);
 			F->elseWritten = 0;
 			RawAddStatement(F, str);
 			F->indent++;
 		}
+
+FlushBoolean_CLEAR_HANDLER1:
+		if (exp) DeleteLogicExpTree(exp);
+		if (test) free(test);
 		StringBuffer_delete(str);
-		DeleteLogicExpTree(exp);
-		continue;
-ERROR_HANDLER:
-		StringBuffer_delete(str);
-		//DeleteLogicExpTree(exp);
-		return;
+		if (error) return;
 	}
 	F->testpending = 0;
 }
@@ -761,24 +756,30 @@ void MarkBackpatch(Function* F) {
 
 void FlushElse(Function* F) {
 	if (F->elsePending > 0) {
-		StringBuffer* str = StringBuffer_new(NULL);
 		int fpc = F->bools[0]->pc;
 		/* Should elseStart be a stack? */
 		if (F->nextBool > 0 && (fpc == F->elseStart || fpc-1 == F->elseStart)) {
-			char* test;
-			int endif;
-			int thenaddr;
-			LogicExp* exp;
+			int endif, thenaddr;
+			char* test = NULL;
+			StringBuffer* str = StringBuffer_new(NULL);
+			LogicExp* exp = NULL;
 			exp = MakeBoolean(F, &endif, &thenaddr);
-			if (error) return;
+			if (error) goto FlushElse_CLEAR_HANDLER1;
 			test = WriteBoolean(exp, &thenaddr, &endif, 0);
-			if (error) return;
+			if (error) goto FlushElse_CLEAR_HANDLER1;
 			StoreEndifAddr(F, endif);
 			StringBuffer_addPrintf(str, "elseif %s then", test);
 			F->elseWritten = 0;
 			RawAddStatement(F, str);
 			F->indent++;
+
+FlushElse_CLEAR_HANDLER1:
+			if (exp) DeleteLogicExpTree(exp);
+			if (test) free(test);
+			StringBuffer_delete(str);
+			if (error) return;
 		} else {
+			StringBuffer* str = StringBuffer_new(NULL);
 			StringBuffer_printf(str, "else");
 			RawAddStatement(F, str);
 			/* this test circumvents jump-to-jump optimization at
@@ -787,10 +788,10 @@ void FlushElse(Function* F) {
 				StoreEndifAddr(F, F->elsePending);
 			F->indent++;
 			F->elseWritten = 1;
+			StringBuffer_delete(str);
 		}
 		F->elsePending = 0;
 		F->elseStart = 0;
-		StringBuffer_delete(str);
 	}
 }
 
@@ -798,21 +799,23 @@ void FlushElse(Function* F) {
 * -------------------------------------------------------------------------
 */
 
-DecTableItem *NewTableItem(char *value, int num, char *key)
-{
+DecTableItem *NewTableItem(char *value, int num, char *key) {
 	DecTableItem *self = calloc(sizeof(DecTableItem), 1);
 	((ListItem *) self)->next = NULL;
+	self->key = luadec_strdup(key);
 	self->value = luadec_strdup(value);
 	self->numeric = num;
-	self->key = luadec_strdup(key);
 	return self;
 }
 
-void DeleteTableItem(DecTableItem* item,void* dummy)
-{
-	if(item != NULL){
-		free(item->value);
-		free(item->key);
+void DeleteTableItem(DecTableItem* item,void* dummy) {
+	if (item) {
+		if (item->key) {
+			free(item->key);
+		}
+		if (item->value) {
+			free(item->value);
+		}
 		free(item);
 	}
 }
@@ -1115,6 +1118,7 @@ BoolOp* NewBoolOp(){
 	BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
 	value->op1 = NULL;
 	value->op2 = NULL;
+	((ListItem*)value)->next = NULL;
 	return value;
 }
 
@@ -1130,19 +1134,14 @@ void DeleteBoolOp(BoolOp* ptr){
 	}
 }
 
-BoolOp* CopyBoolOp(const BoolOp* ptr){
-	if(ptr){
-		BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
-		value->op1 = luadec_strdup(ptr->op1);
-		value->op2 = luadec_strdup(ptr->op2);
-		value->dest = ptr->dest;
-		value->neg = ptr->neg;
-		value->op = ptr->op;
-		value->pc = ptr->pc;
-		value->super = value->super;
-		return value;
-	}else{
-		return NULL;
+void ClearBoolOp(BoolOp* ptr) {
+	if (ptr) {
+		if (ptr->op1) {
+			free(ptr->op1);
+		}
+		if (ptr->op2) {
+			free(ptr->op2);
+		}
 	}
 }
 
@@ -1727,12 +1726,10 @@ int CompareProto(const Proto* f1, const Proto* f2, StringBuffer *str){
 char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
 {
 	int i = 0;
-	Function *F;
-	StringBuffer *str = StringBuffer_new(NULL);
 	int baseIndent = indent;
-    char* output;
-
-	F = NewFunction(f);
+    char* output = NULL;
+	StringBuffer *str = StringBuffer_new(NULL);
+	Function *F = NewFunction(f);
 	F->indent = indent;
 	error = NULL;
 
@@ -2344,14 +2341,15 @@ END_SEARCH:
 				  }
 				  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {//RemoveFromSet(F->untils, F->pc
 					  int endif, thenaddr;
-					  char* test;
-					  LogicExp* exp;
+					  char* test = NULL;
+					  LogicExp* exp = NULL;
 					  TRY(exp = MakeBoolean(F, &endif, &thenaddr));
 					  TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
 					  StringBuffer_printf(str, "until %s", test);
 					  F->indent--;
 					  RawAddStatement(F, str);
-					  free(test);
+					  if (test) free(test);
+					  if (exp) DeleteLogicExpTree(exp);
 				  }
 			  /*}else if (RemoveFromSet(F->untils, F->pc)) { // never executed , we use 'while 1' instead of 'until false'
 				  StringBuffer_printf(str, "until false");
@@ -2515,6 +2513,7 @@ END_SEARCH:
 				  if (o == OP_LT) o = OP_LE;
 				  else if (o == OP_LE) o = OP_LT;
 			  }
+			  ClearBoolOp(F->bools[F->nextBool]);
 			  TRY(F->bools[F->nextBool]->op1 = RegisterOrConstant(F, b));
 			  TRY(F->bools[F->nextBool]->op2 = RegisterOrConstant(F, c));
 			  F->bools[F->nextBool]->op = o;
@@ -2552,9 +2551,11 @@ END_SEARCH:
 				  if (cmpa != cmpb) {
 					  TRY(rb = GetR(F, cmpb));
 					  rb = luadec_strdup(rb);
-				  } else
+				  } else {
 					  rb = luadec_strdup(ra);
+				  }
 			  }
+			  ClearBoolOp(F->bools[F->nextBool]);
 			  F->bools[F->nextBool]->op1 = ra;
 			  F->bools[F->nextBool]->op2 = rb;
 			  F->bools[F->nextBool]->op = o;
@@ -2914,9 +2915,7 @@ END_SEARCH:
 	}
 
 	output = PrintFunction(F);
-
 	DeleteFunction(F);
-
 	StringBuffer_delete(str);
 	return output;
 
@@ -3139,14 +3138,15 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  //R(A), R(A+1), ..., R(A+B-2) = vararg
 		  //ANoFrillsIntroToLua51VMInstructions.pdf is wrong
 		  sprintf(line,"%c%d %d",CC(a),CV(a),b);
-		  sprintf(lend,"%s","");
-		  for (l=a; l<a+b-2; l++) {
-			  sprintf(tmp,"R%d,", l);
-			  strcat(lend,tmp);
+		  if (b > 2) {
+			  sprintf(lend, "R%d to R%d := ...", a, a+b-2);
+		  } else if (b == 2){
+			  sprintf(lend, "R%d := ...", a);
+		  } else if (b == 0) {
+			  sprintf(lend, "R%d to top := ...", a);
+		  } else {
+			  sprintf(lend, "");
 		  }
-		  sprintf(tmp,"R%d", a+b-2);
-		  strcat(lend,tmp);
-		  strcat(lend," := ...");
 		  break;
 	  case OP_GETUPVAL:
 		  sprintf(line,"%c%d U%d",CC(a),CV(a),b);
@@ -3308,32 +3308,20 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  {
 			  sprintf(line,"R%d %d %d",a,b,c);
 			  if (b>=2) {
-				  sprintf(tmp,"%s","");
-				  for (l=a+1;l<a+b-1;l++) {
-					  sprintf(lend,"R%d,",l);
-					  strcat(tmp,lend);
-						}
-				  sprintf(lend,"R%d",a+b-1);
-				  strcat(tmp,lend);
+				  sprintf(tmp,"R%d to R%d", a+1, a+b-1);
 			  } else if (b==0) {
 				  sprintf(tmp,"R%d to top",a+1);
 			  } else {
 				  sprintf(tmp,"%s","");
-					}
+			  }
 
 			  if (c>=2) {
-				  sprintf(tmp2,"%s","");
-				  for (l=a;l<a+c-2;l++) {
-					  sprintf(lend,"R%d,",l);
-					  strcat(tmp2,lend);
-						}
-				  sprintf(lend,"R%d := ",a+c-2);
-				  strcat(tmp2,lend);
+				  sprintf(tmp2, "R%d to R%d", a, a+c-2);
 			  } else if (c==0) {
 				  sprintf(tmp2,"R%d to top := ",a);
 			  } else {
 				  sprintf(tmp2,"%s","");
-					}
+			  }
 			  sprintf(lend,"%sR%d(%s)",tmp2,a,tmp);
 		  }
 		  break;
@@ -3387,8 +3375,21 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  }
 		  break;
 	  case OP_SETLIST:
-		  sprintf(line,"R%d %d %d",a,b,c);
-		  sprintf(lend,"R%d[(%d-1)*FPF+i] := R(%d+i), 1 <= i <= %d",a,c,a,b);
+		  {
+			  int startindex = (c-1)*LFIELDS_PER_FLUSH;
+			  char explain[80];
+			  sprintf(line,"R%d %d %d",a,b,c);
+			  if ( b == 0 ){
+				  sprintf(lend, "R%d[%d] to R%d[top] := R%d to top", a, startindex, a, a+1);
+			  } else if ( b == 1){
+				  sprintf(lend, "R%d[%d] := R%d",a,startindex,a+1);
+			  } else if ( b > 1){
+				  sprintf(lend, "R%d[%d] to R%d[%d] := R%d to R%d",
+					  a, startindex, a, startindex+b-1, a+1, a+b);
+			  }
+			  sprintf(explain, " ; R(a)[(c-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, FPF=%d", a, b, c, LFIELDS_PER_FLUSH);
+			  strcat(lend, explain);
+		  }
 		  break;
 	  case OP_CLOSE:
 		  sprintf(line,"R%d",a);
