@@ -53,5 +53,6 @@ int PeekSet(IntSet* set, int a);
 int PopSet(IntSet* set);
 int RemoveFromSet(IntSet* set, int a);
 void AddToVarStack(VarStack* stack, char* dest, char* src, int reg);
+void ClearVarStatck(VarStack* stack);
 
 #endif

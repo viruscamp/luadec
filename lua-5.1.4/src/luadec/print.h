@@ -167,7 +167,7 @@ struct IntListItem_ {
 };
 
 void SetR(Function * F, int r, StringBuffer * str, int prio);
-char *GetR(Function * F, int r);
+const char *GetR(Function * F, int r);
 
 typedef struct LogicExp_ LogicExp;
 
