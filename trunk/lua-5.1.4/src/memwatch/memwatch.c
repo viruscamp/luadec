@@ -406,6 +406,9 @@ static void		mwMutexLock( void );
 static void		mwMutexUnlock( void );
 #endif
 
+int gargc = 0;
+char** gargv = NULL;
+
 /***********************************************************************
 ** System functions
 ***********************************************************************/
@@ -447,6 +450,7 @@ void mwInit( void ) {
 
     /* write informational header if needed */
     if( !mwInfoWritten ) {
+		int i;
         mwInfoWritten = 1;
         (void) time( &tid );
         mwWrite(
@@ -454,6 +458,11 @@ void mwInit( void ) {
             " MEMWATCH " VERSION " Copyright (C) 1992-1999 Johan Lindh "
             "=============\n");
         mwWrite( "\nStarted at %s\n", ctime( &tid ) );
+		mwWrite( "Command line: ");
+		for (i=1; i<gargc; i++) {
+			mwWrite( "%s ", gargv[i]);
+		}
+		mwWrite( "\n");
 
 /**************************************************************** Generic */
 		mwWrite( "Modes: " );
