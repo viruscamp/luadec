@@ -375,6 +375,11 @@ void printFuncStructure(Proto * f, char* indent){
 	free(newindent);
 }
 
+#ifdef MEMWATCH
+extern int gargc;
+extern char** gargv;
+#endif
+
 int main(int argc, char* argv[])
 {
 	int oargc;
@@ -383,6 +388,10 @@ int main(int argc, char* argv[])
 	lua_State* L;
 	Proto* f;
 	int i;
+#ifdef MEMWATCH
+	gargc = argc;
+	gargv = argv;
+#endif
 	oargc = argc;
 	oargv = argv;
 	LDS2 = NULL;
@@ -411,10 +420,10 @@ int main(int argc, char* argv[])
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION "\n");
+		printf("; Disassembled using luadec " VERSION " http://code.google.com/p/luadec \n");
 		printf("; Command line was: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION "\n");
+		printf("-- Decompiled using luadec " VERSION " http://code.google.com/p/luadec \n");
 		printf("-- Command line was: ");
 	}
 	for (i=1; i<oargc; i++) {
