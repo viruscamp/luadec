@@ -347,7 +347,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 {
 	int i;
 	int firstaddr, elseaddr, last, realLast;
-	LogicExp *curr, *first;
+	LogicExp *curr=NULL, *first=NULL;
 	int dest;
 
 	if (endif)
@@ -571,7 +571,7 @@ char* OutputBoolean(Function* F, int* endif, int test) {
 
 OutputBoolean_CLEAR_HANDLER1:
 	if (exp) DeleteLogicExpTree(exp);
-	if (error) return NULL;
+	//if (error) { free(result); return NULL; }
 
 	return result;
 }
@@ -1421,9 +1421,30 @@ void DeclareLocals(Function * F)
 	F->freeLocal += locals + internalLocals;
 }
 
+void PrintFunctionCheck(Function * F){
+	if (F->nextEndif){
+		// if you come here, something must be wrong
+		// F->nextEndif should be cleared in function int GetEndifAddr(Function* F, int addr)
+		// you may get -- WARNING: missing end command somewhere! Added here
+		StringBuffer* str = StringBuffer_new("-- WARNING: F->nextEndif is not empty. Unhandled nextEndif->addr = ");
+		Statement* stmt = NULL;
+		Endif* ptr = F->nextEndif;
+		while(ptr){			
+			StringBuffer_addPrintf(str, "%d ", ptr->addr);
+			F->nextEndif = ptr->next;
+			free(ptr);
+			ptr = F->nextEndif;
+		}
+		stmt = NewStatement(StringBuffer_getBuffer(str), F->pc, F->indent);
+		AddToList(&(F->statements), cast(ListItem*, stmt));
+		StringBuffer_delete(str);
+	}
+}
+
 char* PrintFunction(Function * F)
 {
 	char* result;
+	PrintFunctionCheck(F);
 	StringBuffer_prune(F->decompiledCode);
 	LoopList(&(F->statements), (ListItemFn) PrintStatement, F);
 	result = StringBuffer_getBuffer(F->decompiledCode);
@@ -2104,11 +2125,11 @@ END_SEARCH:
 				  /*
 				  * assign boolean value
 				  */
-				  char *test;
+				  char *test = NULL;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
+				  if (test) free(test);
 				  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
-				  free(test);
 			  }
 			  if (c)
 				  ignoreNext = 1;
@@ -2428,7 +2449,7 @@ END_SEARCH:
 				  break;
 			  } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 				  int boola = GETARG_A(code[pc+1]);
-				  char* test;
+				  char* test = NULL;
 				  /* skip */
 				  char* ra = luadec_strdup(REGISTER(boola));
 				  char* rb = luadec_strdup(ra);
@@ -2447,6 +2468,7 @@ END_SEARCH:
 				  F->testjump = dest;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
+				  if (test) free(test);
 				  TRY(UnsetPending(F, boola));
 				  TRY(Assign(F, REGISTER(boola), StringBuffer_getRef(str), boola, 0, 0));
 				  ignoreNext = 2;
