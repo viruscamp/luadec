@@ -40,7 +40,7 @@ lopcodes.o:	../lopcodes.c ../lopcodes.h
 memwatch.o: ../memwatch/memwatch.c ../memwatch/memwatch.h
 	$(CC) -o $@ -c $(CFLAGS) $(INCS) ../memwatch/memwatch.c
 
-$(LIB)/liblua.a:
+$(LIBDIR)/liblua.a:
 	cd ..; $(MAKE)
 
 clean:
