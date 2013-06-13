@@ -45,6 +45,16 @@ struct llist * add(struct llist * list, int startpc, int endpc) {
 	return list->next;
 }
 
+struct llist * deletellist(struct llist * list) {
+	struct llist *curr, *next;
+	curr = list;
+	while(curr){
+		next = curr->next;
+		free(curr);
+		curr = next;
+	}
+}
+
 int luaU_guess_locals(Proto * f, int main) {
 	int blockend[255];
 	int block;
@@ -462,6 +472,8 @@ int luaU_guess_locals(Proto * f, int main) {
 			}
 		}
 	}
+
+	deletellist(list_begin.next);
 
 	// run with all functions
 	for (i=0; i<f->sizep; i++) {

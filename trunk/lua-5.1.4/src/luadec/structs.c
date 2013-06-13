@@ -168,3 +168,14 @@ void AddToVarStack(VarStack * stack, char* dest, char* src, int reg) {
    stack->ctr++;
 }
 
+void ClearVarStatck(VarStack* stack){
+	int i;
+	for (i = 0; i < stack->ctr; i++) {
+		if (stack->dests[i])
+			free(stack->dests[i]);
+		if (stack->srcs[i])
+			free(stack->srcs[i]);
+	}
+	stack->ctr = 0;
+}
+

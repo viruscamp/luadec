@@ -37,20 +37,19 @@ extern lua_State* glstate;
 
 char* error_nil = "ERROR_nil";
 char* nilstr = "nil";
-char* upvalue = "upvaluexxxxxxxxx";
+char* upvalue = "upvalue_inexistent_Rxxxx";
 StringBuffer *errorStr;
 
 /*
 * -------------------------------------------------------------------------
 */
 
-char* getupval(Function * F, int r) {
+const char* getupval(Function * F, int r) {
 	if (F->f->upvalues && r < F->f->sizeupvalues) {
 		return (char*)getstr(F->f->upvalues[r]);
 	} else {
-		char* s = malloc(20);
-		sprintf(s,"upvalue_%d",r);
-		return s;
+		sprintf(upvalue,"upvalue_inexistent_R%d",r);
+		return upvalue;
 	}
 }
 
@@ -107,7 +106,7 @@ int GetJmpAddr(Function* F, int addr){
 }
 
 void RawAddStatement(Function * F, StringBuffer * str);
-void DeclareLocal(Function * F, int ixx, char* value);
+void DeclareLocal(Function * F, int ixx, const char* value);
 
 Statement *NewStatement(char *code, int line, int indent) {
 	Statement *self;
@@ -811,18 +810,16 @@ void DeleteTableItem(DecTableItem* item,void* dummy) {
 
 void DeclarePendingLocals(Function * F);
 
-void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
+void Assign(Function * F, const char* dest, const char* src, int reg, int prio, int mayTest)
 {
-	char* nsrc = luadec_strdup(src);
+	char* nsrc = NULL;
 
 	if (PENDING(reg)) {
 		if (guess_locals) {
 			SET_ERROR(F,"Overwrote pending register.");
 		} else {
-			char *s;
 			SET_ERROR(F,"Overwrote pending register. Missing locals? Creating them");
-			s = luadec_strdup(REGISTER(reg));
-			DeclareLocal(F,reg,s);
+			DeclareLocal(F,reg,REGISTER(reg));
 		}
 		return;
 		//SET_ERROR("overwrote pending register!");
@@ -837,10 +834,13 @@ void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
 
 	if (debug) { printf("SET_CTR(Tpend) = %d \n", SET_CTR(F->tpend)); }
 
+	nsrc = luadec_strdup(src);
 	if (reg != -1 && F->testpending == reg+1 && mayTest && F->testjump == F->pc+2) {
 		int endif;
 		char* test = OutputBoolean(F, &endif, 1);
 		if (error) {
+			free(nsrc);
+			if (test) free(test);
 			return;
 		}
 		if (endif >= F->pc) {
@@ -848,17 +848,16 @@ void Assign(Function * F, char* dest, char* src, int reg, int prio, int mayTest)
 			StringBuffer_printf(str, "%s or %s", test, src);
 			free(nsrc);
 			nsrc = StringBuffer_getBuffer(str);
-			free(test);
 			StringBuffer_delete(str);
 			F->testpending = 0;
 			F->Rprio[reg] = 8;
 		}
+		if (test) free(test);
 	}
 	F->testjump = 0;
 
 	if (reg != -1 && !IS_VARIABLE(reg)) {
-		if (REGISTER(reg))
-			free(REGISTER(reg));
+		if (REGISTER(reg)) free(REGISTER(reg));
 		REGISTER(reg) = nsrc;
 		AddToSet(F->tpend, reg);
 	} else {
@@ -1146,7 +1145,9 @@ Function *NewFunction(const Proto * f)
 	InitList(&(self->statements));
 	self->f = f;
 	self->vpend = calloc(sizeof(VarStack), 1);
+	self->vpend->ctr = 0;
 	self->tpend = calloc(sizeof(IntSet), 1);
+	self->tpend->ctr = 0;
 
 	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
@@ -1183,6 +1184,7 @@ void DeleteFunction(Function * self)
 		self->bools[i] = NULL;
 	}
 	StringBuffer_delete(self->decompiledCode);
+	ClearVarStatck(self->vpend);
 	free(self->vpend);
 	free(self->tpend);
 	//free(self->repeats);
@@ -1195,7 +1197,7 @@ void DeleteFunction(Function * self)
 
 void DeclareVariable(Function * F, const char *name, int reg);
 
-char *GetR(Function * F, int r)
+const char *GetR(Function * F, int r)
 {
 	if (IS_TABLE(r)) {
 		PrintTable(F, r, 0);
@@ -1228,19 +1230,17 @@ void DeclareVariable(Function * F, const char *name, int reg)
 void OutputAssignments(Function * F)
 {
 	int i, srcs, size;
-	StringBuffer *vars;
-	StringBuffer *exps;
+	StringBuffer *vars = StringBuffer_new(NULL);
+	StringBuffer *exps = StringBuffer_new(NULL);
 	if (!SET_IS_EMPTY(F->tpend))
-		return;
-	vars = StringBuffer_new(NULL);
-	exps = StringBuffer_new(NULL);
+		goto OutputAssignments_ERROR_HANDLER;
 	size = SET_CTR(F->vpend);
 	srcs = 0;
 	for (i = 0; i < size; i++) {
 		int r = F->vpend->regs[i];
 		if (!(r == -1 || PENDING(r))) {
 			SET_ERROR(F,"Attempted to generate an assignment, but got confused about usage of registers");
-			return;
+			goto OutputAssignments_ERROR_HANDLER;
 		}
 
 		if (i > 0)
@@ -1271,8 +1271,9 @@ void OutputAssignments(Function * F)
 		StringBuffer_add(vars, StringBuffer_getRef(exps));
 		AddStatement(F, vars);
 		if (error)
-			return;
+			goto OutputAssignments_ERROR_HANDLER;
 	}
+OutputAssignments_ERROR_HANDLER:
 	StringBuffer_delete(vars);
 	StringBuffer_delete(exps);
 }
@@ -1622,9 +1623,9 @@ void ShowState(Function * F)
 
 #define TRY(x)  x; if (error) goto errorHandler
 
-void DeclareLocal(Function * F, int ixx, char* value) {
+void DeclareLocal(Function * F, int ixx, const char* value) {
 	if (!IS_VARIABLE(ixx)) {
-		char* x = malloc(10);
+		char x[10];
 		StringBuffer *str = StringBuffer_new(NULL);
 
 		sprintf(x,"l_%d_%d",functionnum, ixx);
@@ -1749,11 +1750,11 @@ errorHandler:
 int listUpvalues(Function *F, StringBuffer *str){
     int i = 0;
     for (i = 0; i < F->f->sizeupvalues - 1; i++) {
-        StringBuffer_add(str,getupval(F,i));
+        StringBuffer_add(str,UPVALUE(i));
         StringBuffer_add(str," , ");
     }
     i = F->f->sizeupvalues - 1;
-    StringBuffer_add(str,getupval(F,i));
+    StringBuffer_add(str,UPVALUE(i));
     return F->f->sizeupvalues;
 }
 
@@ -2229,14 +2230,11 @@ END_SEARCH:
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  TRY(bstr = GetR(F, b));
 
-			  bstr = luadec_strdup(bstr);
-
 			  TRY(Assign(F, REGISTER(a+1), bstr, a+1, PRIORITY(b), 0));
 
 			  StringBuffer_set(str, bstr);
 			  MakeIndex(F, str, cstr, SELF);
 			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
-			  free(bstr);
 			  free(cstr);
 			  break;
 		  }
@@ -2399,12 +2397,13 @@ END_SEARCH:
 							  }
 						  }
 						  if (vname[i-1] == NULL) {
-							  vname[i-1] = malloc(5);
-							  sprintf(vname[i-1],"i_%d",i);
-							  TRY(DeclareVariable(F, vname[i-1], a + 2 + i));
+							  char tmp[5];
+							  sprintf(tmp,"i_%d",i);
+							  TRY(DeclareVariable(F, tmp, a+2+i));
+							  vname[i-1] = F->R[a+2+i];
 						  }
 					  } else {
-						  vname[i-1] = luadec_strdup(F->R[a+2+i]);
+						  vname[i-1] = F->R[a+2+i];
 					  }
 					  F->internal[a+2+i] = 1;
 				  }

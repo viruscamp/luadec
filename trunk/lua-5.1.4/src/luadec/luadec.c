@@ -50,6 +50,7 @@ static const char* progname=PROGNAME;	/* actual program name */
 static void fatal(const char* message)
 {
 	fprintf(stderr,"%s: %s\n",progname,message);
+	if (glstate) lua_close(glstate);
 	exit(EXIT_FAILURE);
 }
 
