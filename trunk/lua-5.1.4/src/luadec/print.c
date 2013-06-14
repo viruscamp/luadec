@@ -3080,6 +3080,7 @@ void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) {
 	char tmp[MAXCONSTSIZE+128];
 	char tmp2[MAXCONSTSIZE+128];
+	char *tmpconstant1 = NULL, *tmpconstant2 = NULL;
 	Proto* f = fwork;
 	int pc,l;
 	if (functions!=0) {
@@ -3112,8 +3113,10 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  sprintf(lend,"%c%d := %c%d",CC(a),CV(a),CC(b),CV(b));
 		  break;
 	  case OP_LOADK:
+		  tmpconstant1 = DecompileConstant(f,bc);
 		  sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
-		  sprintf(lend,"%c%d := %s",CC(a),CV(a),DecompileConstant(f,bc));
+		  sprintf(lend,"%c%d := %s",CC(a),CV(a),tmpconstant1);
+		  free(tmpconstant1);
 		  break;
 	  case OP_LOADBOOL:
 		  sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
@@ -3166,7 +3169,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_GETTABLE:
 		  sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 		  if (IS_CONSTANT(c)) {
-			  sprintf(lend,"R%d := R%d[%s]",a,b,DecompileConstant(f,c-256));
+			  tmpconstant1 = DecompileConstant(f,c-256);
+			  sprintf(lend,"R%d := R%d[%s]",a,b,tmpconstant1);
+			  free(tmpconstant1);
 		  } else {
 			  sprintf(lend,"R%d := R%d[R%d]",a,b,c);
 		  }
@@ -3183,13 +3188,21 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 		  if (IS_CONSTANT(b)) {
 			  if (IS_CONSTANT(c)) {
-				  sprintf(lend,"R%d[%s] := %s",a,DecompileConstant(f,b-256),DecompileConstant(f,c-256));
+				  tmpconstant1 = DecompileConstant(f,b-256);
+				  tmpconstant2 = DecompileConstant(f,c-256);
+				  sprintf(lend,"R%d[%s] := %s",a,tmpconstant1,tmpconstant2);
+				  free(tmpconstant1);
+				  free(tmpconstant2);
 			  } else {
-				  sprintf(lend,"R%d[%s] := R%d",a,DecompileConstant(f,b-256),c);
+				  tmpconstant1 = DecompileConstant(f,b-256);
+				  sprintf(lend,"R%d[%s] := R%d",a,tmpconstant1,c);
+				  free(tmpconstant1);
 			  }
 		  } else {
 			  if (IS_CONSTANT(c)) {
-				  sprintf(lend,"R%d[R%d] := %s",a,b,DecompileConstant(f,c-256));
+				  tmpconstant2 = DecompileConstant(f,c-256);
+				  sprintf(lend,"R%d[R%d] := %s",a,b,tmpconstant2);
+				  free(tmpconstant2);
 			  } else {
 				  sprintf(lend,"R%d[R%d] := R%d",a,b,c);
 			  }
@@ -3202,7 +3215,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_SELF:
 		  sprintf(line,"R%d R%d %c%d",a,b,CC(c),CV(c));
 		  if (IS_CONSTANT(c)) {
-			  sprintf(lend,"R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,DecompileConstant(f,c-256));
+			  tmpconstant1 = DecompileConstant(f,c-256);
+			  sprintf(lend,"R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,tmpconstant1);
+			  free(tmpconstant1);
 		  } else {
 			  sprintf(lend,"R%d := R%d; R%d := R%d[R%d]",a+1,b,a,b,c);
 		  }
@@ -3216,13 +3231,21 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 		  sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 		  if (IS_CONSTANT(b)) {
 			  if (IS_CONSTANT(c)) {
-				  sprintf(lend,"R%d := %s %s %s",a,DecompileConstant(f,b-256),operators[o], DecompileConstant(f,c-256));
+				  tmpconstant1 = DecompileConstant(f,b-256);
+				  tmpconstant2 = DecompileConstant(f,c-256);
+				  sprintf(lend,"R%d := %s %s %s",a,tmpconstant1,operators[o],tmpconstant2);
+				  free(tmpconstant1);
+				  free(tmpconstant2);
 			  } else {
-				  sprintf(lend,"R%d := %s %s R%d",a,DecompileConstant(f,b-256),operators[o],c);
+				  tmpconstant1 = DecompileConstant(f,b-256);
+				  sprintf(lend,"R%d := %s %s R%d",a,tmpconstant1,operators[o],c);
+				  free(tmpconstant1);
 			  }
 		  } else {
 			  if (IS_CONSTANT(c)) {
-				  sprintf(lend,"R%d := R%d %s %s",a,b,operators[o],DecompileConstant(f,c-256));
+				  tmpconstant2 = DecompileConstant(f,c-256);
+				  sprintf(lend,"R%d := R%d %s %s",a,b,operators[o],tmpconstant2);
+				  free(tmpconstant2);
 			  } else {
 				  sprintf(lend,"R%d := R%d %s R%d",a,b,operators[o],c);
 			  }
@@ -3233,7 +3256,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 	  case OP_LEN:
 		  sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
 		  if (IS_CONSTANT(b)) {
-			  sprintf(lend,"R%d := %s %s",a,operators[o],DecompileConstant(f,b-256));
+			  tmpconstant1 = DecompileConstant(f,b-256);
+			  sprintf(lend,"R%d := %s %s",a,operators[o],tmpconstant1);
+			  free(tmpconstant1);
 		  } else {
 			  sprintf(lend,"R%d := %s R%d",a,operators[o],b);
 		  }
@@ -3264,10 +3289,14 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(tmp,"R%d",b);
 			  sprintf(tmp2,"R%d",c);
 			  if (IS_CONSTANT(b)) {
-				  sprintf(tmp,"%s",DecompileConstant(f,b-256));
+				  tmpconstant1 = DecompileConstant(f,b-256);
+				  sprintf(tmp,"%s",tmpconstant1);
+				  free(tmpconstant1);
 				 }
 			  if (IS_CONSTANT(c)) {
-				  sprintf(tmp2,"%s",DecompileConstant(f,c-256));
+				  tmpconstant2 = DecompileConstant(f,c-256);
+				  sprintf(tmp2,"%s",tmpconstant2);
+				  free(tmpconstant2);
 				 }
 			  if (a) {
 				  sprintf(lend,"if %s %s %s then PC := %d else PC := %d",tmp,invopstr(o),tmp2,pc+2,dest);
@@ -3282,7 +3311,9 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(line,"%c%d %d",CC(a),CV(a),c);
 			  sprintf(tmp,"R%d",a);
 			  if (IS_CONSTANT(a)) {
-				  sprintf(tmp,"%s",DecompileConstant(f,a-256));
+				  tmpconstant1 = DecompileConstant(f,a-256);
+				  sprintf(tmp,"%s",tmpconstant1);
+				  free(tmpconstant1);
 				 }
 			  if (c) {
 				  sprintf(lend,"if not %s then PC := %d else PC := %d",tmp,pc+2,dest);
@@ -3298,10 +3329,14 @@ void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) 
 			  sprintf(tmp,"R%d",a);
 			  sprintf(tmp2,"R%d",b);
 			  if (IS_CONSTANT(a)) {
-				  sprintf(tmp,"%s",DecompileConstant(f,a-256));
+				  tmpconstant1 = DecompileConstant(f,a-256);
+				  sprintf(tmp,"%s",tmpconstant1);
+				  free(tmpconstant1);
 			  }
 			  if (IS_CONSTANT(b)) {
-				  sprintf(tmp2,"%s",DecompileConstant(f,b-256));
+				  tmpconstant2 = DecompileConstant(f,b-256);
+				  sprintf(tmp2,"%s",tmpconstant2);
+				  free(tmpconstant2);
 			  }
 			  if (c) {
 				  sprintf(lend,"if %s then %s := %s ; PC := %d else PC := %d",tmp2,tmp,tmp2,pc+2,dest);
