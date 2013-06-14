@@ -7,7 +7,7 @@
 typedef struct BoolOp_ BoolOp;
 
 struct BoolOp_ {
-   ListItem super;
+   //ListItem super;
    char *op1;
    char *op2;
    OpCode op;
@@ -209,6 +209,6 @@ void luaU_disassemble(const Proto* f, int dflag, int functions, char* name);
 
 BoolOp* NewBoolOp();
 void DeleteBoolOp(BoolOp* ptr);
-BoolOp* CopyBoolOp(const BoolOp* ptr);
+void ClearBoolOp(BoolOp* ptr);
 
 #endif

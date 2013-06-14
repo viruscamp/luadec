@@ -480,7 +480,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 						prevParent = prevParent->subexp;
 				TieAsSubExp(chain, curr);
 
-				curr->parent = prevParent;
+				//curr->parent = prevParent;
 				if (prevParent == NULL) {
 					first = chain;
 				} else {
@@ -520,8 +520,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		}
 	}
 	if (!F->bools[0]){
-		DeleteBoolOp(F->bools[0]);
-		F->bools[0] = NewBoolOp();
+		ClearBoolOp(F->bools[0]);
 	}
 	F->nextBool -= last + 1;
 	if (endif && *endif == 0) {
@@ -1102,7 +1101,7 @@ BoolOp* NewBoolOp(){
 	BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
 	value->op1 = NULL;
 	value->op2 = NULL;
-	((ListItem*)value)->next = NULL;
+	//((ListItem*)value)->next = NULL;
 	return value;
 }
 
@@ -2337,9 +2336,10 @@ END_SEARCH:
 				  F->bools[F->nextBool]->dest = dest;
 				  F->nextBool++;
 				  if(F->bools[F->nextBool]){
-					DeleteBoolOp(F->bools[F->nextBool]);
+					  ClearBoolOp(F->bools[F->nextBool]);
+				  }else{
+					  F->bools[F->nextBool] = NewBoolOp();
 				  }
-				  F->bools[F->nextBool] = NewBoolOp();
 				  if (F->testpending) {
 					  F->testjump = dest;
 				  }
@@ -2462,9 +2462,10 @@ END_SEARCH:
 				  F->bools[F->nextBool]->dest = dest;
 				  F->nextBool++;
 				  if(F->bools[F->nextBool]){
-					DeleteBoolOp(F->bools[F->nextBool]);
+					  ClearBoolOp(F->bools[F->nextBool]);
+				  }else{
+					  F->bools[F->nextBool] = NewBoolOp();
 				  }
-				  F->bools[F->nextBool] = NewBoolOp();
 				  F->testjump = dest;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
