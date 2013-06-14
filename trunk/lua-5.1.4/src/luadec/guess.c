@@ -45,7 +45,7 @@ struct llist * add(struct llist * list, int startpc, int endpc) {
 	return list->next;
 }
 
-struct llist * deletellist(struct llist * list) {
+void deletellist(struct llist * list) {
 	struct llist *curr, *next;
 	curr = list;
 	while(curr){
