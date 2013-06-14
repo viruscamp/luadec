@@ -353,7 +353,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 	if (endif)
 		*endif = 0;
 
-	if (F->nextBool == 0) {
+	if (F->nextBool == NULL) {
 		SET_ERROR(F,"Attempted to build a boolean expression without a pending context");
 		return NULL;
 	}
@@ -519,8 +519,8 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 			F->bools[i] = NULL;
 		}
 	}
-	if (!F->bools[0]){
-		ClearBoolOp(F->bools[0]);
+	if (F->bools[0] == NULL){
+		F->bools[0] = NewBoolOp();
 	}
 	F->nextBool -= last + 1;
 	if (endif && *endif == 0) {
