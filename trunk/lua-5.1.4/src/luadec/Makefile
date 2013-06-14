@@ -26,7 +26,7 @@ T= luadec
 all: $T
 
 $T: $(OBJS) $(MYOBJS) $(LIBDIR)/liblua.a
-	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(MYOBJS) -L$(LIBDIR) -llua
+	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(MYOBJS) $(LIBDIR)/liblua.a $(LIBS)
 
 debug:
 	$(MAKE) all MYCFLAGS="-g -DDEBUG -D_DEBUG"
