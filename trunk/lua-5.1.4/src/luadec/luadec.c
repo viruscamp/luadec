@@ -15,6 +15,10 @@
 #include "lundump.h"
 #include "print.h"
 
+#ifndef SRCVERSION
+#include "srcversion.h"
+#endif
+
 #ifndef LUA_DEBUG
 #define luaB_opentests(L)
 #endif
@@ -61,7 +65,8 @@ static void usage(const char* message, const char* arg)
 		fprintf(stderr,"%s: ",progname); fprintf(stderr,message,arg); fprintf(stderr,"\n");
 	}
 	fprintf(stderr,
-		"LuaDec by Hisham Muhammad\n"
+		"LuaDec " VERSION " r" SRCVERSION "\n"
+		" Original by Hisham Muhammad (http://luadec.luaforge.net)\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
 		" by VirusCamp (http://code.google.com/p/luadec)\n"
 		"usage: %s [options] [filename].  Available options are:\n"
@@ -420,11 +425,11 @@ int main(int argc, char* argv[])
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION " http://code.google.com/p/luadec \n");
-		printf("; Command line was: ");
+		printf("; Disassembled using luadec " VERSION " r" SRCVERSION " from http://code.google.com/p/luadec\n");
+		printf("; Command line: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION " http://code.google.com/p/luadec \n");
-		printf("-- Command line was: ");
+		printf("-- Decompiled using luadec " VERSION " r" SRCVERSION " from http://code.google.com/p/luadec\n");
+		printf("-- Command line: ");
 	}
 	for (i=1; i<oargc; i++) {
 		printf("%s ",oargv[i]);
