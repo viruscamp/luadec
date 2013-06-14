@@ -4,13 +4,14 @@ LIBDIR=..
 BINDIR=.
 
 CC= gcc
-CFLAGS= -O2 -Wall $(INCS) $(MYCFLAGS)
+CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
 LDFLAGS= $(MYLDFLAGS)
 AR= ar rcu
 RANLIB= ranlib
 RM= rm -f
 LIBS= -lm $(MYLIBS)
 
+SRCVERSION=$(shell svnversion -n .)
 MYCFLAGS=
 MYLDFLAGS=
 MYLIBS=
