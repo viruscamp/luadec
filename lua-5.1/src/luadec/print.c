@@ -1119,9 +1119,11 @@ void ClearBoolOp(BoolOp* ptr) {
 	if (ptr) {
 		if (ptr->op1) {
 			free(ptr->op1);
+			ptr->op1 = NULL;
 		}
 		if (ptr->op2) {
 			free(ptr->op2);
+			ptr->op2 = NULL;
 		}
 	}
 }
@@ -1257,9 +1259,14 @@ void OutputAssignments(Function * F)
 		int r = F->vpend->regs[i];
 		if (r != -1)
 			PENDING(r) = 0;
-		free(F->vpend->dests[i]);
-		if (F->vpend->srcs[i])
+		if (F->vpend->dests[i]){
+			free(F->vpend->dests[i]);
+			F->vpend->dests[i] = NULL;
+		}
+		if (F->vpend->srcs[i]){
 			free(F->vpend->srcs[i]);
+			F->vpend->srcs[i] = NULL;
+		}
 	}
 	F->vpend->ctr = 0;
 
