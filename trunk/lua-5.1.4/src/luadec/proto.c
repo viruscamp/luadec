@@ -17,7 +17,7 @@ char *DecompileString(const Proto * f, int n)
 	int i;
 	const unsigned char *s = (const unsigned char *)svalue(&f->k[n]);
 	int len = (&(&f->k[n])->value.gc->ts)->tsv.len;
-	char *ret = (char*)malloc(len * 4 + 3);
+	char *ret = (char*)calloc(len * 4 + 3, sizeof(char*));
 	int p = 0;
 	ret[p++] = '"';
 	for (i = 0; i < len; i++, s++) {
@@ -76,7 +76,7 @@ char *DecompileString(const Proto * f, int n)
 
 char *DecompileConstant(const Proto * f, int i)
 {
-	//  char* ret = malloc(4);
+	//  char* ret = calloc(4, sizeof(char*));
 	//  sprintf(ret,"nil");
 	//  return ret;
 	const TValue *o = &f->k[i];
@@ -84,18 +84,18 @@ char *DecompileConstant(const Proto * f, int i)
 		case LUA_TBOOLEAN: // Lua5.1 specific
 			{
 				if (o->value.b) {
-					char *ret = (char*)malloc(6);
+					char *ret = (char*)calloc(6, sizeof(char*));
 					strcpy(ret, "true");
 					return ret;
 				} else {
-					char *ret = (char*)malloc(7);
+					char *ret = (char*)calloc(7, sizeof(char*));
 					strcpy(ret, "false");
 					return ret;
 				}
 			}
 		case LUA_TNUMBER:
 			{
-				char *ret = (char*)malloc(100);
+				char *ret = (char*)calloc(100, sizeof(char*));
 				sprintf(ret, LUA_NUMBER_FMT, nvalue(o));
 				return ret;
 			}
@@ -103,13 +103,13 @@ char *DecompileConstant(const Proto * f, int i)
 			return DecompileString(f, i);
 		case LUA_TNIL:
 			{
-				char *ret = (char*)malloc(4);
+				char *ret = (char*)calloc(4, sizeof(char*));
 				strcpy(ret, "nil");
 				return ret;
 			}
 		default:                   /* cannot happen */
 			{
-				char *ret = (char*)malloc(18);
+				char *ret = (char*)calloc(18, sizeof(char*));
 				strcpy(ret, "Uknown_Type_Error");
 				return ret;
 			}

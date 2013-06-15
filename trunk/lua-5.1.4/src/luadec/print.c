@@ -222,7 +222,7 @@ void DeleteIntListItem(IntListItem* item, void * dummy){
 }
 
 LogicExp* MakeExpNode(BoolOp* boolOp) {
-	LogicExp* node = cast(LogicExp*, malloc(sizeof(LogicExp)));
+	LogicExp* node = cast(LogicExp*, calloc(1, sizeof(LogicExp)));
 	node->parent = NULL;
 	node->subexp = NULL;
 	node->next = NULL;
@@ -237,7 +237,7 @@ LogicExp* MakeExpNode(BoolOp* boolOp) {
 }
 
 LogicExp* MakeExpChain(int dest) {
-	LogicExp* node = cast(LogicExp*, malloc(sizeof(LogicExp)));
+	LogicExp* node = cast(LogicExp*, calloc(1, sizeof(LogicExp)));
 	node->parent = NULL;
 	node->subexp = NULL;
 	node->next = NULL;
@@ -535,12 +535,12 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 		PrintLogicExp(str, *thenaddr, exp, 0, test);
 		if (test && endif && *endif == 0) {
 			//SET_ERROR(F,"Unhandled construct in boolean test");
-			result = (char*)malloc(30);
+			result = (char*)calloc(30, sizeof(char*));
 			sprintf(result," --UNHANDLEDCONTRUCT-- ");
 			goto WriteBoolean_CLEAR_HANDLER1;
 		}
 	} else {
-		result = (char*)malloc(30);
+		result = (char*)calloc(30, sizeof(char*));
 		sprintf(result,"error_maybe_false");
 		goto WriteBoolean_CLEAR_HANDLER1;
 	}
@@ -576,7 +576,7 @@ OutputBoolean_CLEAR_HANDLER1:
 void StoreEndifAddr(Function * F, int addr) {
 	Endif* at = F->nextEndif;
 	Endif* prev = NULL;
-	Endif* newEndif = (Endif*)malloc(sizeof(Endif));
+	Endif* newEndif = (Endif*)calloc(1, sizeof(Endif));
 	newEndif->addr = addr;
 	while (at && at->addr < addr) {
 		prev = at;
@@ -1326,7 +1326,7 @@ void DeclareLocals(Function * F)
 			if (functionnum >=0 && functionnum < 255 && localdeclare[functionnum][i]==F->pc) {
 				char* name;
 				int r = i;
-				name = (char*)malloc(10);
+				name = (char*)calloc(10, sizeof(char*));
 				sprintf(name,"l_%d_%d",functionnum,i);
 				if (F->internal[r]) {
 					names[r] = name;
@@ -1477,7 +1477,7 @@ char *RegisterOrConstant(Function * F, int r)
 		const char *reg = GetR(F, r);
 		if (error)
 			return NULL;
-		copy = (char*)malloc(strlen(reg) + 1);
+		copy = (char*)calloc(strlen(reg) + 1, sizeof(char*));
 		strcpy(copy, reg);
 		return copy;
 	}
@@ -1741,7 +1741,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)malloc(MAX(10,strlen(LOCAL(i))+1));
+		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char*));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
@@ -1810,7 +1810,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)malloc(MAX(10,strlen(LOCAL(i))+1));
+		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char*));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));

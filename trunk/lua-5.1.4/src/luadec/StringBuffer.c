@@ -14,7 +14,7 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 StringBuffer* StringBuffer_new(char* data) {
-   StringBuffer* self = (StringBuffer*) malloc(sizeof(StringBuffer));
+   StringBuffer* self = (StringBuffer*) calloc(1, sizeof(StringBuffer));
    if (data != NULL) {
       int len = strlen(data);
       self->bufferSize = MAX(STRINGBUFFER_BLOCK, len+1);
@@ -125,7 +125,7 @@ void StringBuffer_addPrintf(StringBuffer* self, char* format, ...) {
 }
 
 char* StringBuffer_getCopy(StringBuffer* self) {
-   char* result = (char*)malloc(self->bufferSize+1);
+   char* result = (char*)calloc(self->bufferSize+1, sizeof(char*));
    strncpy(result, self->buffer, self->usedSize);
    result[self->usedSize] = '\0';
    return result;
