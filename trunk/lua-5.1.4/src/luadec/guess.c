@@ -9,10 +9,6 @@
 
 #define DEBUG_PRINT
 
-#ifndef LUA_OPNAMES
-#define LUA_OPNAMES
-#endif
-
 #include "ldebug.h"
 #include "lobject.h"
 #include "lopcodes.h"

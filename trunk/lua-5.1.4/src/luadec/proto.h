@@ -1,10 +1,6 @@
 #ifndef PROTO_H
 #define PROTO_H
 
-#ifndef LUA_OPNAMES
-#define LUA_OPNAMES
-#endif
-
 #include "ldebug.h"
 #include "lobject.h"
 #include "lopcodes.h"

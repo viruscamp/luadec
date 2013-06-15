@@ -6,10 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef LUA_OPNAMES
-#define LUA_OPNAMES
-#endif
-
 #include "ldebug.h"
 #include "lobject.h"
 #include "lopcodes.h"
