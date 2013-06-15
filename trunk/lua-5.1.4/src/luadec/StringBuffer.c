@@ -18,12 +18,12 @@ StringBuffer* StringBuffer_new(char* data) {
    if (data != NULL) {
       int len = strlen(data);
       self->bufferSize = MAX(STRINGBUFFER_BLOCK, len+1);
-      self->buffer = (char*)calloc(self->bufferSize, 1);
+      self->buffer = (char*)calloc(self->bufferSize, sizeof(char));
       self->usedSize = len;
       strncpy(self->buffer, data, len+1);
    } else {
       self->bufferSize = STRINGBUFFER_BLOCK;
-      self->buffer = (char*)calloc(self->bufferSize, 1);
+      self->buffer = (char*)calloc(self->bufferSize, sizeof(char));
       self->usedSize = 0;
    }
    return self;
@@ -39,7 +39,7 @@ void StringBuffer_makeRoom(StringBuffer* self, int neededSize) {
       int newSize = self->bufferSize * 2;
       if (newSize < neededSize)
          newSize += neededSize;
-      self->buffer = (char*)realloc(self->buffer, newSize + 1);
+      self->buffer = (char*)realloc(self->buffer, (newSize+1)*sizeof(char));
       self->bufferSize = newSize;
    }
 }
@@ -125,7 +125,7 @@ void StringBuffer_addPrintf(StringBuffer* self, char* format, ...) {
 }
 
 char* StringBuffer_getCopy(StringBuffer* self) {
-   char* result = (char*)calloc(self->bufferSize+1, sizeof(char*));
+   char* result = (char*)calloc(self->bufferSize+1, sizeof(char));
    strncpy(result, self->buffer, self->usedSize);
    result[self->usedSize] = '\0';
    return result;
@@ -138,7 +138,7 @@ char* StringBuffer_getRef(StringBuffer* self) {
 char* StringBuffer_getBuffer(StringBuffer* self) {
    char* result = self->buffer;
    self->bufferSize = STRINGBUFFER_BLOCK;
-   self->buffer = (char*)calloc(self->bufferSize, 1);
+   self->buffer = (char*)calloc(self->bufferSize, sizeof(char));
    self->usedSize = 0;
    return result;
 }

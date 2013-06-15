@@ -12,7 +12,7 @@ static void AddOutput(Output ** output, int indent, char *line)
     Output *newline = (Output*)calloc(1, sizeof(Output));
     Output *walk = *output;
     int lenline = strlen(line);
-    newline->line = (char*)calloc(lenline + (indent * 3) + 1, sizeof(char*));
+    newline->line = (char*)calloc(lenline + (indent * 3) + 1, sizeof(char));
     newline->next = NULL;
     for (i = 0; i < indent * 3; i++)
         newline->line[i] = ' ';

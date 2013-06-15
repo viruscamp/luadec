@@ -108,7 +108,7 @@ void DeclareLocal(Function * F, int ixx, const char* value);
 
 Statement *NewStatement(char *code, int line, int indent) {
 	Statement *self;
-	self = (Statement*)calloc(sizeof(Statement), 1);
+	self = (Statement*)calloc(1, sizeof(Statement));
 	cast(ListItem*, self)->next = NULL;
 	self->code = code;
 	self->line = line;
@@ -132,7 +132,7 @@ void PrintStatement(Statement * self, void* F_) {
 }
 
 LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code){
-	LoopItem* self = (LoopItem*)calloc(sizeof(LoopItem), 1);
+	LoopItem* self = (LoopItem*)calloc(1, sizeof(LoopItem));
 
 	self->parent = NULL;
 	self->child = NULL;
@@ -207,7 +207,7 @@ void DeleteLoopTree2(LoopItem* item){
 }
 
 IntListItem *NewIntListItem(int v){
-	IntListItem* self = (IntListItem*)calloc(sizeof(IntListItem), 1);
+	IntListItem* self = (IntListItem*)calloc(1, sizeof(IntListItem));
 	((ListItem *) self)->next = NULL;
 	self->value = v;
 	return self;
@@ -222,7 +222,7 @@ void DeleteIntListItem(IntListItem* item, void * dummy){
 }
 
 LogicExp* MakeExpNode(BoolOp* boolOp) {
-	LogicExp* node = cast(LogicExp*, calloc(1, sizeof(LogicExp)));
+	LogicExp* node = (LogicExp*)calloc(1, sizeof(LogicExp));
 	node->parent = NULL;
 	node->subexp = NULL;
 	node->next = NULL;
@@ -237,7 +237,7 @@ LogicExp* MakeExpNode(BoolOp* boolOp) {
 }
 
 LogicExp* MakeExpChain(int dest) {
-	LogicExp* node = cast(LogicExp*, calloc(1, sizeof(LogicExp)));
+	LogicExp* node = (LogicExp*)calloc(1, sizeof(LogicExp));
 	node->parent = NULL;
 	node->subexp = NULL;
 	node->next = NULL;
@@ -535,12 +535,12 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 		PrintLogicExp(str, *thenaddr, exp, 0, test);
 		if (test && endif && *endif == 0) {
 			//SET_ERROR(F,"Unhandled construct in boolean test");
-			result = (char*)calloc(30, sizeof(char*));
+			result = (char*)calloc(30, sizeof(char));
 			sprintf(result," --UNHANDLEDCONTRUCT-- ");
 			goto WriteBoolean_CLEAR_HANDLER1;
 		}
 	} else {
-		result = (char*)calloc(30, sizeof(char*));
+		result = (char*)calloc(30, sizeof(char));
 		sprintf(result,"error_maybe_false");
 		goto WriteBoolean_CLEAR_HANDLER1;
 	}
@@ -781,7 +781,7 @@ FlushElse_CLEAR_HANDLER1:
 */
 
 DecTableItem *NewTableItem(const char *value, int num, const char *key) {
-	DecTableItem *self = (DecTableItem*)calloc(sizeof(DecTableItem), 1);
+	DecTableItem *self = (DecTableItem*)calloc(1, sizeof(DecTableItem));
 	((ListItem *) self)->next = NULL;
 	self->key = luadec_strdup(key);
 	self->value = luadec_strdup(value);
@@ -950,7 +950,7 @@ char *PrintTable(Function * F, int r, int returnCopy)
 
 DecTable *NewTable(int r, Function * F, int b, int c, int pc) // Lua5.1 specific
 {
-	DecTable *self = (DecTable*)calloc(sizeof(DecTable), 1);
+	DecTable *self = (DecTable*)calloc(1, sizeof(DecTable));
 	((ListItem *) self)->next = NULL;
 	InitList(&(self->numeric));
 	InitList(&(self->keyed));
@@ -1096,7 +1096,7 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 */
 
 BoolOp* NewBoolOp(){
-	BoolOp* value = (BoolOp*)calloc(sizeof(BoolOp), 1);
+	BoolOp* value = (BoolOp*)calloc(1, sizeof(BoolOp));
 	value->op1 = NULL;
 	value->op2 = NULL;
 	//((ListItem*)value)->next = NULL;
@@ -1138,23 +1138,23 @@ Function *NewFunction(const Proto * f)
 	/*
 	* calloc, to ensure all parameters are 0/NULL
 	*/
-	self = (Function*)calloc(sizeof(Function), 1);
+	self = (Function*)calloc(1, sizeof(Function));
 	InitList(&(self->statements));
 	self->f = f;
-	self->vpend = (VarStack*)calloc(sizeof(VarStack), 1);
+	self->vpend = (VarStack*)calloc(1, sizeof(VarStack));
 	self->vpend->ctr = 0;
-	self->tpend = (IntSet*)calloc(sizeof(IntSet), 1);
+	self->tpend = (IntSet*)calloc(1, sizeof(IntSet));
 	self->tpend->ctr = 0;
 
 	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
-	//self->repeats = calloc(sizeof(IntSet), 1);
+	//self->repeats = calloc(1, sizeof(IntSet));
 	//self->repeats->mayRepeat = 1;
-	//self->untils = calloc(sizeof(IntSet), 1);
+	//self->untils = calloc(1, sizeof(IntSet));
 	InitList(&(self->breaks));
-	self->do_opens = (IntSet*)calloc(sizeof(IntSet), 1);
-	self->do_closes = (IntSet*)calloc(sizeof(IntSet), 1);
+	self->do_opens = (IntSet*)calloc(1, sizeof(IntSet));
+	self->do_closes = (IntSet*)calloc(1, sizeof(IntSet));
 	self->decompiledCode = StringBuffer_new(NULL);
 
 	for(i=0; i< MAXARG_A; i++){
@@ -1326,7 +1326,7 @@ void DeclareLocals(Function * F)
 			if (functionnum >=0 && functionnum < 255 && localdeclare[functionnum][i]==F->pc) {
 				char* name;
 				int r = i;
-				name = (char*)calloc(10, sizeof(char*));
+				name = (char*)calloc(10, sizeof(char));
 				sprintf(name,"l_%d_%d",functionnum,i);
 				if (F->internal[r]) {
 					names[r] = name;
@@ -1477,7 +1477,7 @@ char *RegisterOrConstant(Function * F, int r)
 		const char *reg = GetR(F, r);
 		if (error)
 			return NULL;
-		copy = (char*)calloc(strlen(reg) + 1, sizeof(char*));
+		copy = (char*)calloc(strlen(reg) + 1, sizeof(char));
 		strcpy(copy, reg);
 		return copy;
 	}
@@ -1741,7 +1741,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char*));
+		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
@@ -1810,7 +1810,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char*));
+		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
