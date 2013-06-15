@@ -84,12 +84,10 @@ char *DecompileConstant(const Proto * f, int i)
 		case LUA_TBOOLEAN: // Lua5.1 specific
 			{
 				if (o->value.b) {
-					char *ret = (char*)calloc(6, sizeof(char));
-					strcpy(ret, "true");
+					char *ret = strdup("true");
 					return ret;
 				} else {
-					char *ret = (char*)calloc(7, sizeof(char));
-					strcpy(ret, "false");
+					char *ret = strdup("false");
 					return ret;
 				}
 			}
@@ -103,14 +101,12 @@ char *DecompileConstant(const Proto * f, int i)
 			return DecompileString(f, i);
 		case LUA_TNIL:
 			{
-				char *ret = (char*)calloc(4, sizeof(char));
-				strcpy(ret, "nil");
+				char *ret = strdup("nil");
 				return ret;
 			}
 		default:                   /* cannot happen */
 			{
-				char *ret = (char*)calloc(18, sizeof(char));
-				strcpy(ret, "Uknown_Type_Error");
+				char *ret = strdup("Uknown_Type_Error");
 				return ret;
 			}
 	}

@@ -514,7 +514,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		if( i-last-1 != i){
 			DeleteBoolOp(F->bools[i-last-1]);
 			F->bools[i-last-1] = F->bools[i];
-			F->bools[i] = NULL;
+			F->bools[i] = NewBoolOp();
 		}
 	}
 	if (F->bools[0] == NULL){
@@ -1484,8 +1484,7 @@ char *RegisterOrConstant(Function * F, int r)
 		const char *reg = GetR(F, r);
 		if (error)
 			return NULL;
-		copy = (char*)calloc(strlen(reg) + 1, sizeof(char));
-		strcpy(copy, reg);
+		copy = luadec_strdup(reg);
 		return copy;
 	}
 }
