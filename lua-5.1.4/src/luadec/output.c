@@ -9,10 +9,10 @@
 static void AddOutput(Output ** output, int indent, char *line)
 {
     int i;
-    Output *newline = malloc(sizeof(Output));
+    Output *newline = (Output*)malloc(sizeof(Output));
     Output *walk = *output;
     int lenline = strlen(line);
-    newline->line = malloc(lenline + (indent * 3) + 1);
+    newline->line = (char*)malloc(lenline + (indent * 3) + 1);
     newline->next = NULL;
     for (i = 0; i < indent * 3; i++)
         newline->line[i] = ' ';

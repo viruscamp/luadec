@@ -202,13 +202,17 @@ typedef enum {
 } IndexType;
 void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type);
 
-void luaU_decompile(const Proto * f, int lflag);
-void luaU_decompileFunctions(const Proto * f, int lflag, int functions);
-void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr);
-void luaU_disassemble(const Proto* f, int dflag, int functions, char* name);
+void luaU_decompile(Proto * f, int lflag);
+void luaU_decompileFunctions(Proto * f, int lflag, int functions);
+void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr);
+void luaU_disassemble(Proto* f, int dflag, int functions, char* name);
 
 BoolOp* NewBoolOp();
 void DeleteBoolOp(BoolOp* ptr);
 void ClearBoolOp(BoolOp* ptr);
+
+int listUpvalues(Function *F, StringBuffer *str);
+int CompareProto(const Proto* f1, const Proto* f2, StringBuffer *str);
+int FunctionCheck(const Proto * f, int indent, StringBuffer *str);
 
 #endif

@@ -14,136 +14,136 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 StringBuffer* StringBuffer_new(char* data) {
-   StringBuffer* this = (StringBuffer*) malloc(sizeof(StringBuffer));
+   StringBuffer* self = (StringBuffer*) malloc(sizeof(StringBuffer));
    if (data != NULL) {
       int len = strlen(data);
-      this->bufferSize = MAX(STRINGBUFFER_BLOCK, len+1);
-      this->buffer = calloc(this->bufferSize, 1);
-      this->usedSize = len;
-      strncpy(this->buffer, data, len+1);
+      self->bufferSize = MAX(STRINGBUFFER_BLOCK, len+1);
+      self->buffer = (char*)calloc(self->bufferSize, 1);
+      self->usedSize = len;
+      strncpy(self->buffer, data, len+1);
    } else {
-      this->bufferSize = STRINGBUFFER_BLOCK;
-      this->buffer = calloc(this->bufferSize, 1);
-      this->usedSize = 0;
+      self->bufferSize = STRINGBUFFER_BLOCK;
+      self->buffer = (char*)calloc(self->bufferSize, 1);
+      self->usedSize = 0;
    }
-   return this;
+   return self;
 }
 
-void StringBuffer_delete(StringBuffer* this) {
-   free(this->buffer);
-   free(this);
+void StringBuffer_delete(StringBuffer* self) {
+   free(self->buffer);
+   free(self);
 }
 
-void StringBuffer_makeRoom(StringBuffer* this, int neededSize) {
-   if (this->bufferSize <= neededSize) {
-      int newSize = this->bufferSize * 2;
+void StringBuffer_makeRoom(StringBuffer* self, int neededSize) {
+   if (self->bufferSize <= neededSize) {
+      int newSize = self->bufferSize * 2;
       if (newSize < neededSize)
          newSize += neededSize;
-      this->buffer = realloc(this->buffer, newSize + 1);
-      this->bufferSize = newSize;
+      self->buffer = (char*)realloc(self->buffer, newSize + 1);
+      self->bufferSize = newSize;
    }
 }
 
-void StringBuffer_addChar(StringBuffer* this, char ch) {
-   StringBuffer_makeRoom(this, this->usedSize + 1);
-   this->buffer[this->usedSize] = ch;
-   this->usedSize++;
-   this->buffer[this->usedSize] = '\0';
+void StringBuffer_addChar(StringBuffer* self, char ch) {
+   StringBuffer_makeRoom(self, self->usedSize + 1);
+   self->buffer[self->usedSize] = ch;
+   self->usedSize++;
+   self->buffer[self->usedSize] = '\0';
 }
 
-void StringBuffer_set(StringBuffer* this, const char* str) {
+void StringBuffer_set(StringBuffer* self, const char* str) {
    int len = strlen(str);
-   StringBuffer_makeRoom(this, len+1);
-   strncpy(this->buffer, str, len+1);
-   this->usedSize = len;
-   this->buffer[this->usedSize] = '\0';
+   StringBuffer_makeRoom(self, len+1);
+   strncpy(self->buffer, str, len+1);
+   self->usedSize = len;
+   self->buffer[self->usedSize] = '\0';
 }
 
-void StringBuffer_add(StringBuffer* this, char* str) {
+void StringBuffer_add(StringBuffer* self, const char* str) {
    int len = strlen(str);
-   int end = this->usedSize;
-   StringBuffer_makeRoom(this, this->usedSize + len+1);
-   strncpy(this->buffer + end, str, len+1);
-   this->usedSize += len;
-   this->buffer[this->usedSize] = '\0';
+   int end = self->usedSize;
+   StringBuffer_makeRoom(self, self->usedSize + len+1);
+   strncpy(self->buffer + end, str, len+1);
+   self->usedSize += len;
+   self->buffer[self->usedSize] = '\0';
 }
 
-void StringBuffer_prepend(StringBuffer* this, char* str) {
+void StringBuffer_prepend(StringBuffer* self, const char* str) {
    int len = strlen(str);
-   int end = this->usedSize;
+   int end = self->usedSize;
    int i;
-   StringBuffer_makeRoom(this, this->usedSize + len+1);
+   StringBuffer_makeRoom(self, self->usedSize + len+1);
    for (i = end; i >= 0; i--)
-      this->buffer[i+len] = this->buffer[i];
-   strncpy(this->buffer, str, len);
-   this->usedSize += len;
+      self->buffer[i+len] = self->buffer[i];
+   strncpy(self->buffer, str, len);
+   self->usedSize += len;
 }
 
-void StringBuffer_addAll(StringBuffer* this, int n, ...) {
+void StringBuffer_addAll(StringBuffer* self, int n, ...) {
    int i;
    char* s;
    va_list ap;
    va_start(ap, n);
    for (i = 0; i < n; i++) {
       s = va_arg(ap, char*);
-      StringBuffer_add(this, s);
+      StringBuffer_add(self, s);
    }
    va_end(ap);
 }
 
-void StringBuffer_printf(StringBuffer* this, char* format, ...) {
+void StringBuffer_printf(StringBuffer* self, char* format, ...) {
    va_list ap;
    int n, size = 100;
    while (1) {
-      StringBuffer_makeRoom(this, size + 1);
+      StringBuffer_makeRoom(self, size + 1);
       va_start(ap, format);
-      n = vsnprintf(this->buffer, size, format, ap);
+      n = vsnprintf(self->buffer, size, format, ap);
       va_end(ap);
       if (n > -1 && n < size) {
-         this->usedSize = n;
+         self->usedSize = n;
          return;
       }
       size *= 2;
    }
 }
 
-void StringBuffer_addPrintf(StringBuffer* this, char* format, ...) {
+void StringBuffer_addPrintf(StringBuffer* self, char* format, ...) {
    va_list ap;
    int n, size = 100;
-   int end = this->usedSize;
+   int end = self->usedSize;
    while (1) {
-      StringBuffer_makeRoom(this, end + size + 1);
+      StringBuffer_makeRoom(self, end + size + 1);
       va_start(ap, format);
-      n = vsnprintf(this->buffer + end, size, format, ap);
+      n = vsnprintf(self->buffer + end, size, format, ap);
       va_end(ap);
       if (n > -1 && n < size) {
-         this->usedSize = end + n;
+         self->usedSize = end + n;
          return;
       }
       size *= 2;
    }
 }
 
-char* StringBuffer_getCopy(StringBuffer* this) {
-   char* result = malloc(this->bufferSize+1);
-   strncpy(result, this->buffer, this->usedSize);
-   result[this->usedSize] = '\0';
+char* StringBuffer_getCopy(StringBuffer* self) {
+   char* result = (char*)malloc(self->bufferSize+1);
+   strncpy(result, self->buffer, self->usedSize);
+   result[self->usedSize] = '\0';
    return result;
 }
 
-char* StringBuffer_getRef(StringBuffer* this) {
-   return this->buffer;
+char* StringBuffer_getRef(StringBuffer* self) {
+   return self->buffer;
 }
 
-char* StringBuffer_getBuffer(StringBuffer* this) {
-   char* result = this->buffer;
-   this->bufferSize = STRINGBUFFER_BLOCK;
-   this->buffer = calloc(this->bufferSize, 1);
-   this->usedSize = 0;
+char* StringBuffer_getBuffer(StringBuffer* self) {
+   char* result = self->buffer;
+   self->bufferSize = STRINGBUFFER_BLOCK;
+   self->buffer = (char*)calloc(self->bufferSize, 1);
+   self->usedSize = 0;
    return result;
 }
 
-void StringBuffer_prune(StringBuffer* this) {
-   this->usedSize = 0;
-   this->buffer[0] = '\0';
+void StringBuffer_prune(StringBuffer* self) {
+   self->usedSize = 0;
+   self->buffer[0] = '\0';
 }

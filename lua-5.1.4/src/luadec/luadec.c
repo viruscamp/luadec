@@ -371,7 +371,7 @@ int luaU_guess_locals(Proto * f, int main);
 
 void printFuncStructure(Proto * f, char* indent){
 	int i;
-	char* newindent = calloc(strlen(indent)+10,1);
+	char* newindent = (char*)calloc(strlen(indent)+10,1);
 	for (i=0;i<f->sizep;i++) {
 		printf("%s%d\n",indent,i+1);
 		sprintf(newindent," %s%d_",indent,i+1);
