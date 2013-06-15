@@ -36,7 +36,7 @@ struct llist {
 struct llist * add(struct llist * list, int startpc, int endpc) {
 	list->startpc = startpc;
 	list->endpc = endpc;
-	list->next = (struct llist *)malloc(sizeof(struct llist));
+	list->next = (struct llist *)calloc(1, sizeof(struct llist));
 	list->next->next = NULL;
 	return list->next;
 }
