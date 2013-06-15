@@ -13,6 +13,8 @@
 #define LUA_OPNAMES
 #endif
 
+#include "lua.h"
+#include "lauxlib.h"
 #include "ldebug.h"
 #include "lobject.h"
 #include "lopcodes.h"
@@ -110,7 +112,7 @@ void DeclareLocal(Function * F, int ixx, const char* value);
 
 Statement *NewStatement(char *code, int line, int indent) {
 	Statement *self;
-	self = calloc(sizeof(Statement), 1);
+	self = (Statement*)calloc(sizeof(Statement), 1);
 	cast(ListItem*, self)->next = NULL;
 	self->code = code;
 	self->line = line;
@@ -134,7 +136,7 @@ void PrintStatement(Statement * self, void* F_) {
 }
 
 LoopItem *NewLoopItem(LoopType type, int prep, int start, int body, int end, int next_code){
-	LoopItem* self = calloc(sizeof(LoopItem), 1);
+	LoopItem* self = (LoopItem*)calloc(sizeof(LoopItem), 1);
 
 	self->parent = NULL;
 	self->child = NULL;
@@ -209,7 +211,7 @@ void DeleteLoopTree2(LoopItem* item){
 }
 
 IntListItem *NewIntListItem(int v){
-	IntListItem* self = calloc(sizeof(IntListItem), 1);
+	IntListItem* self = (IntListItem*)calloc(sizeof(IntListItem), 1);
 	((ListItem *) self)->next = NULL;
 	self->value = v;
 	return self;
@@ -353,7 +355,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 	if (endif)
 		*endif = 0;
 
-	if (F->nextBool == NULL) {
+	if (F->nextBool == 0) {
 		SET_ERROR(F,"Attempted to build a boolean expression without a pending context");
 		return NULL;
 	}
@@ -537,12 +539,12 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 		PrintLogicExp(str, *thenaddr, exp, 0, test);
 		if (test && endif && *endif == 0) {
 			//SET_ERROR(F,"Unhandled construct in boolean test");
-			result = malloc(30);
+			result = (char*)malloc(30);
 			sprintf(result," --UNHANDLEDCONTRUCT-- ");
 			goto WriteBoolean_CLEAR_HANDLER1;
 		}
 	} else {
-		result = malloc(30);
+		result = (char*)malloc(30);
 		sprintf(result,"error_maybe_false");
 		goto WriteBoolean_CLEAR_HANDLER1;
 	}
@@ -578,7 +580,7 @@ OutputBoolean_CLEAR_HANDLER1:
 void StoreEndifAddr(Function * F, int addr) {
 	Endif* at = F->nextEndif;
 	Endif* prev = NULL;
-	Endif* newEndif = malloc(sizeof(Endif));
+	Endif* newEndif = (Endif*)malloc(sizeof(Endif));
 	newEndif->addr = addr;
 	while (at && at->addr < addr) {
 		prev = at;
@@ -782,8 +784,8 @@ FlushElse_CLEAR_HANDLER1:
 * -------------------------------------------------------------------------
 */
 
-DecTableItem *NewTableItem(char *value, int num, char *key) {
-	DecTableItem *self = calloc(sizeof(DecTableItem), 1);
+DecTableItem *NewTableItem(const char *value, int num, const char *key) {
+	DecTableItem *self = (DecTableItem*)calloc(sizeof(DecTableItem), 1);
 	((ListItem *) self)->next = NULL;
 	self->key = luadec_strdup(key);
 	self->value = luadec_strdup(value);
@@ -952,7 +954,7 @@ char *PrintTable(Function * F, int r, int returnCopy)
 
 DecTable *NewTable(int r, Function * F, int b, int c, int pc) // Lua5.1 specific
 {
-	DecTable *self = calloc(sizeof(DecTable), 1);
+	DecTable *self = (DecTable*)calloc(sizeof(DecTable), 1);
 	((ListItem *) self)->next = NULL;
 	InitList(&(self->numeric));
 	InitList(&(self->keyed));
@@ -966,7 +968,7 @@ DecTable *NewTable(int r, Function * F, int b, int c, int pc) // Lua5.1 specific
 	return self;
 }
 
-void AddToTable(Function* F, DecTable * tbl, char *value, char *key)
+void AddToTable(Function* F, DecTable * tbl, const char *value, const char *key)
 {
 	DecTableItem *item;
 	List *type;
@@ -1027,7 +1029,7 @@ void SetList(Function * F, int a, int b, int c)
 		return;
 	}
 	if (b == 0) {
-		char *rstr;
+		const char *rstr;
 		i = 1;
 		do{
 			rstr = GetR(F, a + i);
@@ -1043,7 +1045,7 @@ void SetList(Function * F, int a, int b, int c)
 	} //should be {...} or func(func()) ,when b == 0, that will use all avaliable reg from R(a)
 
 	for (i = 1; i <= b; i++) {
-		char* rstr = GetR(F, a + i);
+		const char* rstr = GetR(F, a + i);
 		if (error)
 			return;
 		AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
@@ -1140,12 +1142,12 @@ Function *NewFunction(const Proto * f)
 	/*
 	* calloc, to ensure all parameters are 0/NULL
 	*/
-	self = calloc(sizeof(Function), 1);
+	self = (Function*)calloc(sizeof(Function), 1);
 	InitList(&(self->statements));
 	self->f = f;
-	self->vpend = calloc(sizeof(VarStack), 1);
+	self->vpend = (VarStack*)calloc(sizeof(VarStack), 1);
 	self->vpend->ctr = 0;
-	self->tpend = calloc(sizeof(IntSet), 1);
+	self->tpend = (IntSet*)calloc(sizeof(IntSet), 1);
 	self->tpend->ctr = 0;
 
 	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
@@ -1155,8 +1157,8 @@ Function *NewFunction(const Proto * f)
 	//self->repeats->mayRepeat = 1;
 	//self->untils = calloc(sizeof(IntSet), 1);
 	InitList(&(self->breaks));
-	self->do_opens = calloc(sizeof(IntSet), 1);
-	self->do_closes = calloc(sizeof(IntSet), 1);
+	self->do_opens = (IntSet*)calloc(sizeof(IntSet), 1);
+	self->do_closes = (IntSet*)calloc(sizeof(IntSet), 1);
 	self->decompiledCode = StringBuffer_new(NULL);
 
 	for(i=0; i< MAXARG_A; i++){
@@ -1328,7 +1330,7 @@ void DeclareLocals(Function * F)
 			if (functionnum >=0 && functionnum < 255 && localdeclare[functionnum][i]==F->pc) {
 				char* name;
 				int r = i;
-				name = malloc(10);
+				name = (char*)malloc(10);
 				sprintf(name,"l_%d_%d",functionnum,i);
 				if (F->internal[r]) {
 					names[r] = name;
@@ -1476,10 +1478,10 @@ char *RegisterOrConstant(Function * F, int r)
 		return DecompileConstant(F->f, r - 256); // TODO: Lua5.1 specific. Should change to MSR!!!
 	} else {
 		char *copy;
-		char *reg = GetR(F, r);
+		const char *reg = GetR(F, r);
 		if (error)
 			return NULL;
-		copy = malloc(strlen(reg) + 1);
+		copy = (char*)malloc(strlen(reg) + 1);
 		strcpy(copy, reg);
 		return copy;
 	}
@@ -1743,7 +1745,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = malloc(MAX(10,strlen(LOCAL(i))+1));
+		char* x = (char*)malloc(MAX(10,strlen(LOCAL(i))+1));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
@@ -1812,7 +1814,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = malloc(MAX(10,strlen(LOCAL(i))+1));
+		char* x = (char*)malloc(MAX(10,strlen(LOCAL(i))+1));
 		sprintf(x,"%s",LOCAL(i));
 		//sprintf(x,"l_%d_%d",functionnum, i);
 		TRY(DeclareVariable(F, x, i));
@@ -2084,7 +2086,7 @@ END_SEARCH:
 	  case OP_MOVE:
 		  /* Upvalue handling added to OP_CLOSURE */
 		  {
-			  char* bstr = NULL;
+			  const char* bstr = NULL;
 			  if (a == b)
 				  break;
 			  if (CALL(b) < 2)
@@ -2179,7 +2181,8 @@ END_SEARCH:
 			  /*
 			  * Read table entry into register.
 			  */
-			  char *bstr, *cstr;
+			  const char *bstr;
+			  char* cstr;
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  TRY(bstr = GetR(F, b));
 			  if (bstr[0] == '{') {
@@ -2197,8 +2200,8 @@ END_SEARCH:
 			  /*
 			  * Global Assignment statement.
 			  */
-			  char *var = GLOBAL(bc);
-			  char *astr;
+			  const char *var = GLOBAL(bc);
+			  const char *astr;
 			  TRY(astr = GetR(F, a));
 			  TRY(Assign(F, var, astr, -1, 0, 0));
 			  break;
@@ -2208,8 +2211,8 @@ END_SEARCH:
 			  /*
 			  * Global Assignment statement.
 			  */
-			  char *var = UPVALUE(b);// UP(b) is correct
-			  char *astr;
+			  const char *var = UPVALUE(b);// UP(b) is correct
+			  const char *astr;
 			  TRY(astr = GetR(F, a));
 			  TRY(Assign(F, var, astr, -1, 0, 0));
 			  break;
@@ -2246,7 +2249,8 @@ END_SEARCH:
 			  /*
 			  * Read table entry into register.
 			  */
-			  char *bstr, *cstr;
+			  const char *bstr;
+			  char *cstr;
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  TRY(bstr = GetR(F, b));
 
@@ -2294,7 +2298,7 @@ END_SEARCH:
 	  case OP_NOT:
 	  case OP_LEN:
 		  {
-			  char *bstr;
+			  const char *bstr;
 			  int prio = priorities[o];
 			  int bprio = PRIORITY(b);
 			  TRY(bstr = GetR(F, b));
@@ -2311,7 +2315,7 @@ END_SEARCH:
 		  {
 			  int i;
 			  for (i = b; i <= c; i++) {
-				  char *istr;
+				  const char *istr;
 				  TRY(istr = GetR(F, i));
 				  if (PRIORITY(i) > priorities[o]) {
 					  StringBuffer_addPrintf(str, "(%s)", istr);
@@ -2382,9 +2386,7 @@ END_SEARCH:
 				  */
 				  int i;
 				  //int step;
-				  char *generator;
-				  char *control;
-				  char *state;
+				  const char *generator, *control, *state;
 				  //char *variables[20];
 				  char* vname[40];
 				  //int stepLen;
@@ -2533,7 +2535,7 @@ END_SEARCH:
 	  case OP_TEST:
 		  {
 			  int cmpa, cmpb, cmpc;
-			  char *ra, *rb, *rc;
+			  const char *ra, *rb, *rc;
 
 			  if (o==OP_TESTSET) {
 				  cmpa = a;
@@ -2548,23 +2550,20 @@ END_SEARCH:
 			  }
 
 			  if (!IS_VARIABLE(cmpa)) {
-				  ra = luadec_strdup(REGISTER(cmpa));
+				  ra = REGISTER(cmpa);
 				  TRY(rb = GetR(F, cmpb));
-				  rb = luadec_strdup(rb);
 				  PENDING(cmpa) = 0;
 			  } else {
 				  TRY(ra = GetR(F, cmpa));
-				  ra = luadec_strdup(ra);
 				  if (cmpa != cmpb) {
 					  TRY(rb = GetR(F, cmpb));
-					  rb = luadec_strdup(rb);
 				  } else {
-					  rb = luadec_strdup(ra);
+					  rb = ra;
 				  }
 			  }
 			  ClearBoolOp(F->bools[F->nextBool]);
-			  F->bools[F->nextBool]->op1 = ra;
-			  F->bools[F->nextBool]->op2 = rb;
+			  F->bools[F->nextBool]->op1 = luadec_strdup(ra);
+			  F->bools[F->nextBool]->op2 = luadec_strdup(rb);
 			  F->bools[F->nextBool]->op = o;
 			  F->bools[F->nextBool]->neg = cmpc;
 			  F->bools[F->nextBool]->pc = pc + 1;
@@ -2583,7 +2582,7 @@ END_SEARCH:
 			  * R(A),...,R(A+F-2) := R(A)(R(A+1),...,R(A+B-1))
 			  */
 			  int i, limit, self;
-			  char* astr;
+			  const char* astr;
 			  self = 0;
 
 			  if (b == 0) {
@@ -2600,7 +2599,7 @@ END_SEARCH:
 			  StringBuffer_addPrintf(str, "%s(", astr);
 
 			  {
-				  char* at = astr + strlen(astr) - 1;
+				  const char* at = astr + strlen(astr) - 1;
 				  while (at > astr && (luadec_isalpha(*at) || *at == '_')) {
 					  at--;
 				  }
@@ -2609,7 +2608,7 @@ END_SEARCH:
 			  }
 
 			  for (i = a + 1; i < limit; i++) {
-				  char *ireg;
+				  const char *ireg = NULL;
 				  TRY(ireg = GetR(F, i));
 				  if(strcmp(ireg,".end") == 0)
 					  break;
@@ -2661,8 +2660,7 @@ END_SEARCH:
 				  limit = a + b - 1;
 			  StringBuffer_set(str, "return ");
 			  for (i = a; i < limit; i++) {
-				  char* istr;
-				  istr = GetR(F, i);
+				  const char* istr = GetR(F, i);
 				  if (strcmp(istr,".end") == 0)
 					  break;
 				  if (i > a)
@@ -2715,10 +2713,7 @@ END_SEARCH:
 			  int i;
 			  int step;
 			  char *idxname;
-			  char *initial;
-			  //char *findSign;
-			  char *a1str;
-			  char *endstr;
+			  const char *initial, *a1str, *endstr;
 			  int stepLen;
 			  F->intspos++;
 			  TRY(initial = GetR(F, a));
@@ -2944,7 +2939,7 @@ errorHandler:
 	return output;
 }
 
-void luaU_decompile(const Proto * f, int dflag)
+void luaU_decompile(Proto * f, int dflag)
 {
 	char* code;
 	debug = dflag;
@@ -2958,7 +2953,7 @@ void luaU_decompile(const Proto * f, int dflag)
 	fflush(stderr);
 }
 
-void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
+void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr)
 {
 	int i,c=f->sizep;
 	char* code;
@@ -3026,7 +3021,7 @@ void luaU_decompileNestedFunctions(const Proto* f, int dflag, char* funcnumstr)
 	fflush(stderr);
 }
 
-void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
+void luaU_decompileFunctions(Proto* f, int dflag, int functions)
 {
 	int i,c=f->sizep;
 	char* code;
@@ -3077,7 +3072,7 @@ void luaU_decompileFunctions(const Proto* f, int dflag, int functions)
 #define CV(r) (!IS_CONSTANT((r)) ? r : (r-256))
 #define MAXCONSTSIZE 1024
 
-void luaU_disassemble(const Proto* fwork, int dflag, int functions, char* name) {
+void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
 	char tmp[MAXCONSTSIZE+128];
 	char tmp2[MAXCONSTSIZE+128];
 	char *tmpconstant1 = NULL, *tmpconstant2 = NULL;
