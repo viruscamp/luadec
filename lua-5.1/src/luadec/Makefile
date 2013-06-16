@@ -18,8 +18,8 @@ MYLIBS=
 MYOBJS=
 
 INCS= -I..
-OBJS= guess.o luadec.o decompile.o proto.o StringBuffer.o structs.o
-SRCS= guess.c luadec.c decompile.c proto.c StringBuffer.c structs.c
+OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o
+SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c
 
 T= luadec
 

@@ -21,7 +21,7 @@
 #include "decompile.h"
 #include "structs.h"
 
-#define IS_CONSTANT(r) (r >= 256) // TODO: Lua5.1 specific. Should use MSR!!!!
+#define IS_CONSTANT(r) ISK(r)
 
 extern lua_State* glstate;
 

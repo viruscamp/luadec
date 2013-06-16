@@ -13,7 +13,9 @@
 #include "lopcodes.h"
 #include "lstring.h"
 #include "lundump.h"
+
 #include "decompile.h"
+#include "disassemble.h"
 
 #ifndef SRCVERSION
 #include "srcversion.h"
