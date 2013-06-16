@@ -1,5 +1,5 @@
-#ifndef PRINT_H
-#define PRINT_H
+#ifndef DECOMPILE_H
+#define DECOMPILE_H
 
 #include "structs.h"
 #include "StringBuffer.h"
