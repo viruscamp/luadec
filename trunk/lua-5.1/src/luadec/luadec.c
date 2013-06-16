@@ -13,7 +13,7 @@
 #include "lopcodes.h"
 #include "lstring.h"
 #include "lundump.h"
-#include "print.h"
+#include "decompile.h"
 
 #ifndef SRCVERSION
 #include "srcversion.h"

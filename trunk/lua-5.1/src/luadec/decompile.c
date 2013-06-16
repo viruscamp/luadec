@@ -20,7 +20,7 @@
 #include "StringBuffer.h"
 #include "proto.h"
 
-#include "print.h"
+#include "decompile.h"
 #include "structs.h"
 
 #define stddebug stdout
