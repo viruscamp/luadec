@@ -205,7 +205,6 @@ void MakeIndex(Function* F, StringBuffer * str, char* rstr, IndexType type);
 void luaU_decompile(Proto * f, int lflag);
 void luaU_decompileFunctions(Proto * f, int lflag, int functions);
 void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr);
-void luaU_disassemble(Proto* f, int dflag, int functions, char* name);
 
 BoolOp* NewBoolOp();
 void DeleteBoolOp(BoolOp* ptr);
