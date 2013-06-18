@@ -725,13 +725,13 @@ function DescribeInst(inst, pos, func)
   end
  
   local function IS_CONSTANT(r)
-	return (r >= 256)
+	return (r >= config.BITRK)
   end
   local function CC(r)
-	return (IS_CONSTANT(r) and 'K') or 'R'
+	return (IS_CONSTANT(r) and 'K' or 'R')
   end
   local function CV(r)
-	return (IS_CONSTANT(r) and (r-256)) or r
+	return (IS_CONSTANT(r) and (r-config.BITRK) or r)
   end
 
   local function Kst(x)
@@ -739,8 +739,8 @@ function DescribeInst(inst, pos, func)
   end
   local function RK(r)
 	local str=''
-	if r >= 256 then
-		str = 'K'..(r-256).."("..Kst(r-256)..")"
+	if r >= config.BITRK then
+		str = 'K'..(r-config.BITRK).."("..Kst(r-config.BITRK)..")"
 	else
 		str = 'R'..r
 	end
@@ -789,7 +789,7 @@ function DescribeInst(inst, pos, func)
 	local v
     if inst.B == 0 then v = "false" else v = "true" end
     if inst.C > 0 then
-		Comment = string.format("%s%d := %s; PC := %d",CC(a),CV(a),v,CommentLoc(1));
+		Comment = string.format("%s%d := %s; PC := %s",CC(a),CV(a),v,CommentLoc(1));
 	else
 		Comment = string.format("%s%d := %s",CC(a),CV(a),v)
 	end
