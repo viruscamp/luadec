@@ -16,12 +16,9 @@
 #include "lstring.h"
 
 #include "StringBuffer.h"
-#include "proto.h"
-
-#include "decompile.h"
 #include "structs.h"
-
-#define IS_CONSTANT(r) ISK(r)
+#include "proto.h"
+#include "decompile.h"
 
 extern lua_State* glstate;
 

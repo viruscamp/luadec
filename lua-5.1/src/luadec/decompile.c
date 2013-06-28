@@ -18,10 +18,9 @@
 #include "lstring.h"
 
 #include "StringBuffer.h"
-#include "proto.h"
-
-#include "decompile.h"
 #include "structs.h"
+#include "proto.h"
+#include "decompile.h"
 
 #define stddebug stdout
 
@@ -55,7 +54,6 @@ char* luadec_strdup(const char * src){
 	return src?strdup(src):NULL;
 }
 
-#define GLOBAL(r) (char*)svalue(&f->k[r])
 #define UPVALUE(r) ( getupval(F,r) )
 #define REGISTER(r) F->R[r]
 #define PRIORITY(r) (r>=MAXSTACK ? 0 : F->Rprio[r])
@@ -65,16 +63,11 @@ char* luadec_strdup(const char * src){
 #define CALL(r) F->Rcall[r]
 #define IS_TABLE(r) F->Rtabl[r]
 #define IS_VARIABLE(r) F->Rvar[r]
-#define IS_CONSTANT(r)  ISK(r)
 
 #define SET_CTR(s) s->ctr
 #define SET(s,y) s->values[y]
 #define SET_IS_EMPTY(s) (s->ctr == 0)
 
-#define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
-#define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
-
-#define IsMain(f)	(f->linedefined==0)
 #define fb2int(x)	(luaO_fb2int(x))
 #define int2fb(x)	(luaO_int2fb(x))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -1458,22 +1451,6 @@ char* PrintFunction(Function * F)
 /*
 * -------------------------------------------------------------------------
 */
-
-static char *operators[22] = {
-		" ", " ", " ", " ", " ",
-		" ", " ", " ", " ", " ",
-		" ", " ","+", "-", "*",
-		"/", "%", "^", "-", "not ",
-		"#", ".."
-}; // Lua5.1 specific
-
-static int priorities[22] = {
-		0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0,
-		0, 0, 4, 4, 3,
-		3, 3, 1, 2, 2,
-		2, 5
-}; // Lua5.1 specific
 
 char *RegisterOrConstant(Function * F, int r)
 {

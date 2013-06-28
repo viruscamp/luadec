@@ -1,7 +1,5 @@
 #include "common.h"
 
-#include "proto.h"
-
 //#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +8,24 @@
 #include "lobject.h"
 #include "lopcodes.h"
 #include "lundump.h"
+
+#include "proto.h"
+
+const char *operators[22] = {
+		" ", " ", " ", " ", " ",
+		" ", " ", " ", " ", " ",
+		" ", " ","+", "-", "*",
+		"/", "%", "^", "-", "not ",
+		"#", ".."
+}; // Lua5.1 specific
+
+const int priorities[22] = {
+		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0,
+		0, 0, 4, 4, 3,
+		3, 3, 1, 2, 2,
+		2, 5
+}; // Lua5.1 specific
 
 // PrintString from luac is not 8-bit clean
 char *DecompileString(const Proto * f, int n)

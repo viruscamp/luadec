@@ -16,24 +16,7 @@
 #include "lstring.h"
 
 #include "proto.h"
-
-// below macros are copied from decompile.c , please keep synchronized
-#define GLOBAL(r) (char*)svalue(&f->k[r])
-#define IS_CONSTANT(r) ISK(r)
-#define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
-#define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
-
-#define CC(r) (IS_CONSTANT((r)) ? 'K' : 'R')
-#define CV(r) (IS_CONSTANT((r)) ? INDEXK(r) : r)
-#define MAXCONSTSIZE 1024
-
-static char *operators[22] = {
-		" ", " ", " ", " ", " ",
-		" ", " ", " ", " ", " ",
-		" ", " ","+", "-", "*",
-		"/", "%", "^", "-", "not ",
-		"#", ".."
-}; // Lua5.1 specific
+#include "disassemble.h"
 
 void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
 	char tmp[MAXCONSTSIZE+128];
