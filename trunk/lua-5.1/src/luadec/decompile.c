@@ -800,8 +800,14 @@ void DeleteTableItem(DecTableItem* item,void* dummy) {
 
 void DeclarePendingLocals(Function * F);
 
-void Assign(Function * F, const char* dest, const char* src, int reg, int prio, int mayTest)
+void AssignGlobalOrUpvalue(Function * F, const char* dest, const char* src){
+	F->testjump = 0;
+	AddToVarStack(F->vpend, luadec_strdup(dest), luadec_strdup(src), -1);
+}
+
+void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
 {
+	char* dest = REGISTER(reg);
 	char* nsrc = NULL;
 
 	if (PENDING(reg)) {
@@ -812,20 +818,16 @@ void Assign(Function * F, const char* dest, const char* src, int reg, int prio, 
 			DeclareLocal(F,reg,REGISTER(reg));
 		}
 		return;
-		//SET_ERROR("overwrote pending register!");
-		//return;
 	}
 
-	if (reg != -1) {
-		PENDING(reg) = 1;
-		CALL(reg) = 0;
-		F->Rprio[reg] = prio;
-	}
+	PENDING(reg) = 1;
+	CALL(reg) = 0;
+	F->Rprio[reg] = prio;
 
 	if (debug) { printf("SET_CTR(Tpend) = %d \n", SET_CTR(F->tpend)); }
 
 	nsrc = luadec_strdup(src);
-	if (reg != -1 && F->testpending == reg+1 && mayTest && F->testjump == F->pc+2) {
+	if (F->testpending == reg+1 && mayTest && F->testjump == F->pc+2) {
 		int endif;
 		char* test = OutputBoolean(F, &endif, 1);
 		if (error) {
@@ -846,7 +848,7 @@ void Assign(Function * F, const char* dest, const char* src, int reg, int prio, 
 	}
 	F->testjump = 0;
 
-	if (reg != -1 && !IS_VARIABLE(reg)) {
+	if (!IS_VARIABLE(reg)) {
 		if (REGISTER(reg)) free(REGISTER(reg));
 		REGISTER(reg) = nsrc;
 		AddToSet(F->tpend, reg);
@@ -862,9 +864,6 @@ int MatchTable(DecTable * tbl, int *name)
 
 void DeleteTable(DecTable * tbl)
 {
-	/*
-	* TODO: delete values from table
-	*/
 	LoopList(&(tbl->keyed),(ListItemFn)DeleteTableItem,NULL);
 	LoopList(&(tbl->numeric),(ListItemFn)DeleteTableItem,NULL);
 	free(tbl);
@@ -928,7 +927,7 @@ char *PrintTable(Function * F, int r, int returnCopy)
 	}
 	StringBuffer_addChar(str, '}');
 	PENDING(r) = 0;
-	Assign(F, REGISTER(r), StringBuffer_getRef(str), r, 0, 0);
+	AssignReg(F, r, StringBuffer_getRef(str), 0, 0);
 	if (error) {
 		result = NULL;
 	}else if (returnCopy){
@@ -1092,7 +1091,7 @@ BoolOp* NewBoolOp(){
 	BoolOp* value = (BoolOp*)calloc(1, sizeof(BoolOp));
 	value->op1 = NULL;
 	value->op2 = NULL;
-	//((ListItem*)value)->next = NULL;
+	((ListItem*)value)->next = NULL;
 	return value;
 }
 
@@ -1972,13 +1971,13 @@ END_SEARCH:
 			if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)){
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a; ixx++) {
-					TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
+					TRY(AssignReg(F, ixx, "nil", 0, 1));
 					PENDING(ixx)=1;
 				}
 			} else if (o != OP_JMP) {
 				int ixx;
 				for (ixx = F->freeLocal; ixx <= a-1; ixx++) {
-					TRY(Assign(F, REGISTER(ixx), "nil", ixx, 0, 1));
+					TRY(AssignReg(F, ixx, "nil", 0, 1));
 					PENDING(ixx)=1;
 				}
 			}
@@ -2077,7 +2076,7 @@ END_SEARCH:
 			  /*
 			  * Copy from one register to another
 			  */
-			  TRY(Assign(F, REGISTER(a), bstr, a, PRIORITY(b), 1));
+			  TRY(AssignReg(F, a, bstr, PRIORITY(b), 1));
 			  break;
 		  }
 	  case OP_LOADK:
@@ -2086,7 +2085,7 @@ END_SEARCH:
 			  * Constant. Store it in register.
 			  */
 			  char *ctt = DecompileConstant(f, bc);
-			  TRY(Assign(F, REGISTER(a), ctt, a, 0, 1));
+			  TRY(AssignReg(F, a, ctt, 0, 1));
 			  free(ctt);
 			  break;
 		  }
@@ -2100,7 +2099,7 @@ END_SEARCH:
 					  // some boolean constructs overwrite pending regs :(
 					  TRY(UnsetPending(F, a));
 				  }
-				  TRY(Assign(F, REGISTER(a), b ? "true" : "false", a, 0, 1));
+				  TRY(AssignReg(F, a, b ? "true" : "false", 0, 1));
 			  } else {
 				  /*
 				  * assign boolean value
@@ -2109,7 +2108,7 @@ END_SEARCH:
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
 				  if (test) free(test);
-				  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+				  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  }
 			  if (c)
 				  ignoreNext = 1;
@@ -2122,7 +2121,7 @@ END_SEARCH:
 			  * Read nil into register.
 			  */
 			  for(i = a; i <= b; i++) {
-				  TRY(Assign(F, REGISTER(i), "nil", i, 0, 1));
+				  TRY(AssignReg(F, i, "nil", 0, 1));
 			  }
 			  break;
 		  }
@@ -2133,18 +2132,18 @@ END_SEARCH:
 			  * Read ... into register.
 			  */
 			  if (b==0) {
-				  TRY(Assign(F, REGISTER(a), "...", a, 0, 1));
-				  TRY(Assign(F, REGISTER(a+1), ".end", a+1, 0, 1));
+				  TRY(AssignReg(F, a, "...", 0, 1));
+				  TRY(AssignReg(F, a+1, ".end", 0, 1));
 			  } else {
 				  for(i = 0; i < b-1; i++) {
-					  TRY(Assign(F, REGISTER(a+i), "...", a+i, 0, 1));
+					  TRY(AssignReg(F, a+i, "...", 0, 1));
 				  }
 			  }
 			  break;
 		  }
 	  case OP_GETUPVAL:
 		  {
-			  TRY(Assign(F, REGISTER(a), UPVALUE(b), a, 0, 1));
+			  TRY(AssignReg(F, a, UPVALUE(b), 0, 1));
 			  break;
 		  }
 	  case OP_GETGLOBAL:
@@ -2152,7 +2151,7 @@ END_SEARCH:
 			  /*
 			  * Read global into register.
 			  */
-			  TRY(Assign(F, REGISTER(a), GLOBAL(bc), a, 0, 1));
+			  TRY(AssignReg(F, a, GLOBAL(bc), 0, 1));
 			  break;
 		  }
 	  case OP_GETTABLE:
@@ -2170,7 +2169,7 @@ END_SEARCH:
 				  StringBuffer_set(str, bstr);
 			  }
 			  MakeIndex(F, str, cstr, DOT);
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  free(cstr);
 			  break;
 		  }
@@ -2182,7 +2181,7 @@ END_SEARCH:
 			  const char *var = GLOBAL(bc);
 			  const char *astr;
 			  TRY(astr = GetR(F, a));
-			  TRY(Assign(F, var, astr, -1, 0, 0));
+			  TRY(AssignGlobalOrUpvalue(F, var, astr));
 			  break;
 		  }
 	  case OP_SETUPVAL:
@@ -2193,7 +2192,7 @@ END_SEARCH:
 			  const char *var = UPVALUE(b);// UP(b) is correct
 			  const char *astr;
 			  TRY(astr = GetR(F, a));
-			  TRY(Assign(F, var, astr, -1, 0, 0));
+			  TRY(AssignGlobalOrUpvalue(F, var, astr));
 			  break;
 		  }
 	  case OP_SETTABLE:
@@ -2212,7 +2211,7 @@ END_SEARCH:
 				  */
 				  StringBuffer_set(str, REGISTER(a));
 				  MakeIndex(F, str, bstr, DOT);
-				  TRY(Assign(F, StringBuffer_getRef(str), cstr, -1, 0, 0));
+				  TRY(AssignGlobalOrUpvalue(F, StringBuffer_getRef(str), cstr));
 			  }
 			  free(bstr);
 			  free(cstr);
@@ -2233,11 +2232,11 @@ END_SEARCH:
 			  TRY(cstr = RegisterOrConstant(F, c));
 			  TRY(bstr = GetR(F, b));
 
-			  TRY(Assign(F, REGISTER(a+1), bstr, a+1, PRIORITY(b), 0));
+			  TRY(AssignReg(F, a+1, bstr, PRIORITY(b), 0));
 
 			  StringBuffer_set(str, bstr);
 			  MakeIndex(F, str, cstr, SELF);
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  free(cstr);
 			  break;
 		  }
@@ -2268,7 +2267,7 @@ END_SEARCH:
 			  } else {
 				  StringBuffer_addPrintf(str, "(%s)", cstr);
 			  }
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, prio, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), prio, 0));
 			  free(bstr);
 			  free(cstr);
 			  break;
@@ -2287,7 +2286,7 @@ END_SEARCH:
 			  } else {
 				  StringBuffer_addPrintf(str, "(%s)", bstr);
 			  }
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  break;
 		  }
 	  case OP_CONCAT:
@@ -2304,7 +2303,7 @@ END_SEARCH:
 				  if (i < c)
 					  StringBuffer_add(str, " .. ");
 			  }
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  break;
 		  }
 	  case OP_JMP:
@@ -2452,7 +2451,7 @@ END_SEARCH:
 				  StringBuffer_printf(str, "%s", test);
 				  if (test) free(test);
 				  TRY(UnsetPending(F, boola));
-				  TRY(Assign(F, REGISTER(boola), StringBuffer_getRef(str), boola, 0, 0));
+				  TRY(AssignReg(F, boola, StringBuffer_getRef(str), 0, 0));
 				  ignoreNext = 2;
 			  } else if (GET_OPCODE(idest) == OP_LOADBOOL) {
 				  /*
@@ -2612,8 +2611,8 @@ END_SEARCH:
 			  if (o == OP_TAILCALL || c == 1 ) {
 				  TRY(AddStatement(F, str));
 			  } else {
-				  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
-				  if (c == 0) TRY(Assign(F, REGISTER(a+1), ".end", a+1, 0, 1));
+				  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
+				  if (c == 0) TRY(AssignReg(F, a+1, ".end", 0, 1));
 				  for (i = 0; i < c-1; i++) {
 					  CALL(a+i) = i+1;
 				  }
@@ -2834,7 +2833,7 @@ END_SEARCH:
 				  if (F->indent == 0)
 					  StringBuffer_add(str, "\n");
 			  }
-			  TRY(Assign(F, REGISTER(a), StringBuffer_getRef(str), a, 0, 0));
+			  TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			  /* need to add upvalue handling */
 
 			  ignoreNext = f->p[c]->sizeupvalues;
