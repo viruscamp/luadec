@@ -122,7 +122,7 @@ char *DecompileConstant(const Proto * f, int i)
 			}
 		default:                   /* cannot happen */
 			{
-				char *ret = strdup("Uknown_Type_Error");
+				char *ret = strdup("Unknown_Type_Error");
 				return ret;
 			}
 	}
