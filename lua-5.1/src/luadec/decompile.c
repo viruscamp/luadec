@@ -773,34 +773,10 @@ FlushElse_CLEAR_HANDLER1:
 * -------------------------------------------------------------------------
 */
 
-DecTableItem *NewTableItem(const char *value, int num, const char *key) {
-	DecTableItem *self = (DecTableItem*)calloc(1, sizeof(DecTableItem));
-	((ListItem *) self)->next = NULL;
-	self->key = luadec_strdup(key);
-	self->value = luadec_strdup(value);
-	self->numeric = num;
-	return self;
-}
-
-void DeleteTableItem(DecTableItem* item,void* dummy) {
-	if (item) {
-		if (item->key) {
-			free(item->key);
-		}
-		if (item->value) {
-			free(item->value);
-		}
-		free(item);
-	}
-}
-
-/*
-* -------------------------------------------------------------------------
-*/
-
 void DeclarePendingLocals(Function * F);
 
-void AssignGlobalOrUpvalue(Function * F, const char* dest, const char* src){
+void AssignGlobalOrUpvalue(Function * F, const char* dest, const char* src)
+{
 	F->testjump = 0;
 	AddToVarStack(F->vpend, luadec_strdup(dest), luadec_strdup(src), -1);
 }
@@ -815,7 +791,7 @@ void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
 			SET_ERROR(F,"Overwrote pending register.");
 		} else {
 			SET_ERROR(F,"Overwrote pending register. Missing locals? Creating them");
-			DeclareLocal(F,reg,REGISTER(reg));
+			DeclareLocal(F,reg,dest);
 		}
 		return;
 	}
@@ -857,6 +833,31 @@ void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
 	}
 }
 
+/*
+* Table Functions
+*/
+
+DecTableItem *NewTableItem(const char *value, int num, const char *key) {
+	DecTableItem *self = (DecTableItem*)calloc(1, sizeof(DecTableItem));
+	((ListItem *) self)->next = NULL;
+	self->key = luadec_strdup(key);
+	self->value = luadec_strdup(value);
+	self->numeric = num;
+	return self;
+}
+
+void DeleteTableItem(DecTableItem* item,void* dummy) {
+	if (item) {
+		if (item->key) {
+			free(item->key);
+		}
+		if (item->value) {
+			free(item->value);
+		}
+		free(item);
+	}
+}
+
 int MatchTable(DecTable * tbl, int *name)
 {
 	return tbl->reg == *name;
@@ -871,7 +872,6 @@ void DeleteTable(DecTable * tbl)
 
 void CloseTable(Function * F, int r)
 {
-	//DecTable *tbl = (DecTable *) PopFromList(&(F->tables));
 	DecTable *tbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
 	if (tbl->reg != r) {
 		SET_ERROR(F,"Unhandled construct in table");
@@ -935,10 +935,8 @@ char *PrintTable(Function * F, int r, int returnCopy)
 	}
 	StringBuffer_delete(str);
 	CloseTable(F, r);
-	//if (error) return NULL;
 	return result;
 }
-
 
 DecTable *NewTable(int r, Function * F, int b, int c, int pc) // Lua5.1 specific
 {
@@ -972,47 +970,20 @@ void AddToTable(Function* F, DecTable * tbl, const char *value, const char *key)
 	}
 	item = NewTableItem(value, index, key);
 	AddToList(type, (ListItem *) item);
-	// FIXME: should work with arrays, too
-	//( tbl->keyed.size > fb2int(int2fb(tbl->keyedSize)-1)) && tbl->keyed.size <= tbl->keyedSize )
-	if (tbl->keyedSize == tbl->used && tbl->arraySize == 0) {
-		//PrintTable(F, tbl->reg, 0);
-		if (error)
-			return;
-	}
 }
 
 void StartTable(Function * F, int r, int b, int c, int pc)
 {
 	DecTable *tbl = NewTable(r, F, b, c, pc);
-	/*
-	DecTable *oldtbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
-	if(oldtbl != NULL){
-		// should not happen ,because PrintTable removed the DecTable
-		// previous RemoveFindInList is not necessary
-		// but it happened sometimes, why?
-		StringBuffer* str = StringBuffer_new("");
-		StringBuffer_printf(str,"Unhandled OP_NEWTABLE PC=%d R=%d", oldtbl->pc, r);
-		SET_ERROR(F,StringBuffer_getRef(str));
-		StringBuffer_delete(str);
-		DeleteTableItem(oldtbl,NULL);
-	}
-	*/
 	AddToListHead(&(F->tables), (ListItem *) tbl);
 	F->Rtabl[r] = 1;
-	F->Rtabl[r] = 1;
-	if (b == 0 && c == 0) {
-		//PrintTable(F, r, 1); //dirty hack,only to skip {...}
-		if (error)
-			return;
-	}
 }
 
 void SetList(Function * F, int a, int b, int c)
 {
 	int i;
-	//DecTable *tbl = (DecTable *) LastItem(&(F->tables));
 	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
-	if (tbl == NULL || tbl->reg != a) {
+	if (tbl == NULL) {
 		SET_ERROR(F,"Unhandled construct in list (SETLIST)");
 		return;
 	}
@@ -1026,8 +997,6 @@ void SetList(Function * F, int a, int b, int c)
 			if (strcmp(rstr,".end") == 0)
 				break;
 			AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
-			if (error)
-				return;
 			i++;
 		} while (1);
 	} //should be {...} or func(func()) ,when b == 0, that will use all avaliable reg from R(a)
@@ -1037,13 +1006,7 @@ void SetList(Function * F, int a, int b, int c)
 		if (error)
 			return;
 		AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
-		if (error)
-			return;
 	}
-	//	if (tbl->arraySize == 0 || (tbl->arraySize > 0 && tbl->numeric.size > fb2int(int2fb(tbl->arraySize)-1)))
-	//		PrintTable(F, tbl->reg, 0);
-	if (error)
-		return;
 }
 
 void UnsetPending(Function * F, int r)
@@ -1068,18 +1031,11 @@ void UnsetPending(Function * F, int r)
 int SetTable(Function * F, int a, char *bstr, char *cstr)
 {
 	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
-	if ((!tbl) || (tbl->reg != a)) {
-		/*
-		* SetTable is not being applied to the table being generated. (This
-		* will probably need a more strict check)
-		*/
+	if (tbl==NULL) {
 		UnsetPending(F, a);
-		if (error) return 0;
 		return 0;
 	}
 	AddToTable(F, tbl, cstr, bstr);
-	if (error)
-		return 0;
 	return 1;
 }
 

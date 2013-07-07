@@ -31,7 +31,7 @@
 
 #define	OUTPUT		"luadec.out"	/* default output file */
 
-#define VERSION "2.1 UNICODE"
+#define VERSION "2.1"
 
 static int debugging=0;			/* debug decompiler? */
 static int functions=0;			/* dump functions separately? */
