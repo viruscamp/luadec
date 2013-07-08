@@ -684,14 +684,29 @@ void FlushBoolean(Function * F) {
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
+		LoopItem* walk = F->loop_ptr;
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
+		//TODO find another method to determine while loop body to output while do
+		//search parent
+		while (walk){
+			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
+				break;
+			}
+			walk = walk->parent;
+		}
 		test = WriteBoolean(exp, &thenaddr, &endif, 0);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		StoreEndifAddr(F, endif);
-		StringBuffer_addPrintf(str, "if %s then", test);
-		F->elseWritten = 0;
-		RawAddStatement(F, str);
-		F->indent++;
+		if (walk){
+			StringBuffer_addPrintf(str, "while %s do", test);
+			RawAddStatement(F, str);
+			F->indent++;
+		} else {
+			StoreEndifAddr(F, endif);
+			StringBuffer_addPrintf(str, "if %s then", test);
+			F->elseWritten = 0;
+			RawAddStatement(F, str);
+			F->indent++;
+		}
 
 FlushBoolean_CLEAR_HANDLER1:
 		if (exp) DeleteLogicExpTree(exp);
@@ -1860,7 +1875,8 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 							OpCode x_1 = GET_OPCODE(code[x-1]);
 							if( isTestOpCode(x_1) ){
 								if( found == 0 ){
-									LoopItem* item = NewLoopItem(WHILE, dest, dest, x + 1, pc, real_end);
+									// cannot determine loop body
+									LoopItem* item = NewLoopItem(WHILE, dest, dest, dest, pc, real_end);
 									AddToLoopTree(F, item);
 									found = 1;
 									break;
@@ -1969,19 +1985,6 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			F->indent--;
 			TRY(AddStatement(F, str));
 			StringBuffer_prune(str);
-		}
-
-		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == WHILE)) {
-			int endif, thenaddr;
-			char* test = NULL;
-			LogicExp* exp = NULL;
-			TRY(exp = MakeBoolean(F, &endif, &thenaddr));
-			TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
-			StringBuffer_printf(str, "while %s do", test);
-			RawAddStatement(F, str);
-			F->indent++;
-			if (test) free(test);
-			if (exp) DeleteLogicExpTree(exp);
 		}
 
 		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1)) {
