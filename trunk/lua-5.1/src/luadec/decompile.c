@@ -206,8 +206,8 @@ IntListItem *NewIntListItem(int v){
 	return self;
 }
 
-int MatchIntListItem(IntListItem* item, IntListItem* match){
-	return (item->value == match->value);
+int MatchIntListItem(IntListItem* item, int* match_value){
+	return (item->value == *match_value);
 }
 
 void DeleteIntListItem(IntListItem* item, void * dummy){
@@ -684,28 +684,14 @@ void FlushBoolean(Function * F) {
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
 		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
-		LoopItem* walk = F->loop_ptr;
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		//search parent
-		while (walk){
-			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
-				break;
-			}
-			walk = walk->parent;
-		}
 		test = WriteBoolean(exp, &thenaddr, &endif, 0);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		if (walk){
-			StringBuffer_addPrintf(str, "while %s do", test);
-			RawAddStatement(F, str);
-			F->indent++;
-		} else {
-			StoreEndifAddr(F, endif);
-			StringBuffer_addPrintf(str, "if %s then", test);
-			F->elseWritten = 0;
-			RawAddStatement(F, str);
-			F->indent++;
-		}
+		StoreEndifAddr(F, endif);
+		StringBuffer_addPrintf(str, "if %s then", test);
+		F->elseWritten = 0;
+		RawAddStatement(F, str);
+		F->indent++;
 
 FlushBoolean_CLEAR_HANDLER1:
 		if (exp) DeleteLogicExpTree(exp);
@@ -1103,6 +1089,7 @@ Function *NewFunction(const Proto * f)
 	//self->repeats->mayRepeat = 1;
 	//self->untils = calloc(1, sizeof(IntSet));
 	InitList(&(self->breaks));
+	InitList(&(self->continues));
 	self->do_opens = (IntSet*)calloc(1, sizeof(IntSet));
 	self->do_closes = (IntSet*)calloc(1, sizeof(IntSet));
 	self->decompiledCode = StringBuffer_new(NULL);
@@ -1438,7 +1425,7 @@ const char* keywords[] = {
 	"end", "false", "for", "function", "if",
 	"in", "local", "nil", "not", "or",
 	"repeat", "return", "then", "true", "until",
-	"while"
+	"while", "continue"
 };
 
 /* type: DOT=0,SELF=1,TABLE=2
@@ -1714,6 +1701,10 @@ int listUpvalues(Function *F, StringBuffer *str){
     return F->f->sizeupvalues;
 }
 
+int isTestOpCode(OpCode op){
+	return ( op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET );
+}
+
 char* ProcessCode(const Proto * f, int indent, int func_checking)
 {
 	int i = 0;
@@ -1799,99 +1790,89 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		}
 	}
 
-	for (pc = n - 1; pc >= 0; pc--) {
+	for( pc = n - 1; pc >= 0; pc-- ){
 		Instruction i = code[pc];
 		OpCode o = GET_OPCODE(i);
 		int sbc = GETARG_sBx(i);
 		int dest = sbc + pc + 1;
 		int real_end = GetJmpAddr(F,pc + 1);
 
-		if (o == OP_CLOSE) {
+		if( o == OP_CLOSE ){
 			int a = GETARG_A(i);
 			AddToSet(F->do_opens, f->locvars[a].startpc);
 			AddToSet(F->do_closes, f->locvars[a].endpc);
-		}else if (o == OP_FORLOOP){
+		}else if( o == OP_FORLOOP ){
 			LoopItem* item = NewLoopItem(FORLOOP, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
-		}else if(o == OP_JMP) {
-			IntListItem* intItem = NewIntListItem(pc);
-			if (FindInList(&processed_jmps, (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem))){
-				free(intItem);
-				continue;
-			}
-			free(intItem);
-			intItem = NULL;
-			if (dest < pc) {
-				int found = 0;
-				int x;
-				OpCode pc_1 = GET_OPCODE(code[pc-1]);
-
-				// TFORLOOP jump back
+		}else if( o == OP_JMP ){
+			OpCode pc_1 = GET_OPCODE(code[pc-1]);
+			if( dest == F->loop_ptr->start && !isTestOpCode(pc_1)){
+				//continues
+				IntListItem *intItem = NewIntListItem(pc);
+				AddToList(&(F->continues), cast(ListItem*,intItem));
+			}else if( dest == F->loop_ptr->next_code ){
+				if (!isTestOpCode(pc_1)){
+					//breaks
+					IntListItem *intItem = NewIntListItem(pc);
+					AddToList(&(F->breaks), cast(ListItem*,intItem));
+				}
+			}else if( F->loop_ptr->body <= dest && dest < pc ){
 				if(pc_1 == OP_TFORLOOP){
+					// TFORLOOP jump back
 					LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
 					AddToLoopTree(F, item);
-					goto END_SEARCH;
-				}
-				// WHILE jump back
-				for(x = pc - 1; x > dest; x--){
-					Instruction xi = code[x];
-					OpCode xo = GET_OPCODE(xi);
-					int x_dest = GETARG_sBx(xi) + x + 1;
-					if(xo == OP_JMP && x_dest == real_end){
-						OpCode x_1 = GET_OPCODE(code[x-1]);
-						if ( x_1 == OP_EQ || x_1 == OP_LE || x_1 == OP_LT || x_1 == OP_TEST || x_1 == OP_TESTSET ){
-							if ( found == 0 ){
-								LoopItem* item = NewLoopItem(WHILE, dest, dest, x + 1, pc, real_end);
-								AddToLoopTree(F, item);
-								found = 1;
-							}
-						}else{ // BREAK
-							IntListItem* intItem = NewIntListItem(x);
-							AddToList(&(F->breaks), cast(ListItem*,intItem));
-	
-						}
-						intItem = NewIntListItem(x);
-						AddToList(&processed_jmps, cast(ListItem*,intItem));
-					}
-				}
-				if (found == 1){
-					goto END_SEARCH;
-				}
-
-				// REPEAT jump back
-				if ( pc_1 == OP_EQ || pc_1 == OP_LE || pc_1 == OP_LT || pc_1 == OP_TEST || pc_1 == OP_TESTSET ){
+				}else if ( isTestOpCode(pc_1) ){
+					// REPEAT jump back
 					/***
-					 * if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
-					 * jump back may be 'until' or 'if', they are the same,
-					 * but 'if' is more clear, so we skip making a loop to choose 'if'.
-					 * see the lua code:
+						* if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
+						* jump back may be 'until' or 'if', they are the same,
+						* but 'if' is more clear, so we skip making a loop to choose 'if'.
+						* see the lua code:
 					local a,b,c,f
 
 					while 1 do
-					  repeat
-					    f(b)
-					  until c
-					  f(a)
+						repeat
+						f(b)
+						until c
+						f(a)
 					end
 
 					while 1 do
-					  f(b)
-					  if c then
+						f(b)
+						if c then
 						f(a)
-					  end
+						end
 					end
-					 */
-
+						*/
 					if ( !((F->loop_ptr->type == WHILE1 ) && (dest == F->loop_ptr->start))){
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
 					}
 				}else{
-					LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
-					AddToLoopTree(F, item);
+					// WHILE jump back
+					int found = 0;
+					int x;
+					for(x = pc - 1; x > dest; x--){
+						Instruction xi = code[x];
+						OpCode xo = GET_OPCODE(xi);
+						int x_dest = GETARG_sBx(xi) + x + 1;
+						if(xo == OP_JMP && x_dest == real_end){
+							OpCode x_1 = GET_OPCODE(code[x-1]);
+							if( isTestOpCode(x_1) ){
+								if( found == 0 ){
+									LoopItem* item = NewLoopItem(WHILE, dest, dest, x + 1, pc, real_end);
+									AddToLoopTree(F, item);
+									found = 1;
+									break;
+								}
+							}
+						}
+					}
+					if( found != 1 ){
+						LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
+						AddToLoopTree(F, item);
+					}
 				}
-END_SEARCH:
-				;
 			}
 		}
 	}
@@ -1990,10 +1971,23 @@ END_SEARCH:
 			StringBuffer_prune(str);
 		}
 
-		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1) ){
+		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == WHILE)) {
+			int endif, thenaddr;
+			char* test = NULL;
+			LogicExp* exp = NULL;
+			TRY(exp = MakeBoolean(F, &endif, &thenaddr));
+			TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
+			StringBuffer_printf(str, "while %s do", test);
+			RawAddStatement(F, str);
+			F->indent++;
+			if (test) free(test);
+			if (exp) DeleteLogicExpTree(exp);
+		}
+
+		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1)) {
 			LoopItem *walk = F->loop_ptr;
 
-			while (walk->parent && (walk->parent->body == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE1)){
+			while (walk->parent && (walk->parent->body == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE1)) {
 				walk = walk->parent;
 			};
 
