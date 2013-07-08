@@ -97,6 +97,7 @@ struct Function_ {
    LoopItem* loop_tree;
    LoopItem* loop_ptr;
    List breaks;
+   List continues;
    //IntSet* repeats;
    //IntSet* untils;
    /* Control of do/end blocks. */
