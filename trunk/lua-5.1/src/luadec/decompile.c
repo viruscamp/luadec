@@ -2263,9 +2263,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		  {
 			  int dest = sbc + pc + 2;
 			  Instruction idest = code[dest - 1];
-			  IntListItem* intItem = NewIntListItem(pc);
-			  IntListItem* foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, cast(ListItem*,intItem));
-			  free(intItem);
+			  IntListItem* foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc);
 			  if (boolpending) {
 				  boolpending = 0;
 				  F->bools[F->nextBool]->dest = dest;
