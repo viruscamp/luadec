@@ -779,7 +779,7 @@ void DeclarePendingLocals(Function * F);
 void AssignGlobalOrUpvalue(Function * F, const char* dest, const char* src)
 {
 	F->testjump = 0;
-	AddToVarStack(F->vpend, luadec_strdup(dest), luadec_strdup(src), -1);
+	AddToVarStack(&(F->vpend), luadec_strdup(dest), luadec_strdup(src), -1);
 }
 
 void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
@@ -830,7 +830,7 @@ void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
 		REGISTER(reg) = nsrc;
 		AddToSet(F->tpend, reg);
 	} else {
-		AddToVarStack(F->vpend, luadec_strdup(dest), nsrc, reg);
+		AddToVarStack(&(F->vpend), luadec_strdup(dest), nsrc, reg);
 	}
 }
 
@@ -1092,17 +1092,13 @@ Function *NewFunction(const Proto * f)
 	self = (Function*)calloc(1, sizeof(Function));
 	InitList(&(self->statements));
 	self->f = f;
-	self->vpend = (VarStack*)calloc(1, sizeof(VarStack));
-	self->vpend->ctr = 0;
+	InitList(&(self->vpend));
 	self->tpend = (IntSet*)calloc(1, sizeof(IntSet));
 	self->tpend->ctr = 0;
 
 	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
-	//self->repeats = calloc(1, sizeof(IntSet));
-	//self->repeats->mayRepeat = 1;
-	//self->untils = calloc(1, sizeof(IntSet));
 	InitList(&(self->breaks));
 	InitList(&(self->continues));
 	self->do_opens = (IntSet*)calloc(1, sizeof(IntSet));
@@ -1133,11 +1129,10 @@ void DeleteFunction(Function * self)
 		self->bools[i] = NULL;
 	}
 	StringBuffer_delete(self->decompiledCode);
-	ClearVarStatck(self->vpend);
-	free(self->vpend);
+	ClearList(&(self->vpend));
 	free(self->tpend);
-	//free(self->repeats);
-	//free(self->untils);
+	ClearList(&(self->breaks));
+	ClearList(&(self->continues));
 	DeleteLoopTree(self->loop_tree);
 	free(self->do_opens);
 	free(self->do_closes);
@@ -1178,47 +1173,42 @@ void DeclareVariable(Function * F, const char *name, int reg)
 
 void OutputAssignments(Function * F)
 {
-	int i, srcs, size;
+	int i, srcs;
+	ListItem *walk, *tail;
 	StringBuffer *vars = StringBuffer_new(NULL);
 	StringBuffer *exps = StringBuffer_new(NULL);
 	if (!SET_IS_EMPTY(F->tpend))
 		goto OutputAssignments_ERROR_HANDLER;
-	size = SET_CTR(F->vpend);
 	srcs = 0;
-	for (i = 0; i < size; i++) {
-		int r = F->vpend->regs[i];
+	walk = F->vpend.head;
+	tail = F->vpend.tail;
+	i = 0;
+	while (walk) {
+		int r = cast(VarListItem*, walk)->reg;
+		char* src = cast(VarListItem*, walk)->src;
+		char* dest = cast(VarListItem*, walk)->dest;
 		if (!(r == -1 || PENDING(r))) {
 			SET_ERROR(F,"Attempted to generate an assignment, but got confused about usage of registers");
 			goto OutputAssignments_ERROR_HANDLER;
 		}
 
-		if (i > 0)
+		if (i > 0) {
 			StringBuffer_prepend(vars, ", ");
-		StringBuffer_prepend(vars, F->vpend->dests[i]);
+		}
+		StringBuffer_prepend(vars, dest);
 
-		if (F->vpend->srcs[i] && (srcs > 0 || (srcs == 0 && strcmp(F->vpend->srcs[i], "nil") != 0) || i == size-1)) {
+		if (src && (srcs > 0 || (srcs == 0 && strcmp(src, "nil") != 0) || walk == tail )) {
 			if (srcs > 0)
 				StringBuffer_prepend(exps, ", ");
-			StringBuffer_prepend(exps, F->vpend->srcs[i]);
+			StringBuffer_prepend(exps, src);
 			srcs++;
 		}
-
-	}
-
-	for (i = 0; i < size; i++) {
-		int r = F->vpend->regs[i];
-		if (r != -1)
+		if (r != -1) {
 			PENDING(r) = 0;
-		if (F->vpend->dests[i]){
-			free(F->vpend->dests[i]);
-			F->vpend->dests[i] = NULL;
 		}
-		if (F->vpend->srcs[i]){
-			free(F->vpend->srcs[i]);
-			F->vpend->srcs[i] = NULL;
-		}
+		walk = walk->next;
+		i++;
 	}
-	F->vpend->ctr = 0;
 
 	if (i > 0) {
 		StringBuffer_add(vars, " = ");
@@ -1228,6 +1218,7 @@ void OutputAssignments(Function * F)
 			goto OutputAssignments_ERROR_HANDLER;
 	}
 OutputAssignments_ERROR_HANDLER:
+	ClearList(&(F->vpend));
 	StringBuffer_delete(vars);
 	StringBuffer_delete(exps);
 }
@@ -1550,6 +1541,7 @@ void FunctionHeader(Function * F) {
 void ShowState(Function * F)
 {
 	int i;
+	ListItem *walk;
 	fprintf(stddebug, "\n");
 	fprintf(stddebug, "next bool: %d\n", F->nextBool);
 	fprintf(stddebug, "locals(%d): ", F->freeLocal);
@@ -1557,14 +1549,20 @@ void ShowState(Function * F)
 		fprintf(stddebug, "%d{%s} ", i, REGISTER(i));
 	}
 	fprintf(stddebug, "\n");
-	fprintf(stddebug, "vpend(%d): ", SET_CTR(F->vpend));
-	for (i = 0; i < SET_CTR(F->vpend); i++) {
-		int r = F->vpend->regs[i];
+	fprintf(stddebug, "vpend(%d): ", F->vpend.size);
+
+	walk = F->vpend.head;
+	i = 0;
+	while (walk) {		
+		int r = cast(VarListItem*, walk)->reg;
+		char* src = cast(VarListItem*, walk)->src;
+		char* dest = cast(VarListItem*, walk)->dest;
 		if (r != -1 && !PENDING(r)) {
 			SET_ERROR(F,"Confused about usage of registers for variables");
 			return;
 		}
-		fprintf(stddebug, "%d{%s=%s} ", r, F->vpend->dests[i], F->vpend->srcs[i]);
+		fprintf(stddebug, "%d{%s=%s} ", r, dest, src);
+		walk = walk->next;
 	}
 	fprintf(stddebug, "\n");
 	fprintf(stddebug, "tpend(%d): ", SET_CTR(F->tpend));
@@ -1892,7 +1890,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			}
 		}
 	}
-	DeleteList(&processed_jmps);
+	ClearList(&processed_jmps);
 
 	F->loop_ptr = F->loop_tree;
 	next_child = F->loop_tree->child;
