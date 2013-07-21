@@ -12,8 +12,9 @@ void InitList(List * list) {
 }
 
 void AddToList(List * list, ListItem * item) {
-	if (list == NULL || item == NULL)
+	if (!list || !item) {
 		return;
+	}
 	if (list->tail) {
 		list->tail->next = item;
 	} else {
@@ -26,42 +27,33 @@ void AddToList(List * list, ListItem * item) {
 }
 
 void AddToListHead(List * list, ListItem * item) {
-	if (list==NULL || item==NULL)
+	if (!list || !item) {
 		return;
+	}
 	if (list->head) {
 		list->head->prev = item;
 	} else {
 		list->tail = item;
 	}
-	item->prev = NULL;
 	item->next = list->head;
+	item->prev = NULL;
 	list->head = item;
 	list->size++;
 }
 
-ListItem *LastItem(List * list) {
+ListItem * FirstItem(List * list) {
+	return list->head;
+}
+
+ListItem * LastItem(List * list) {
 	return list->tail;
 }
 
-ListItem *PopFromList(List * list) {
-	ListItem *walk, *prev;
-	if (!list->tail) {
-		return NULL;
-	}
-	walk = list->tail;
-	prev = walk->prev;
-	if (prev) {
-		prev->next = NULL;
-	} else {
-		list->head = NULL;
-	}
-	list->tail = prev;
-	walk->prev = NULL;
-	walk->next = NULL;
-	return walk;
+ListItem * PopFromList(List * list) {
+	return RemoveFromList(list, list->tail);
 }
 
-void LoopList(List * list, ListItemFn fn, void* param) {
+void LoopList(List * list, ListItemFn fn, void * param) {
 	ListItem *walk = list->head;
 	while (walk) {
 		ListItem *save = walk;
@@ -82,7 +74,7 @@ void ClearList(List * list) {
 	list->size = 0;
 }
 
-ListItem *FindInList(List * list, ListItemCmpFn cmp, const void *sample) {
+ListItem * FindFromListHead(List * list, ListItemCmpFn cmp, const void * sample) {
 	ListItem *walk = list->head;
 	while (walk) {
 		if (cmp(walk, sample))
@@ -92,28 +84,38 @@ ListItem *FindInList(List * list, ListItemCmpFn cmp, const void *sample) {
 	return NULL;
 }
 
-ListItem *RemoveFindInList(List * list, ListItemCmpFn cmp, const void *sample) {
-	ListItem *walk = list->head;
+ListItem * FindFromListTail(List * list, ListItemCmpFn cmp, const void * sample) {
+	ListItem *walk = list->tail;
 	while (walk) {
-		if (cmp(walk, sample)) {
-			if (walk->prev != NULL) {
-				walk->prev->next = walk->next;
-			} else {
-				list->head = walk->next;
-			}
-			if (walk->next != NULL) {
-				walk->next->prev = walk->prev;
-			} else {
-				list->tail = walk->prev;
-			}
-			list->size--;
-			walk->prev = NULL;
-			walk->next = NULL;
+		if (cmp(walk, sample))
 			return walk;
-		}
-		walk = walk->next;
+		walk = walk->prev;
 	}
 	return NULL;
+}
+
+ListItem * RemoveFromList(List * list, ListItem * item) {
+	if (!list || !item) {
+		return NULL;
+	}
+	if (item->next) {
+		item->next->prev = item->prev;
+	} else if (list->tail == item) {
+		list->tail = item->prev;
+	} else {
+		assert(0);
+	}
+	if (item->prev) {
+		item->prev->next = item->next;
+	} else if (list->head == item) {
+		list->head = item->next;
+	} else {
+		assert(0);
+	}
+	list->size--;
+	item->next = NULL;
+	item->prev = NULL;
+	return item;
 }
 
 int AddToSet(IntSet * set, int a) {
@@ -165,11 +167,11 @@ int RemoveFromSet(IntSet * set, int a) {
 	return 1;
 }
 
-void AddToVarStack(List* stack, char* dest, char* src, int reg) {
-	VarListItem* var = (VarListItem*)calloc(1, sizeof(VarListItem));
+void AddToVarList(List * stack, char * dest, char * src, int reg) {
+	VarListItem *var = (VarListItem*)calloc(1, sizeof(VarListItem));
 	var->dest = dest;
 	var->src = src;
 	var->reg = reg;
-	AddToList(stack, var);
+	AddToList(stack, (ListItem*)var);
 }
 

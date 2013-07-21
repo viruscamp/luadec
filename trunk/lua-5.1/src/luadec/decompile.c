@@ -337,49 +337,52 @@ void TieAsSubExp(LogicExp* parent, LogicExp* item) {
 LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 {
 	int i;
-	int firstaddr, elseaddr, last, realLast;
-	LogicExp *curr=NULL, *first=NULL;
+	int firstaddr, elseaddr;
+	BoolOp * first, * realLast, * last, * tmpLast, * curr;
+	int lastCount;
+	LogicExp *currExp=NULL, *firstExp=NULL;
 	int dest;
 
 	if (endif)
 		*endif = 0;
 
-	if (F->nextBool == 0) {
+	if (F->bools.size == 0) {
 		SET_ERROR(F,"Attempted to build a boolean expression without a pending context");
 		return NULL;
 	}
 
-	realLast = F->nextBool - 1;
+	first = (BoolOp*)FirstItem(&(F->bools));
+	realLast = (BoolOp*)LastItem(&(F->bools));
 	last = realLast;
-	firstaddr = F->bools[0]->pc + 2;
-	*thenaddr = F->bools[last]->pc + 2;
-	elseaddr = F->bools[last]->dest;
+	firstaddr = first->pc + 2;
+	*thenaddr = last->pc + 2;
+	elseaddr = last->dest;
 
-	for (i = realLast; i >= 0; i--) {
-		int dest = F->bools[i]->dest;
+	for (curr = realLast; curr; curr = cast(BoolOp*, curr->super.prev)) {
+		int dest = curr->dest;
 		if ((elseaddr > *thenaddr) &&
-			( ((F->bools[i]->op == OP_TEST) || (F->bools[i]->op == OP_TESTSET)) ? (dest > elseaddr+1) :
+			( ((curr->op == OP_TEST) || (curr->op == OP_TESTSET)) ? (dest > elseaddr+1) :
 			(dest > elseaddr))) {
-				last = i;
-				*thenaddr = F->bools[i]->pc + 2;
+				last = curr;
+				*thenaddr = curr->pc + 2;
 				elseaddr = dest;
 		}
 	}
 
 	{
-		int tmpLast = last;
-		for (i = 0; i < tmpLast; i++) {
-			int dest = F->bools[i]->dest;
+		tmpLast = last;
+		for (curr = first; curr && curr != tmpLast; curr = cast(BoolOp*, curr->super.next)) {
+			int dest = curr->dest;
 			if (elseaddr > firstaddr) {
 				if (dest < firstaddr) {
-					last = i;
-					*thenaddr = F->bools[i]->pc + 2;
+					last = curr;
+					*thenaddr = curr->pc + 2;
 					elseaddr = dest;
 				}
 			} else {
 				if (dest == firstaddr) {
-					last = i;
-					*thenaddr = F->bools[i]->pc + 2;
+					last = curr;
+					*thenaddr = curr->pc + 2;
 					elseaddr = dest;
 				} else {
 					break;
@@ -388,46 +391,46 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		}
 	}
 
-	dest = F->bools[0]->dest;
-	curr = MakeExpNode(F->bools[0]);
+	dest = first->dest;
+	currExp = MakeExpNode(first);
 
 	if (dest > firstaddr && dest <= *thenaddr) {
-		first = MakeExpChain(dest);
-		TieAsSubExp(first, curr);
+		firstExp = MakeExpChain(dest);
+		TieAsSubExp(firstExp, currExp);
 	} else {
-		first = curr;
+		firstExp = currExp;
 		if (endif)
 			*endif = dest;
 	}
 
 	if (debug) {
 		printf("\n");
-		for (i = 0; i <= last; i++) {
-			BoolOp* op = F->bools[i];
+		for (i = 0, curr = first; curr && curr != cast(BoolOp*, last->super.next); i++, curr = cast(BoolOp*, curr->super.next)) {
+			BoolOp* op = curr;
 			if (debug) {
 				printf("Exps(%d): at %d\tdest %d\tneg %d\t(%s %s %s) cpd %d \n", i,
-					op->pc, op->dest, op->neg, op->op1, opstr(op->op), op->op2, curr->parent ? curr->parent->dest : -1);
+					op->pc, op->dest, op->neg, op->op1, opstr(op->op), op->op2, currExp->parent ? currExp->parent->dest : -1);
 			}
 		}
 		printf("\n");
 	}
 
-	for (i = 1; i <= last; i++) {
-		BoolOp* op = F->bools[i];
+	for (curr = first, lastCount = 0; curr && curr != cast(BoolOp*, last->super.next); curr = cast(BoolOp*, curr->super.next), lastCount++) {
+		BoolOp* op = curr;
 		int at = op->pc;
 		int dest = op->dest;
 
 		LogicExp* exp = MakeExpNode(op);
 		if (dest < firstaddr) {
 			/* jump to loop in a while */
-			TieAsNext(curr, exp);
-			curr = exp;
+			TieAsNext(currExp, exp);
+			currExp = exp;
 			if (endif)
 				*endif = dest;
 		} else if (dest > *thenaddr) {
 			/* jump to "else" */
-			TieAsNext(curr, exp);
-			curr = exp;
+			TieAsNext(currExp, exp);
+			currExp = exp;
 			if (endif) {
 				if ((op->op != OP_TEST) && (op->op != OP_TESTSET)) {
 					if (*endif != 0 && *endif != dest) {
@@ -437,87 +440,94 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 				}
 				*endif = dest;
 			}
-		} else if (dest == curr->dest) {
+		} else if (dest == currExp->dest) {
 			/* within current chain */
-			TieAsNext(curr, exp);
-			curr = exp;
-		} else if (dest > curr->dest) {
-			if (curr->parent == NULL || dest < curr->parent->dest) {
+			TieAsNext(currExp, exp);
+			currExp = exp;
+		} else if (dest > currExp->dest) {
+			if (currExp->parent == NULL || dest < currExp->parent->dest) {
 				/* creating a new level */
 				LogicExp* subexp = MakeExpChain(dest);
 				LogicExp* savecurr;
-				TieAsNext(curr, exp);
-				curr = exp;
-				savecurr = curr;
-				if (curr->parent == NULL) {
-					TieAsSubExp(subexp, first);
-					first = subexp;
+				TieAsNext(currExp, exp);
+				currExp = exp;
+				savecurr = currExp;
+				if (currExp->parent == NULL) {
+					TieAsSubExp(subexp, firstExp);
+					firstExp = subexp;
 				}
-			} else if (dest > curr->parent->dest) {
+			} else if (dest > currExp->parent->dest) {
 				/* start a new chain */
 				LogicExp* prevParent;
 				LogicExp* chain;
-				TieAsNext(curr, exp);
-				curr = curr->parent;
-				if (!curr->is_chain) {
+				TieAsNext(currExp, exp);
+				currExp = currExp->parent;
+				if (!currExp->is_chain) {
 					SET_ERROR(F,"unhandled construct in 'if'");
 					return NULL;
 				};
-				prevParent = curr->parent;
+				prevParent = currExp->parent;
 				chain = MakeExpChain(dest);
-				Untie(curr, thenaddr);
+				Untie(currExp, thenaddr);
 				if (prevParent)
 					if (prevParent->is_chain)
 						prevParent = prevParent->subexp;
-				TieAsSubExp(chain, curr);
+				TieAsSubExp(chain, currExp);
 
 				//curr->parent = prevParent;
 				if (prevParent == NULL) {
-					first = chain;
+					firstExp = chain;
 				} else {
 					// todo
 					TieAsNext(prevParent, chain);
 				}
 			}
-		} else if (dest > firstaddr && dest < curr->dest) {
+		} else if (dest > firstaddr && dest < currExp->dest) {
 			/* start a new chain */
 			LogicExp* subexp = MakeExpChain(dest);
 			TieAsSubExp(subexp, exp);
-			TieAsNext(curr, subexp);
-			curr = exp;
+			TieAsNext(currExp, subexp);
+			currExp = exp;
 		} else {
 			SET_ERROR(F,"unhandled construct in 'if'");
 			return NULL;
 		}
 
-		if (curr->parent && at+3 > curr->parent->dest) {
-			curr->parent->dest = curr->dest;
-			if (i < last) {
-				LogicExp* chain = MakeExpChain(curr->dest);
-				TieAsSubExp(chain, first);
-				first = chain;
+		if (currExp->parent && at+3 > currExp->parent->dest) {
+			currExp->parent->dest = currExp->dest;
+			if (curr != last) {
+				LogicExp* chain = MakeExpChain(currExp->dest);
+				TieAsSubExp(chain, firstExp);
+				firstExp = chain;
 			}
-			curr = curr->parent;
+			currExp = currExp->parent;
 		}
 	}
-	if (first->is_chain){
-		first = first->subexp;
+	if (firstExp->is_chain){
+		firstExp = firstExp->subexp;
 	}
-	for (i = last+1; i < F->nextBool; i++){
-		if( i-last-1 != i){
-			DeleteBoolOp(F->bools[i-last-1]);
-			F->bools[i-last-1] = F->bools[i];
-			F->bools[i] = NewBoolOp();
+	if (last) {
+		if (F->bools.tail == (ListItem*)last) {
+			F->bools.head = NULL;
+			F->bools.tail = NULL;
+			F->bools.size = 0;
+		} else {
+			F->bools.head = last->super.next;
+			F->bools.head->prev = NULL;
+			F->bools.size -= lastCount;
 		}
+
 	}
-	if (F->bools[0] == NULL){
-		F->bools[0] = NewBoolOp();
+	curr = last; 
+	while (curr) {
+		BoolOp * prev = cast(BoolOp*, curr->super.prev);
+		DeleteBoolOp(curr, NULL);
+		curr = prev;
 	}
-	F->nextBool -= last + 1;
 	if (endif && *endif == 0) {
 		*endif = *thenaddr;
 	}
-	return first;
+	return firstExp;
 }
 
 char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
@@ -679,7 +689,7 @@ void RawAddStatement(Function * F, StringBuffer * str)
 
 void FlushBoolean(Function * F) {
 	FlushElse(F);
-	while (F->nextBool > 0) {
+	while (F->bools.size > 0) {
 		int endif, thenaddr;
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
@@ -731,9 +741,9 @@ void MarkBackpatch(Function* F) {
 
 void FlushElse(Function* F) {
 	if (F->elsePending > 0) {
-		int fpc = F->bools[0]->pc;
+		int fpc = cast(BoolOp*, FirstItem(&(F->bools)))->pc;
 		/* Should elseStart be a stack? */
-		if (F->nextBool > 0 && (fpc == F->elseStart || fpc-1 == F->elseStart)) {
+		if (F->bools.size > 0 && (fpc == F->elseStart || fpc-1 == F->elseStart)) {
 			int endif, thenaddr;
 			char* test = NULL;
 			StringBuffer* str = StringBuffer_new(NULL);
@@ -779,7 +789,7 @@ void DeclarePendingLocals(Function * F);
 void AssignGlobalOrUpvalue(Function * F, const char* dest, const char* src)
 {
 	F->testjump = 0;
-	AddToVarStack(&(F->vpend), luadec_strdup(dest), luadec_strdup(src), -1);
+	AddToVarList(&(F->vpend), luadec_strdup(dest), luadec_strdup(src), -1);
 }
 
 void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
@@ -830,7 +840,7 @@ void AssignReg(Function * F, int reg, const char* src, int prio, int mayTest)
 		REGISTER(reg) = nsrc;
 		AddToSet(F->tpend, reg);
 	} else {
-		AddToVarStack(&(F->vpend), luadec_strdup(dest), nsrc, reg);
+		AddToVarList(&(F->vpend), luadec_strdup(dest), nsrc, reg);
 	}
 }
 
@@ -873,7 +883,7 @@ void DeleteTable(DecTable * tbl)
 
 void CloseTable(Function * F, int r)
 {
-	DecTable *tbl = (DecTable *) RemoveFindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
+	DecTable *tbl = (DecTable *) RemoveFromList(&(F->tables), FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &r));
 	if (tbl->reg != r) {
 		SET_ERROR(F,"Unhandled construct in table");
 		return;
@@ -888,7 +898,7 @@ char *PrintTable(Function * F, int r, int returnCopy)
 	int numerics = 0;
 	DecTableItem *item;
 	StringBuffer *str = StringBuffer_new("{");
-	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&r);
+	DecTable *tbl = (DecTable *) FindFromListTail(&(F->tables), (ListItemCmpFn) MatchTable,&r);
 	if (tbl == NULL) {
 		F->Rtabl[r] = 0;
 		return F->R[r];
@@ -983,7 +993,7 @@ void StartTable(Function * F, int r, int b, int c, int pc)
 void SetList(Function * F, int a, int b, int c)
 {
 	int i;
-	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
+	DecTable *tbl = (DecTable *) FindFromListTail(&(F->tables), (ListItemCmpFn) MatchTable,&a);
 	if (tbl == NULL) {
 		SET_ERROR(F,"Unhandled construct in list (SETLIST)");
 		return;
@@ -1031,7 +1041,7 @@ void UnsetPending(Function * F, int r)
 
 int SetTable(Function * F, int a, char *bstr, char *cstr)
 {
-	DecTable *tbl = (DecTable *) FindInList(&(F->tables), (ListItemCmpFn) MatchTable,&a);
+	DecTable *tbl = (DecTable *) FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &a);
 	if (tbl==NULL) {
 		UnsetPending(F, a);
 		return 0;
@@ -1044,15 +1054,29 @@ int SetTable(Function * F, int a, char *bstr, char *cstr)
 *	Boolop Functions
 */
 
-BoolOp* NewBoolOp(){
+BoolOp * NewBoolOp(){
 	BoolOp* value = (BoolOp*)calloc(1, sizeof(BoolOp));
 	value->op1 = NULL;
 	value->op2 = NULL;
 	((ListItem*)value)->next = NULL;
+	((ListItem*)value)->prev = NULL;
 	return value;
 }
 
-void DeleteBoolOp(BoolOp* ptr){
+BoolOp * MakeBoolOp(char * op1, char * op2, OpCode op, int neg,	int pc,	int dest){
+	BoolOp* value = (BoolOp*)calloc(1, sizeof(BoolOp));
+	value->op1 = op1;
+	value->op2 = op2;
+	value->op = op;
+	value->neg = neg;
+	value->pc = pc;
+	value->dest = dest;
+	((ListItem*)value)->next = NULL;
+	((ListItem*)value)->prev = NULL;
+	return value;
+}
+
+void DeleteBoolOp(BoolOp * ptr, void * dummy){
 	if(ptr){
 		if(ptr->op1){
 			free(ptr->op1);
@@ -1105,10 +1129,7 @@ Function *NewFunction(const Proto * f)
 	self->do_closes = (IntSet*)calloc(1, sizeof(IntSet));
 	self->decompiledCode = StringBuffer_new(NULL);
 
-	for(i=0; i< MAXARG_A; i++){
-		self->bools[i] = NULL;
-	}
-	self->bools[0] = NewBoolOp();
+	InitList(&(self->bools));
 	
 	self->intspos = 0;
 	return self;
@@ -1118,6 +1139,7 @@ void DeleteFunction(Function * self)
 {
 	int i;
 	LoopList(&(self->statements), (ListItemFn) DeleteStatement, NULL);
+	LoopList(&(self->statements), (ListItemFn) DeleteBoolOp, NULL);
 	/*
 	* clean up registers
 	*/
@@ -1125,8 +1147,6 @@ void DeleteFunction(Function * self)
 		if (self->R[i]){
 			free(self->R[i]);
 		}
-		DeleteBoolOp(self->bools[i]);
-		self->bools[i] = NULL;
 	}
 	StringBuffer_delete(self->decompiledCode);
 	ClearList(&(self->vpend));
@@ -1543,7 +1563,7 @@ void ShowState(Function * F)
 	int i;
 	ListItem *walk;
 	fprintf(stddebug, "\n");
-	fprintf(stddebug, "next bool: %d\n", F->nextBool);
+	fprintf(stddebug, "next bool: %d\n", F->bools.size);
 	fprintf(stddebug, "locals(%d): ", F->freeLocal);
 	for (i = 0; i < F->freeLocal; i++) {
 		fprintf(stddebug, "%d{%s} ", i, REGISTER(i));
@@ -2042,7 +2062,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		  }
 	  case OP_LOADBOOL:
 		  {
-			  if ((F->nextBool == 0) || (c==0)) {
+			  if ((F->bools.size == 0) || (c==0)) {
 				  /*
 				  * assign boolean constant
 				  */
@@ -2199,7 +2219,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 	  case OP_MOD:
 		  {
 			  char *bstr, *cstr;
-			  char *oper = operators[o];
+			  const char *oper = operators[o];
 			  int prio = priorities[o];
 			  int bprio = PRIORITY(b);
 			  int cprio = PRIORITY(c);
@@ -2261,16 +2281,10 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		  {
 			  int dest = sbc + pc + 2;
 			  Instruction idest = code[dest - 1];
-			  IntListItem* foundInt = (IntListItem*)RemoveFindInList(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc);
+			  IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
 			  if (boolpending) {
 				  boolpending = 0;
-				  F->bools[F->nextBool]->dest = dest;
-				  F->nextBool++;
-				  if(F->bools[F->nextBool]){
-					  ClearBoolOp(F->bools[F->nextBool]);
-				  }else{
-					  F->bools[F->nextBool] = NewBoolOp();
-				  }
+				  AddToList(&(F->bools), (ListItem*)MakeBoolOp(NULL, NULL, OP_JMP, 0, 0, dest));
 				  if (F->testpending) {
 					  F->testjump = dest;
 				  }
@@ -2382,19 +2396,8 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				  /* skip */
 				  char* ra = luadec_strdup(REGISTER(boola));
 				  char* rb = luadec_strdup(ra);
-				  F->bools[F->nextBool]->op1 = ra;
-				  F->bools[F->nextBool]->op2 = rb;
-				  F->bools[F->nextBool]->op = OP_TESTSET;
-				  F->bools[F->nextBool]->neg = c;
-				  F->bools[F->nextBool]->pc = pc + 3;
+				  AddToList(&(F->bools), (ListItem*)MakeBoolOp(ra, rb, OP_TESTSET, c, pc+3, dest));
 				  F->testpending = a+1;
-				  F->bools[F->nextBool]->dest = dest;
-				  F->nextBool++;
-				  if(F->bools[F->nextBool]){
-					  ClearBoolOp(F->bools[F->nextBool]);
-				  }else{
-					  F->bools[F->nextBool] = NewBoolOp();
-				  }
 				  F->testjump = dest;
 				  TRY(test = OutputBoolean(F, NULL, 1));
 				  StringBuffer_printf(str, "%s", test);
@@ -2449,12 +2452,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				  if (o == OP_LT) o = OP_LE;
 				  else if (o == OP_LE) o = OP_LT;
 			  }
-			  ClearBoolOp(F->bools[F->nextBool]);
-			  TRY(F->bools[F->nextBool]->op1 = RegisterOrConstant(F, b));
-			  TRY(F->bools[F->nextBool]->op2 = RegisterOrConstant(F, c));
-			  F->bools[F->nextBool]->op = o;
-			  F->bools[F->nextBool]->neg = a;
-			  F->bools[F->nextBool]->pc = pc + 1;
+			  AddToList(&(F->bools), (ListItem*)MakeBoolOp(RegisterOrConstant(F, b), RegisterOrConstant(F, c), o, a, pc+1, -1));
 			  boolpending = 1;
 			  break;
 		  }
@@ -2488,12 +2486,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 					  rb = ra;
 				  }
 			  }
-			  ClearBoolOp(F->bools[F->nextBool]);
-			  F->bools[F->nextBool]->op1 = luadec_strdup(ra);
-			  F->bools[F->nextBool]->op2 = luadec_strdup(rb);
-			  F->bools[F->nextBool]->op = o;
-			  F->bools[F->nextBool]->neg = cmpc;
-			  F->bools[F->nextBool]->pc = pc + 1;
+			  AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(rb), o, cmpc, pc+1, -1));
 			  // Within an IF, a and b are the same, avoiding side-effects
 			  if (cmpa != cmpb || !IS_VARIABLE(cmpa)) {
 				  F->testpending = cmpa+1;

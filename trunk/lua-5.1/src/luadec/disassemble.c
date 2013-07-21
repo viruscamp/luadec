@@ -299,7 +299,7 @@ void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
 			  }
 
 			  if (c>=2) {
-				  sprintf(tmp2, "R%d to R%d", a, a+c-2);
+				  sprintf(tmp2, "R%d to R%d := ", a, a+c-2);
 			  } else if (c==0) {
 				  sprintf(tmp2,"R%d to top := ",a);
 			  } else {
