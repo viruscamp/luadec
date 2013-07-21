@@ -9,29 +9,31 @@
 */
 typedef struct ListItem_ ListItem;
 struct ListItem_ {
-	ListItem *next;
-	ListItem *prev;
+	ListItem * next;
+	ListItem * prev;
 };
 
 typedef struct List_ List;
 struct List_ {
-	ListItem *head;
-	ListItem *tail;
+	ListItem * head;
+	ListItem * tail;
 	int size;
 };
 
-typedef void (*ListItemFn) (ListItem *, void *);
-typedef int (*ListItemCmpFn) (ListItem *, const void *);
+typedef void (* ListItemFn) (ListItem *, void *);
+typedef int (* ListItemCmpFn) (ListItem *, const void *);
 
-void InitList(List* list);
-void AddToList(List* list, ListItem* item);
-void AddToListHead(List* list, ListItem* item);
-ListItem* LastItem(List* list);
-ListItem* PopFromList(List* list);
-void LoopList(List* list, ListItemFn fn, void* param);
-void ClearList(List* list);
-ListItem* FindInList(List* list, ListItemCmpFn cmp, const void *sample);
-ListItem* RemoveFindInList(List* list, ListItemCmpFn cmp, const void *sample);
+void InitList(List * list);
+void AddToList(List * list, ListItem * item);
+void AddToListHead(List * list, ListItem * item);
+ListItem * FirstItem(List * list);
+ListItem * LastItem(List * list);
+ListItem * PopFromList(List * list);
+void LoopList(List * list, ListItemFn fn, void * param);
+void ClearList(List * list);
+ListItem * FindFromListHead(List * list, ListItemCmpFn cmp, const void * sample);
+ListItem * FindFromListTail(List * list, ListItemCmpFn cmp, const void * sample);
+ListItem * RemoveFromList(List * list, ListItem * item);
 
 /*
 ** IntSet is a Stack that has a limited capacity
@@ -43,10 +45,10 @@ struct IntSet_ {
 	int mayRepeat;
 };
 
-int AddToSet(IntSet* set, int a);
-int PeekSet(IntSet* set, int a);
-int PopSet(IntSet* set);
-int RemoveFromSet(IntSet* set, int a);
+int AddToSet(IntSet * set, int a);
+int PeekSet(IntSet * set, int a);
+int PopSet(IntSet * set);
+int RemoveFromSet(IntSet * set, int a);
 
 /*
 ** a Stack use List
@@ -54,11 +56,11 @@ int RemoveFromSet(IntSet* set, int a);
 typedef struct VarListItem_ VarListItem;
 struct VarListItem_ {
 	ListItem super;
-	char* dest;
-	char* src;
+	char * dest;
+	char * src;
 	int reg;
 };
 
-void AddToVarStack(List* stack, char* dest, char* src, int reg);
+void AddToVarList(List * stack, char * dest, char * src, int reg);
 
 #endif
