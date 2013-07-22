@@ -405,7 +405,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 
 	if (debug) {
 		printf("\n");
-		for (i = 0, curr = first; curr && curr != cast(BoolOp*, last->super.next); i++, curr = cast(BoolOp*, curr->super.next)) {
+		for (curr = first, i = 0; curr && curr != cast(BoolOp*, last->super.next); i++, curr = cast(BoolOp*, curr->super.next)) {
 			BoolOp* op = curr;
 			if (debug) {
 				printf("Exps(%d): at %d\tdest %d\tneg %d\t(%s %s %s) cpd %d \n", i,
@@ -415,7 +415,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 		printf("\n");
 	}
 
-	for (curr = first, lastCount = 0; curr && curr != cast(BoolOp*, last->super.next); curr = cast(BoolOp*, curr->super.next), lastCount++) {
+	for (curr = cast(BoolOp*, first->super.next), lastCount = 1; curr && curr != cast(BoolOp*, last->super.next); curr = cast(BoolOp*, curr->super.next), lastCount++) {
 		BoolOp* op = curr;
 		int at = op->pc;
 		int dest = op->dest;
@@ -869,9 +869,9 @@ void DeleteTableItem(DecTableItem* item,void* dummy) {
 	}
 }
 
-int MatchTable(DecTable * tbl, int *name)
+int MatchTable(DecTable * tbl, int *reg)
 {
-	return tbl->reg == *name;
+	return tbl->reg == *reg;
 }
 
 void DeleteTable(DecTable * tbl)
@@ -884,10 +884,6 @@ void DeleteTable(DecTable * tbl)
 void CloseTable(Function * F, int r)
 {
 	DecTable *tbl = (DecTable *) RemoveFromList(&(F->tables), FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &r));
-	if (tbl->reg != r) {
-		SET_ERROR(F,"Unhandled construct in table");
-		return;
-	}
 	DeleteTable(tbl);
 	F->Rtabl[r] = 0;
 }
@@ -1139,7 +1135,7 @@ void DeleteFunction(Function * self)
 {
 	int i;
 	LoopList(&(self->statements), (ListItemFn) DeleteStatement, NULL);
-	LoopList(&(self->statements), (ListItemFn) DeleteBoolOp, NULL);
+	LoopList(&(self->bools), (ListItemFn) DeleteBoolOp, NULL);
 	/*
 	* clean up registers
 	*/
@@ -2284,7 +2280,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			  IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
 			  if (boolpending) {
 				  boolpending = 0;
-				  AddToList(&(F->bools), (ListItem*)MakeBoolOp(NULL, NULL, OP_JMP, 0, 0, dest));
+				  cast(BoolOp*, LastItem(&(F->bools)))->dest = dest;
 				  if (F->testpending) {
 					  F->testjump = dest;
 				  }
