@@ -741,7 +741,8 @@ void MarkBackpatch(Function* F) {
 
 void FlushElse(Function* F) {
 	if (F->elsePending > 0) {
-		int fpc = cast(BoolOp*, FirstItem(&(F->bools)))->pc;
+		BoolOp* firstBool = cast(BoolOp*, FirstItem(&(F->bools)));
+		int fpc = firstBool ? firstBool->pc : -1;
 		/* Should elseStart be a stack? */
 		if (F->bools.size > 0 && (fpc == F->elseStart || fpc-1 == F->elseStart)) {
 			int endif, thenaddr;
@@ -1740,11 +1741,6 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 
 	int ignoreNext = 0;
 
-	/*
-	* State variables for the boolean operations.
-	*/
-	int boolpending = 0;
-
 	Function *F;
 	StringBuffer *str = StringBuffer_new(NULL);
 
@@ -1825,6 +1821,10 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 		int sbc = GETARG_sBx(i);
 		int dest = sbc + pc + 1;
 		int real_end = GetJmpAddr(F,pc + 1);
+
+		while( pc < F->loop_ptr->start){
+			F->loop_ptr = F->loop_ptr->parent;
+		}
 
 		if( o == OP_CLOSE ){
 			int a = GETARG_A(i);
@@ -2278,29 +2278,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			  int dest = sbc + pc + 2;
 			  Instruction idest = code[dest - 1];
 			  IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
-			  if (boolpending) {
-				  boolpending = 0;
-				  cast(BoolOp*, LastItem(&(F->bools)))->dest = dest;
-				  if (F->testpending) {
-					  F->testjump = dest;
-				  }
-				  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {//RemoveFromSet(F->untils, F->pc
-					  int endif, thenaddr;
-					  char* test = NULL;
-					  LogicExp* exp = NULL;
-					  TRY(exp = MakeBoolean(F, &endif, &thenaddr));
-					  TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
-					  StringBuffer_printf(str, "until %s", test);
-					  F->indent--;
-					  RawAddStatement(F, str);
-					  if (test) free(test);
-					  if (exp) DeleteLogicExpTree(exp);
-				  }
-			  /*}else if (RemoveFromSet(F->untils, F->pc)) { // never executed , we use 'while 1' instead of 'until false'
-				  StringBuffer_printf(str, "until false");
-				  F->indent--;
-				  RawAddStatement(F, str);*/
-			  }else if (foundInt != NULL){ // break
+			  if (foundInt != NULL){ // break
 				  free(foundInt);
 				  StringBuffer_printf(str, "do break end");
 				  TRY(AddStatement(F, str));
@@ -2449,7 +2427,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				  else if (o == OP_LE) o = OP_LT;
 			  }
 			  AddToList(&(F->bools), (ListItem*)MakeBoolOp(RegisterOrConstant(F, b), RegisterOrConstant(F, c), o, a, pc+1, -1));
-			  boolpending = 1;
+			  goto LOGIC_NEXT_JMP;
 			  break;
 		  }
 	  case OP_TESTSET: // Lua5.1 specific TODO: correct it
@@ -2487,7 +2465,38 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			  if (cmpa != cmpb || !IS_VARIABLE(cmpa)) {
 				  F->testpending = cmpa+1;
 			  }
-			  boolpending = 1;
+			  goto LOGIC_NEXT_JMP;
+			  break;
+		  }
+LOGIC_NEXT_JMP:
+		  {
+			  int dest;
+			  BoolOp* lastBool;
+			  pc++;
+			  i = code[pc];
+			  o = GET_OPCODE(i);
+			  if ( o != OP_JMP ){
+				  assert(0);
+			  }
+			  sbc = GETARG_sBx(i);
+			  dest = sbc + pc + 2;
+			  lastBool = cast(BoolOp*, LastItem(&(F->bools)));
+			  lastBool->dest = dest;
+			  if (F->testpending) {
+				  F->testjump = dest;
+			  }
+			  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {//RemoveFromSet(F->untils, F->pc
+				  int endif, thenaddr;
+				  char* test = NULL;
+				  LogicExp* exp = NULL;
+				  TRY(exp = MakeBoolean(F, &endif, &thenaddr));
+				  TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
+				  StringBuffer_printf(str, "until %s", test);
+				  F->indent--;
+				  RawAddStatement(F, str);
+				  if (test) free(test);
+				  if (exp) DeleteLogicExpTree(exp);
+			  }
 			  break;
 		  }
 	  case OP_CALL:
