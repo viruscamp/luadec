@@ -805,11 +805,11 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("GETUPVAL") then -- GETUPVAL A B
     Operand = OperandAB(inst)
-	Comment = string.format("%s%d := U%d , %s",CC(a),CV(a),b,func.upvalues[inst.B + 1]);
+	Comment = string.format("%s%d := U%d , %s", CC(a), CV(a), b, func.upvalues[inst.B + 1] or "unknown upval");
 	  ---------------------------------------------------------------
   elseif isop("SETUPVAL") then -- SETUPVAL A B
     Operand = OperandAB(inst)
-    Comment = string.format("%s , U%d := %sd",func.upvalues[inst.B + 1],b, CC(a),CV(a))
+    Comment = string.format("U%d := %s%d , %s", b, CC(a), CV(a), func.upvalues[inst.B + 1] or "unknown upval")
   ---------------------------------------------------------------
   elseif isop("GETGLOBAL") then -- GETGLOBAL A Bx
     Operand = OperandABx(inst)
