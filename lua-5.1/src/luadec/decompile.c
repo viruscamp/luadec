@@ -159,6 +159,7 @@ int AddToLoopTree(Function* F, LoopItem* item){
 			item->next = F->loop_ptr->child;
 			item->prev = NULL;
 			item->child = NULL;
+			item->indent = F->loop_ptr->indent + 1;
 
 			if ( F->loop_ptr->child){
 				F->loop_ptr->child->prev = item;
@@ -699,15 +700,16 @@ void FlushBoolean(Function * F) {
 		//TODO find another method to determine while loop body to output while do
 		//search parent
 		while (walk){
-			if(walk->type == WHILE && walk->body == thenaddr -1 && walk->next_code == endif -1 ){
+			if(walk->type == WHILE && walk->next_code == endif -1 ){
 				break;
 			}
 			walk = walk->parent;
 		}
 		test = WriteBoolean(exp, &thenaddr, &endif, 0);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		if (walk){
+		if (walk && walk->body != -1){
 			StringBuffer_addPrintf(str, "while %s do", test);
+			walk->body = thenaddr;
 			RawAddStatement(F, str);
 			F->indent++;
 		} else {
@@ -1689,6 +1691,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto * f, int indent)
     char* output = NULL;
 	StringBuffer *str = StringBuffer_new(NULL);
 	Function *F = NewFunction(f);
+	F->loop_tree->indent = indent;
 	F->indent = indent;
 	error = NULL;
 
@@ -1890,7 +1893,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 							if( isTestOpCode(x_1) ){
 								if( found == 0 ){
 									// cannot determine loop body
-									LoopItem* item = NewLoopItem(WHILE, dest, dest, dest, pc, real_end);
+									LoopItem* item = NewLoopItem(WHILE, dest, dest, -1, pc, real_end);
 									AddToLoopTree(F, item);
 									found = 1;
 									break;

@@ -56,6 +56,8 @@ struct LoopItem_ {
 	int body;
 	int end;
 	int next_code;
+
+	int indent;
 };
 
 
