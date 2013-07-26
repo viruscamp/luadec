@@ -153,7 +153,7 @@ int MatchLoopItem(LoopItem* item, LoopItem* match){
 
 int AddToLoopTree(Function* F, LoopItem* item){
 	while (F->loop_ptr){
-		if ( item->body >= F->loop_ptr->body && item->end < F->loop_ptr->end){
+		if ( item->start >= F->loop_ptr->start && item->end < F->loop_ptr->end){
 			//find parent , then insert as the first child
 			item->parent = F->loop_ptr;
 			item->next = F->loop_ptr->child;
@@ -688,33 +688,57 @@ void RawAddStatement(Function * F, StringBuffer * str)
 	F->lastLine = F->pc;
 }
 
+void FlushWhile1(Function * F) {
+	LoopItem * walk = F->loop_ptr;
+	StringBuffer * str = StringBuffer_new("");
+
+	if (walk->type == WHILE && walk->start <= F->pc && walk->body == -1) {
+		StringBuffer_set(str, "while 1 do");
+		RawAddStatement(F, str);
+		F->indent++;
+		walk->body = walk->start;
+		walk = walk->parent;
+	}
+
+	StringBuffer_delete(str);
+}
+
 void FlushBoolean(Function * F) {
 	FlushElse(F);
+	if (F->bools.size == 0) {
+		FlushWhile1(F);
+	}
 	while (F->bools.size > 0) {
-		int endif, thenaddr;
+		int flushWhile = 0;
+		int endif = 0, thenaddr = 0;
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
-		LogicExp* exp = MakeBoolean(F, &endif, &thenaddr);
-		LoopItem* walk = F->loop_ptr;
+		LogicExp * exp = NULL;
+		LoopItem * walk = NULL;
+
+		exp = MakeBoolean(F, &endif, &thenaddr);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		//TODO find another method to determine while loop body to output while do
-		//search parent
-		while (walk){
-			if(walk->type == WHILE && walk->next_code == endif -1 ){
-				break;
-			}
-			walk = walk->parent;
-		}
+
 		test = WriteBoolean(exp, &thenaddr, &endif, 0);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-		if (walk && walk->body != -1){
-			StringBuffer_addPrintf(str, "while %s do", test);
+
+		//TODO find another method to determine while loop body to output while do
+		//search parent
+		walk = F->loop_ptr;
+		if (walk->type == WHILE && walk->next_code == endif -1 && walk->body == -1){
+			int whileStart = walk->start;
 			walk->body = thenaddr;
+			flushWhile = 1;
+		}
+
+		if (flushWhile){
+			StringBuffer_printf(str, "while %s do", test);
 			RawAddStatement(F, str);
 			F->indent++;
 		} else {
+			FlushWhile1(F);
 			StoreEndifAddr(F, endif);
-			StringBuffer_addPrintf(str, "if %s then", test);
+			StringBuffer_printf(str, "if %s then", test);
 			F->elseWritten = 0;
 			RawAddStatement(F, str);
 			F->indent++;
@@ -729,11 +753,21 @@ FlushBoolean_CLEAR_HANDLER1:
 	F->testpending = 0;
 }
 
-void AddStatement(Function * F, StringBuffer * str)
+void DeclareLocalsAddStatement(Function * F, StringBuffer * statement)
+{
+	if (F->pc > 0) {
+		FlushBoolean(F);
+		if (error) return;
+	}
+	RawAddStatement(F, statement);
+}
+
+void AddStatement(Function * F, StringBuffer * statement)
 {
 	FlushBoolean(F);
 	if (error) return;
-	RawAddStatement(F, str);
+
+	RawAddStatement(F, statement);
 }
 
 void MarkBackpatch(Function* F) {
@@ -1372,7 +1406,7 @@ void DeclareLocals(Function * F)
 		if (strcmp(StringBuffer_getRef(rhs)," = ") == 0){
 			StringBuffer_add(str,"nil");
 		}
-		AddStatement(F, str);
+		DeclareLocalsAddStatement(F, str);
 		if (error) return;
 	}
 	StringBuffer_delete(rhs);
@@ -1755,9 +1789,6 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 
 	LoopItem* next_child;
 
-	List processed_jmps;
-	InitList(&processed_jmps);
-
 	F = NewFunction(f);
 	F->indent = indent;
 	F->pc = 0;
@@ -1838,17 +1869,20 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			AddToLoopTree(F, item);
 		}else if( o == OP_JMP ){
 			OpCode pc_1 = GET_OPCODE(code[pc-1]);
+			/***
 			if( dest == F->loop_ptr->start && !isTestOpCode(pc_1)){
 				//continues
 				IntListItem *intItem = NewIntListItem(pc);
 				AddToList(&(F->continues), cast(ListItem*,intItem));
-			}else if( dest == F->loop_ptr->next_code ){
+			}else
+			***/
+			if( dest == F->loop_ptr->next_code ){
 				if (!isTestOpCode(pc_1)){
 					//breaks
 					IntListItem *intItem = NewIntListItem(pc);
 					AddToList(&(F->breaks), cast(ListItem*,intItem));
 				}
-			}else if( F->loop_ptr->body <= dest && dest < pc ){
+			}else if( F->loop_ptr->start <= dest && dest < pc ){
 				if(pc_1 == OP_TFORLOOP){
 					// TFORLOOP jump back
 					LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
@@ -1875,41 +1909,22 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 						f(a)
 						end
 					end
-						*/
-					if ( !((F->loop_ptr->type == WHILE1 ) && (dest == F->loop_ptr->start))){
+					
+					if ( !((F->loop_ptr->type == WHILE ) && (dest == F->loop_ptr->start))){
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
 					}
+					***/
+					LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
+					AddToLoopTree(F, item);
 				}else{
 					// WHILE jump back
-					int found = 0;
-					int x;
-					for(x = pc - 1; x > dest; x--){
-						Instruction xi = code[x];
-						OpCode xo = GET_OPCODE(xi);
-						int x_dest = GETARG_sBx(xi) + x + 1;
-						if(xo == OP_JMP && x_dest == real_end){
-							OpCode x_1 = GET_OPCODE(code[x-1]);
-							if( isTestOpCode(x_1) ){
-								if( found == 0 ){
-									// cannot determine loop body
-									LoopItem* item = NewLoopItem(WHILE, dest, dest, -1, pc, real_end);
-									AddToLoopTree(F, item);
-									found = 1;
-									break;
-								}
-							}
-						}
-					}
-					if( found != 1 ){
-						LoopItem* item = NewLoopItem(WHILE1, dest, dest, dest, pc, real_end);
-						AddToLoopTree(F, item);
-					}
+					LoopItem* item = NewLoopItem(WHILE, dest, dest, -1, pc, real_end);
+					AddToLoopTree(F, item);
 				}
 			}
 		}
 	}
-	ClearList(&processed_jmps);
 
 	F->loop_ptr = F->loop_tree;
 	next_child = F->loop_tree->child;
@@ -2004,27 +2019,30 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 			StringBuffer_prune(str);
 		}
 
-		if ((F->loop_ptr->body == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE1)) {
-			LoopItem *walk = F->loop_ptr;
+		if ((F->loop_ptr->start == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE)) {
+			LoopItem * walk = F->loop_ptr;
 
-			while (walk->parent && (walk->parent->body == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE1)) {
+			while (walk->parent && (walk->parent->start == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE)) {
 				walk = walk->parent;
-			};
+			}
 
-			while (1) {
-				if (walk->type == WHILE1){
+			while ( !(walk == F->loop_ptr)) {
+				if (walk->type == WHILE) {
+					walk->body = walk->start;
 					StringBuffer_set(str, "while 1 do");
-				}else if (walk->type == REPEAT){
+				} else if (walk->type == REPEAT) {
 					StringBuffer_set(str, "repeat");
 				}
-				TRY(AddStatement(F,str));
-				StringBuffer_prune(str);
+				TRY(RawAddStatement(F,str));
 				F->indent++;
 
-				if ( walk == F->loop_ptr ){
-					break;
-				}
 				walk = walk->child;
+			}
+
+			if (walk->type == REPEAT) {
+				StringBuffer_set(str, "repeat");
+				TRY(RawAddStatement(F,str));
+				F->indent++;
 			}
 		}
 
