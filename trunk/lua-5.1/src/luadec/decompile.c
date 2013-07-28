@@ -1890,33 +1890,30 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				}else if ( isTestOpCode(pc_1) ){
 					// REPEAT jump back
 					/***
-						* if the out loop(loop_ptr) is while1 and body=loop_ptr.start,
-						* jump back may be 'until' or 'if', they are the same,
-						* but 'if' is more clear, so we skip making a loop to choose 'if'.
-						* see the lua code:
-					local a,b,c,f
+					* if the out loop(loop_ptr) is while and body=loop_ptr.start,
+					* jump back may be 'until' or 'if', they are the same,
+					* but 'if' is more clear, so we skip making a loop to choose 'if'.
+					* see the lua code:
+						local a,b,c,f
 
-					while 1 do
-						repeat
-						f(b)
-						until c
-						f(a)
-					end
-
-					while 1 do
-						f(b)
-						if c then
-						f(a)
+						while 1 do
+							repeat
+								f(b)
+							until c
+							f(a)
 						end
-					end
-					
+
+						while 1 do
+							f(b)
+							if c then
+								f(a)
+							end
+						end
+					***/
 					if ( !((F->loop_ptr->type == WHILE ) && (dest == F->loop_ptr->start))){
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
 					}
-					***/
-					LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
-					AddToLoopTree(F, item);
 				}else{
 					// WHILE jump back
 					LoopItem* item = NewLoopItem(WHILE, dest, dest, -1, pc, real_end);
@@ -2041,6 +2038,29 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 
 			if (walk->type == REPEAT) {
 				StringBuffer_set(str, "repeat");
+				TRY(RawAddStatement(F,str));
+				F->indent++;
+			} else if (walk->type == WHILE) { 
+				/***
+				* try to process all while as " while 1 do if "
+				* see the lua code:
+				local f, a, b, c
+				
+				while test do
+					whilebody
+				end
+
+
+				while 1 do
+					if test then
+						whilebody
+					else
+						break
+					end
+				end
+				***/
+				walk->body = walk->start;
+				StringBuffer_set(str, "while 1 do");
 				TRY(RawAddStatement(F,str));
 				F->indent++;
 			}
@@ -2304,10 +2324,69 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				  StringBuffer_printf(str, "do break end");
 				  TRY(AddStatement(F, str));
 			  }else if (F->loop_ptr && F->loop_ptr->end == pc ){ // until jmp has been processed, tforloop has ignored the jmp, forloop does not have a jmp
+				  if (GetEndifAddr(F, pc + 2)) {
+					  /*** before we have had
+					  while 1 do
+						if test then
+							while_body
+					  ***/
+
+					  /*** method 1
+					  while 1 do
+						if test then
+							while_body
+						else
+							break
+						end
+					  end
+
+					  F->indent--;
+					  StringBuffer_printf(str, "else");
+					  TRY(AddStatement(F, str));
+					  F->indent++;
+					  StringBuffer_printf(str, "break");
+					  TRY(AddStatement(F, str));
+					  F->indent--;
+					  StringBuffer_printf(str, "end");
+					  TRY(AddStatement(F, str));
+					  ***/
+
+					  // method 2 ChangeIfToWhile(F)
+					  Statement *walk = cast(Statement *, F->statements.tail);
+					  while (walk->indent > F->indent - 1) {
+						  walk = cast(Statement *, walk->super.prev);
+					  }
+					  if (strstr(walk->code, "if") == walk->code) {
+						  Statement *prev = cast(Statement *, walk->super.prev);
+						  Statement *next = cast(Statement *, walk->super.next);
+						  if (strstr(prev->code, "while 1 do") == prev->code) {
+							  char* test = walk->code + 3;
+							  int len = strlen(test);
+							  test[len-5] = '\0';
+							  StringBuffer_printf(str, "while %s do", test);
+							  free(prev->code);
+							  prev->code = StringBuffer_getBuffer(str);
+							  prev->super.next = (ListItem *)next;
+							  if (next) {
+								  next->super.prev = (ListItem *)prev;
+							  } else {
+								  F->statements.tail = (ListItem *)prev;
+							  }
+							  F->statements.size--;
+							  DeleteStatement(walk, NULL);
+							  walk = next;
+							  while (walk) {
+								  walk->indent--;
+								  walk = cast(Statement *, walk->super.next);
+							  }
+							  F->indent--;
+						  }
+					  }
+				  }
 				  F->indent--;
 				  StringBuffer_printf(str, "end");
 				  TRY(AddStatement(F, str));
-			  }else if (GetEndifAddr(F, pc + 2)) {
+			  }else if (GetEndifAddr(F, pc + 2)) { // jmp before 'else'
 				  if (F->elseWritten) {
 					  F->indent--;
 					  StringBuffer_printf(str, "end");
@@ -2316,7 +2395,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 				  F->indent--;
 				  F->elsePending = dest;
 				  F->elseStart = pc + 2;
-			  }else if (GET_OPCODE(idest) == OP_TFORLOOP) {
+			  }else if (GET_OPCODE(idest) == OP_TFORLOOP) { // jmp of generic for
 				  /*
 				  * generic 'for'
 				  */
