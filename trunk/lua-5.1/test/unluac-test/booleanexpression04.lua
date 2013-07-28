@@ -1,0 +1,1 @@
+print((not x) and (a == b) and (y < z))
