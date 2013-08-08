@@ -109,8 +109,12 @@ Statement *NewStatement(char *code, int line, int indent) {
 	return self;
 }
 
-void DeleteStatement(Statement * self, void* dummy) {
+void ClearStatement(Statement * self, void* dummy) {
 	free(self->code);
+}
+
+void DeleteStatement(Statement * self) {
+	ClearStatement(self, NULL);
 	free(self);
 }
 
@@ -522,7 +526,7 @@ LogicExp* MakeBoolean(Function * F, int* endif, int* thenaddr)
 	curr = last; 
 	while (curr) {
 		BoolOp * prev = cast(BoolOp*, curr->super.prev);
-		DeleteBoolOp(curr, NULL);
+		DeleteBoolOp(curr);
 		curr = prev;
 	}
 	if (endif && *endif == 0) {
@@ -894,7 +898,7 @@ DecTableItem *NewTableItem(const char *value, int num, const char *key) {
 	return self;
 }
 
-void DeleteTableItem(DecTableItem* item,void* dummy) {
+void ClearTableItem(DecTableItem* item, void* dummy) {
 	if (item) {
 		if (item->key) {
 			free(item->key);
@@ -902,8 +906,12 @@ void DeleteTableItem(DecTableItem* item,void* dummy) {
 		if (item->value) {
 			free(item->value);
 		}
-		free(item);
 	}
+}
+
+void DeleteTableItem(DecTableItem* item) {
+	ClearTableItem(item, NULL);
+	free(item);
 }
 
 int MatchTable(DecTable * tbl, int *reg)
@@ -913,8 +921,8 @@ int MatchTable(DecTable * tbl, int *reg)
 
 void DeleteTable(DecTable * tbl)
 {
-	LoopList(&(tbl->keyed),(ListItemFn)DeleteTableItem,NULL);
-	LoopList(&(tbl->numeric),(ListItemFn)DeleteTableItem,NULL);
+	ClearList(&(tbl->keyed), (ListItemFn)ClearTableItem);
+	ClearList(&(tbl->numeric), (ListItemFn)ClearTableItem);
 	free(tbl);
 }
 
@@ -1109,19 +1117,7 @@ BoolOp * MakeBoolOp(char * op1, char * op2, OpCode op, int neg,	int pc,	int dest
 	return value;
 }
 
-void DeleteBoolOp(BoolOp * ptr, void * dummy){
-	if(ptr){
-		if(ptr->op1){
-			free(ptr->op1);
-		}
-		if(ptr->op2){
-			free(ptr->op2);
-		}
-		free(ptr);
-	}
-}
-
-void ClearBoolOp(BoolOp* ptr) {
+void ClearBoolOp(BoolOp* ptr, void* dummy) {
 	if (ptr) {
 		if (ptr->op1) {
 			free(ptr->op1);
@@ -1132,6 +1128,11 @@ void ClearBoolOp(BoolOp* ptr) {
 			ptr->op2 = NULL;
 		}
 	}
+}
+
+void DeleteBoolOp(BoolOp* ptr){
+	ClearBoolOp(ptr, NULL);
+	free(ptr);
 }
 
 /*
@@ -1171,8 +1172,8 @@ Function *NewFunction(const Proto * f)
 void DeleteFunction(Function * self)
 {
 	int i;
-	LoopList(&(self->statements), (ListItemFn) DeleteStatement, NULL);
-	LoopList(&(self->bools), (ListItemFn) DeleteBoolOp, NULL);
+	ClearList(&(self->statements), (ListItemFn)ClearStatement);
+	ClearList(&(self->bools), (ListItemFn)ClearBoolOp);
 	/*
 	* clean up registers
 	*/
@@ -1182,10 +1183,10 @@ void DeleteFunction(Function * self)
 		}
 	}
 	StringBuffer_delete(self->decompiledCode);
-	ClearList(&(self->vpend));
+	ClearList(&(self->vpend), (ListItemFn)ClearVarListItem);
 	free(self->tpend);
-	ClearList(&(self->breaks));
-	ClearList(&(self->continues));
+	ClearList(&(self->breaks), NULL);
+	ClearList(&(self->continues), NULL);
 	DeleteLoopTree(self->loop_tree);
 	free(self->do_opens);
 	free(self->do_closes);
@@ -1271,7 +1272,7 @@ void OutputAssignments(Function * F)
 			goto OutputAssignments_ERROR_HANDLER;
 	}
 OutputAssignments_ERROR_HANDLER:
-	ClearList(&(F->vpend));
+	ClearList(&(F->vpend), (ListItemFn)ClearVarListItem);
 	StringBuffer_delete(vars);
 	StringBuffer_delete(exps);
 }
@@ -2373,7 +2374,7 @@ char* ProcessCode(const Proto * f, int indent, int func_checking)
 								  F->statements.tail = (ListItem *)prev;
 							  }
 							  F->statements.size--;
-							  DeleteStatement(walk, NULL);
+							  DeleteStatement(walk);
 							  walk = next;
 							  while (walk) {
 								  walk->indent--;

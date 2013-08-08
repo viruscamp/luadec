@@ -5,7 +5,6 @@
 #include "StringBuffer.h"
 
 typedef struct BoolOp_ BoolOp;
-
 struct BoolOp_ {
 	ListItem super;
 	char * op1;
@@ -17,14 +16,12 @@ struct BoolOp_ {
 };
 
 typedef struct Endif_ Endif;
-
 struct Endif_ {
 	int addr;
 	Endif * next;
 };
 
 typedef struct Statement_ Statement;
-
 struct Statement_ {
 	ListItem super;
 	char * code;
@@ -43,7 +40,6 @@ typedef enum {
 } LoopType;
 
 typedef struct LoopItem_ LoopItem;
-
 struct LoopItem_ {
 	LoopItem * parent;
 	LoopItem * child;
@@ -130,7 +126,6 @@ struct Function_ {
 };
 
 typedef struct DecTableItem_ DecTableItem;
-
 struct DecTableItem_ {
 	ListItem super;
 	char * value;
@@ -139,7 +134,6 @@ struct DecTableItem_ {
 };
 
 typedef struct DecTable_ DecTable;
-
 struct DecTable_ {
 	ListItem super;
 	int reg;
@@ -154,7 +148,6 @@ struct DecTable_ {
 };
 
 typedef struct Variable_ Variable;
-
 struct Variable_ {
 	ListItem super;
 	char * name;
@@ -162,7 +155,6 @@ struct Variable_ {
 };
 
 typedef struct IntListItem_ IntListItem;
-
 struct IntListItem_ {
 	ListItem super;
 	int value;
@@ -172,7 +164,6 @@ void SetR(Function * F, int r, StringBuffer * str, int prio);
 const char * GetR(Function * F, int r);
 
 typedef struct LogicExp_ LogicExp;
-
 struct LogicExp_ {
 	LogicExp * parent;
 	LogicExp * next;
@@ -210,8 +201,8 @@ void luaU_decompileNestedFunctions(Proto * f, int dflag, char * funcnumstr);
 
 BoolOp * NewBoolOp();
 BoolOp * MakeBoolOp(char * op1, char * op2, OpCode op, int neg,	int pc,	int dest);
-void DeleteBoolOp(BoolOp * ptr, void * dummy);
-void ClearBoolOp(BoolOp * ptr);
+void ClearBoolOp(BoolOp * ptr, void * dummy);
+void DeleteBoolOp(BoolOp * ptr);
 
 int listUpvalues(Function * F, StringBuffer * str);
 int CompareProto(const Proto * f1, const Proto * f2, StringBuffer * str);
