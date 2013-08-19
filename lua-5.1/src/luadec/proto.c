@@ -77,7 +77,7 @@ char *DecompileString(const Proto * f, int n)
 		default:
 			if ((*s < 32 || *s > 127) && !( *s >= 0x40 && *s <= 0xFE ) ){
 				char* pos = &(ret[p]);
-				sprintf(pos, "\\%d", *s);
+				sprintf(pos, "\\%03d", *s);
 				p += strlen(pos);
 			} else {
 				ret[p++] = *s;
