@@ -2574,9 +2574,10 @@ LOGIC_NEXT_JMP:
 			  int dest;
 			  BoolOp* lastBool;
 			  pc++;
+			  F->pc = pc;
 			  i = code[pc];
 			  o = GET_OPCODE(i);
-			  if ( o != OP_JMP ){
+			  if (o != OP_JMP) {
 				  assert(0);
 			  }
 			  sbc = GETARG_sBx(i);
@@ -2586,7 +2587,7 @@ LOGIC_NEXT_JMP:
 			  if (F->testpending) {
 				  F->testjump = dest;
 			  }
-			  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {//RemoveFromSet(F->untils, F->pc
+			  if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {
 				  int endif, thenaddr;
 				  char* test = NULL;
 				  LogicExp* exp = NULL;
