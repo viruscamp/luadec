@@ -15,6 +15,21 @@
 	#include "memwatch.h"
 #endif
 
-#endif
+#endif // #ifdef _DEBUG
 
-#endif
+#define MACRO_STR_RAW(tok) #tok
+#define MACRO_STR(tok) MACRO_STR_RAW(tok)
+
+#ifndef STRING_LOCALE
+	#define STRING_LOCALE ASCII
+#endif // #ifndef STRING_LOCALE
+
+#ifndef cast
+	#define cast(t,exp) ((t)(exp))
+#endif // #ifndef cast
+
+#ifndef NULL
+	#define NULL    ((void *)0)
+#endif // #ifndef NULL
+
+#endif // #ifndef LUADEC_COMMON_H

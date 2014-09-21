@@ -1,19 +1,17 @@
-#ifndef HEADER_StringBuffer
-#define HEADER_StringBuffer
-
+#ifndef LUADEC_STRINGBUFFER_H
+#define LUADEC_STRINGBUFFER_H
 
 #include <stdlib.h>
 #include <string.h>
 
 #define STRINGBUFFER_BLOCK 256
 
-
-typedef struct StringBuffer_ {
-   char* buffer;
-   int bufferSize;
-   int usedSize;
-} StringBuffer;
-
+typedef struct StringBuffer_ StringBuffer;
+struct StringBuffer_ {
+	char* buffer;
+	int bufferSize;
+	int usedSize;
+};
 
 StringBuffer* StringBuffer_new(char* data);
 
@@ -32,9 +30,9 @@ void StringBuffer_set(StringBuffer* self, const char* str);
 void StringBuffer_addAll(StringBuffer* self, int n, ...);
 
 #ifdef __GNUC__
-#define PRINTF_FUNCTION __attribute__ ((format (printf, 2, 3)))
+	#define PRINTF_FUNCTION __attribute__ ((format (printf, 2, 3)))
 #else
-#define PRINTF_FUNCTION
+	#define PRINTF_FUNCTION
 #endif
 
 void StringBuffer_printf(StringBuffer* self, char* format, ...) PRINTF_FUNCTION;
@@ -45,8 +43,8 @@ char* StringBuffer_getCopy(StringBuffer* self);
 
 char* StringBuffer_getBuffer(StringBuffer* self);
 
-char* StringBuffer_getRef(StringBuffer* self);
+const char* StringBuffer_getRef(StringBuffer* self);
 
 void StringBuffer_prune(StringBuffer* self);
 
-#endif
+#endif // #ifndef LUADEC_STRINGBUFFER_H

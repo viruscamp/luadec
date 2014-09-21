@@ -1,4 +1,3 @@
-/* luadec, based on luac */
 #include "common.h"
 
 #include <stdio.h>
@@ -6,8 +5,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-
-#define DEBUG_PRINT
 
 #include "ldebug.h"
 #include "lobject.h"
@@ -20,26 +17,28 @@
 #include "proto.h"
 #include "decompile.h"
 
+#define DEBUG_PRINT
+
 extern lua_State* glstate;
 
-struct llist;
-
-struct llist {
+typedef struct llist_ llist;
+struct llist_ {
 	int startpc;
 	int endpc;
-	struct llist * next;
+	llist* next;
 };
 
-struct llist * add(struct llist * list, int startpc, int endpc) {
+llist* add(llist* list, int startpc, int endpc) {
 	list->startpc = startpc;
 	list->endpc = endpc;
-	list->next = (struct llist *)calloc(1, sizeof(struct llist));
+	list->next = (llist*)calloc(1, sizeof(llist));
 	list->next->next = NULL;
 	return list->next;
 }
 
-void deletellist(struct llist * list) {
-	struct llist *curr, *next;
+void deletellist(llist* list) {
+	llist* curr;
+	llist* next;
 	curr = list;
 	while(curr){
 		next = curr->next;
@@ -48,16 +47,16 @@ void deletellist(struct llist * list) {
 	}
 }
 
-int luaU_guess_locals(Proto * f, int main) {
+int luaU_guess_locals(Proto* f, int main) {
 	int blockend[255];
 	int block;
 	int regassign[MAXARG_A];
 	int regusage[MAXARG_A];
 	int regblock[MAXARG_A];
 	int lastfree;
-	int i,i2,x,y,pc;
-	struct llist list_begin;
-	struct llist *list_next = &list_begin;
+	int i,i2,x,pc;
+	llist list_begin;
+	llist* list_next = &list_begin;
 
 	if (f->lineinfo != NULL) {
 		return 0;
@@ -152,230 +151,230 @@ int luaU_guess_locals(Proto * f, int main) {
 
 		// check which registers were read or written to.
 		switch (o) {
-	case OP_MOVE:
-		setreg = a;
-		if (b<=a) {
-			intlocfrom = b;
-			intlocto = b;
-		}
-		loadreg = b;
-		break;
-	case OP_UNM:
-	case OP_NOT:
-	case OP_LEN:
-		setreg = a;
-		loadreg = b;
-		break;
-	case OP_LOADNIL:
-		setreg = a;
-		setregto = b;
-		break;
-	case OP_LOADK:
-	case OP_GETUPVAL:
-	case OP_GETGLOBAL:
-	case OP_LOADBOOL:
-	case OP_NEWTABLE:
-	case OP_CLOSURE:
-		setreg = a;
-		break;
-	case OP_GETTABLE:
-		setreg = a;
-		loadreg = b;
-		if (!IS_CONSTANT(c)) {
-			loadreg2 = c;
-		}
-		break;
-	case OP_SETGLOBAL:
-	case OP_SETUPVAL:
-		loadreg = a;
-		break;
-	case OP_SETTABLE:
-		loadreg = a;
-		if (!IS_CONSTANT(b)) {
-			loadreg2 = b;
-		}
-		if (!IS_CONSTANT(c)) {
-			if (loadreg2==-1) {
-				loadreg2 = c;
-			} else {
-				loadreg3 = c;
+		case OP_MOVE:
+			setreg = a;
+			if (b<=a) {
+				intlocfrom = b;
+				intlocto = b;
 			}
-			if ((a+1!=c) && (c>a)) {
-				intlocto = c-1;
-			}
-		}
-		intlocfrom = 0;
-		if (a-1>=intlocto) {
-			intlocto = a-1;
-		}
-		break;
-	case OP_ADD:
-	case OP_SUB:
-	case OP_MUL:
-	case OP_DIV:
-	case OP_POW:
-	case OP_MOD:
-		setreg = a;
-		if (!IS_CONSTANT(b)) {
 			loadreg = b;
-		}
-		if (!IS_CONSTANT(c)) {
-			if (loadreg==-1) {
-				loadreg = c;
-			} else {
-				loadreg2 = c;
-			}
-		}
-		break;
-	case OP_CONCAT:
-		setreg = a;
-		loadreg = b;
-		loadregto = c;
-		break;
-	case OP_CALL:
-		if (c==0) {
+			break;
+		case OP_UNM:
+		case OP_NOT:
+		case OP_LEN:
 			setreg = a;
-			setregto = f->maxstacksize;
-		} else if (c>=2) {
-			setreg = a;
-			setregto = a+c-2;
-		} else if (c==1) {
-			intlocfrom = 0;
-			intlocto = a-1;
-		}
-		if (b==0) {
-			loadreg = a;
-			loadregto = f->maxstacksize;
-		} else {
-			loadreg = a;
-			loadregto = a+b-1;
-		}
-		break;
-	case OP_RETURN:
-		if (b==0) {
-			loadreg = a;
-			loadregto = f->maxstacksize;
-		} else if (b>=2) {
-			loadreg = a;
-			loadregto = a+b-2;
-		}
-		break;
-	case OP_TAILCALL:
-		if (b==0) {
-			loadreg = a;
-			loadregto = f->maxstacksize;
-		} else {
-			loadreg = a;
-			loadregto = a+b-1;
-		}
-		break;
-	case OP_VARARG:
-		if (b==0) {
-			setreg = a;
-			setregto = f->maxstacksize;
-		} else {
-			setreg = a;
-			setregto = a+b-1;
-		}
-		break;
-	case OP_SELF:
-		setreg = a;
-		setregto = a+1;
-		loadreg = b;
-		if (a>b) {
-			intlocfrom = 0;
-			intlocto = b;
-		}
-		if (!IS_CONSTANT(c)) {
-			loadreg2 = c;
-		}
-		break;
-	case OP_EQ:
-	case OP_LT:
-	case OP_LE:
-		if (!IS_CONSTANT(b)) {
 			loadreg = b;
-		}
-		if (!IS_CONSTANT(c)) {
-			if (loadreg==-1) {
-				loadreg = c;
-			} else {
+			break;
+		case OP_LOADNIL:
+			setreg = a;
+			setregto = b;
+			break;
+		case OP_LOADK:
+		case OP_GETUPVAL:
+		case OP_GETGLOBAL:
+		case OP_LOADBOOL:
+		case OP_NEWTABLE:
+		case OP_CLOSURE:
+			setreg = a;
+			break;
+		case OP_GETTABLE:
+			setreg = a;
+			loadreg = b;
+			if (!IS_CONSTANT(c)) {
 				loadreg2 = c;
 			}
-		}
-		break;
-	case OP_TEST:
-		loadreg = a;
-		break;
-	case OP_TESTSET: 
-		setreg = a;
-		loadreg = b;
-		break;
-	case OP_SETLIST:
-		loadreg = a;
-		if (b==0) {
-			loadregto = f->maxstacksize;
-		} else {
-			loadregto = a+b;
-		}
-		break;
-	case OP_FORLOOP:
-		break;
-	case OP_TFORLOOP:
-		break;
-	case OP_FORPREP:
-		loadreg = a;
-		loadregto = a+2;
-		setreg = a;
-		setregto = a+3;
-		intlocfrom = a;
-		intlocto = a+3;
-		regassign[a] = pc;
-		regassign[a+1] = pc;
-		regassign[a+2] = pc;
-		regassign[a+3] = pc+1;
-		regblock[a] = dest;
-		regblock[a+1] = dest;
-		regblock[a+2] = dest;
-		regblock[a+3] = dest-1;
-		block++;
-		blockend[block] = dest-1;
-		if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
-			blockend[block]--;
-		}
-		break;
-	case OP_JMP:
-		if (GET_OPCODE(f->code[dest-1]) == OP_TFORLOOP) {
-			int a = GETARG_A(f->code[dest-1]);
-			int c = GETARG_C(f->code[dest-1]);
+			break;
+		case OP_SETGLOBAL:
+		case OP_SETUPVAL:
+			loadreg = a;
+			break;
+		case OP_SETTABLE:
+			loadreg = a;
+			if (!IS_CONSTANT(b)) {
+				loadreg2 = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				if (loadreg2==-1) {
+					loadreg2 = c;
+				} else {
+					loadreg3 = c;
+				}
+				if ((a+1!=c) && (c>a)) {
+					intlocto = c-1;
+				}
+			}
+			intlocfrom = 0;
+			if (a-1>=intlocto) {
+				intlocto = a-1;
+			}
+			break;
+		case OP_ADD:
+		case OP_SUB:
+		case OP_MUL:
+		case OP_DIV:
+		case OP_POW:
+		case OP_MOD:
 			setreg = a;
-			setregto = a+c+2;
+			if (!IS_CONSTANT(b)) {
+				loadreg = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				if (loadreg==-1) {
+					loadreg = c;
+				} else {
+					loadreg2 = c;
+				}
+			}
+			break;
+		case OP_CONCAT:
+			setreg = a;
+			loadreg = b;
+			loadregto = c;
+			break;
+		case OP_CALL:
+			if (c==0) {
+				setreg = a;
+				setregto = f->maxstacksize;
+			} else if (c>=2) {
+				setreg = a;
+				setregto = a+c-2;
+			} else if (c==1) {
+				intlocfrom = 0;
+				intlocto = a-1;
+			}
+			if (b==0) {
+				loadreg = a;
+				loadregto = f->maxstacksize;
+			} else {
+				loadreg = a;
+				loadregto = a+b-1;
+			}
+			break;
+		case OP_RETURN:
+			if (b==0) {
+				loadreg = a;
+				loadregto = f->maxstacksize;
+			} else if (b>=2) {
+				loadreg = a;
+				loadregto = a+b-2;
+			}
+			break;
+		case OP_TAILCALL:
+			if (b==0) {
+				loadreg = a;
+				loadregto = f->maxstacksize;
+			} else {
+				loadreg = a;
+				loadregto = a+b-1;
+			}
+			break;
+		case OP_VARARG:
+			if (b==0) {
+				setreg = a;
+				setregto = f->maxstacksize;
+			} else {
+				setreg = a;
+				setregto = a+b-1;
+			}
+			break;
+		case OP_SELF:
+			setreg = a;
+			setregto = a+1;
+			loadreg = b;
+			if (a>b) {
+				intlocfrom = 0;
+				intlocto = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				loadreg2 = c;
+			}
+			break;
+		case OP_EQ:
+		case OP_LT:
+		case OP_LE:
+			if (!IS_CONSTANT(b)) {
+				loadreg = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				if (loadreg==-1) {
+					loadreg = c;
+				} else {
+					loadreg2 = c;
+				}
+			}
+			break;
+		case OP_TEST:
+			loadreg = a;
+			break;
+		case OP_TESTSET: 
+			setreg = a;
+			loadreg = b;
+			break;
+		case OP_SETLIST:
+			loadreg = a;
+			if (b==0) {
+				loadregto = f->maxstacksize;
+			} else {
+				loadregto = a+b;
+			}
+			break;
+		case OP_FORLOOP:
+			break;
+		case OP_TFORLOOP:
+			break;
+		case OP_FORPREP:
 			loadreg = a;
 			loadregto = a+2;
+			setreg = a;
+			setregto = a+3;
 			intlocfrom = a;
-			intlocto = a+c+2;
+			intlocto = a+3;
 			regassign[a] = pc;
 			regassign[a+1] = pc;
 			regassign[a+2] = pc;
-			regblock[a] = dest+1;
-			regblock[a+1] = dest+1;
-			regblock[a+2] = dest+1;
-			for (x=a+3;x<=a+c+2;x++) {
-				regassign[x] = pc+1;
-				regblock[x] = dest-1;
-			}
-		}
-		if (dest>pc) {
+			regassign[a+3] = pc+1;
+			regblock[a] = dest;
+			regblock[a+1] = dest;
+			regblock[a+2] = dest;
+			regblock[a+3] = dest-1;
 			block++;
 			blockend[block] = dest-1;
-		}
-		if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
-			blockend[block]--;
-		}
-		break;
-	case OP_CLOSE:
-	default:
-		break;
+			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
+				blockend[block]--;
+			}
+			break;
+		case OP_JMP:
+			if (GET_OPCODE(f->code[dest-1]) == OP_TFORLOOP) {
+				int a = GETARG_A(f->code[dest-1]);
+				int c = GETARG_C(f->code[dest-1]);
+				setreg = a;
+				setregto = a+c+2;
+				loadreg = a;
+				loadregto = a+2;
+				intlocfrom = a;
+				intlocto = a+c+2;
+				regassign[a] = pc;
+				regassign[a+1] = pc;
+				regassign[a+2] = pc;
+				regblock[a] = dest+1;
+				regblock[a+1] = dest+1;
+				regblock[a+2] = dest+1;
+				for (x=a+3;x<=a+c+2;x++) {
+					regassign[x] = pc+1;
+					regblock[x] = dest-1;
+				}
+			}
+			if (dest>pc) {
+				block++;
+				blockend[block] = dest-1;
+			}
+			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
+				blockend[block]--;
+			}
+			break;
+		case OP_CLOSE:
+		default:
+			break;
 		}
 
 		for (i=1; i<=block; i++) {
@@ -443,7 +442,7 @@ int luaU_guess_locals(Proto * f, int main) {
 	// print out information
 	{
 		int length = 0;
-		struct llist* list = &list_begin;
+		llist* list = &list_begin;
 
 		while (list->next!=NULL) {
 			length++;

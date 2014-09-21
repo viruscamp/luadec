@@ -4,22 +4,38 @@ LIBDIR=..
 BINDIR=.
 
 CC= gcc
-CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
+CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" -DSTRING_LOCALE=$(STRING_LOCALE) $(INCS) $(MYCFLAGS)
 LDFLAGS= $(MYLDFLAGS)
 AR= ar rcu
 RANLIB= ranlib
 RM= rm -f
 LIBS= -lm $(MYLIBS)
 
-SRCVERSION=$(shell svnversion -n .)
+ifeq ($(wildcard /dev/null),)
+	DEV_NULL= NUL
+else
+	DEV_NULL= /dev/null
+endif
+
+SRCVERSION=UNKNOWN
+SVN_STATUS=$(shell svnversion -q -n . 1>&2 2>$(DEV_NULL); echo $$?)
+ifeq ($(SVN_STATUS),0)
+	SRCVERSION=$(shell svnversion -q -n .)
+endif
+GIT_STATUS=$(shell git log -n 1 --format=format:%h 1>&2 2>$(DEV_NULL); echo $$?)
+ifeq ($(GIT_STATUS),0)
+	SRCVERSION=$(shell git log -n 1 --format=format:%h)
+endif
+
+STRING_LOCALE= GBK
 MYCFLAGS=
 MYLDFLAGS=
 MYLIBS=
 MYOBJS=
 
 INCS= -I..
-OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o
-SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c
+OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o ast.o
+SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c ast.c
 
 T= luadec
 

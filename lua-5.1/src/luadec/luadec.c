@@ -18,59 +18,58 @@
 #include "disassemble.h"
 
 #ifndef SRCVERSION
-#include "srcversion.h"
+	#include "srcversion.h"
 #endif
 
 #ifndef LUA_DEBUG
-#define luaB_opentests(L)
+	#define luaB_opentests(L)
 #endif
 
 #ifndef PROGNAME
-#define PROGNAME	"LuaDec"	/* program name */
+	#define PROGNAME "LuaDec"	/* program name */
 #endif
 
-#define	OUTPUT		"luadec.out"	/* default output file */
+#define	OUTPUT "luadec.out"		/* default output file */
 
-#define VERSION "2.1"
+#define VERSION "2.2"
 
-static int debugging=0;			/* debug decompiler? */
+int debug=0;					/* debug decompiler? */
 static int functions=0;			/* dump functions separately? */
 static char* funcnumstr=NULL;
 static int printfuncnum=0;      /* print function nums? */
 static int dumping=1;			/* dump bytecodes? */
 static int stripping=0;			/* strip debug information? */
-static int disassemble=0;  /* disassemble? */
-int locals=0;			/* strip debug information? */
+static int disassemble=0;		/* disassemble? */
+int locals=0;					/* strip debug information? */
 int localdeclare[255][255];
 int functionnum;
-int disnested=0;            /* don't decompile nested functions? */
-int func_check=0;            /* compile decompiled function and compare */
+int disnested=0;				/* don't decompile nested functions? */
+int func_check=0;				/* compile decompiled function and compare */
 int guess_locals=1;
 lua_State* glstate;
 static int lds2=0;
 char* LDS2;
-static char Output[]={ OUTPUT };	/* default output file name */
-static const char* output=Output;	/* output file name */
+static char Output[]={ OUTPUT };		/* default output file name */
+static const char* output=Output;		/* output file name */
 static const char* progname=PROGNAME;	/* actual program name */
 
-static void fatal(const char* message)
-{
+static void fatal(const char* message) {
 	fprintf(stderr,"%s: %s\n",progname,message);
-	if (glstate) lua_close(glstate);
+	if (glstate) {
+		lua_close(glstate);
+	}
 	exit(EXIT_FAILURE);
 }
 
-static void usage(const char* message, const char* arg)
-{
-	if (message!=NULL)
-	{
+static void usage(const char* message, const char* arg) {
+	if (message!=NULL) {
 		fprintf(stderr,"%s: ",progname); fprintf(stderr,message,arg); fprintf(stderr,"\n");
 	}
 	fprintf(stderr,
-		"LuaDec " VERSION " r" SRCVERSION "\n"
+		"LuaDec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION "\n"
 		" Original by Hisham Muhammad (http://luadec.luaforge.net)\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
-		" by VirusCamp (http://code.google.com/p/luadec)\n"
+		" by VirusCamp (http://luadec.googlecode.com)\n"
 		"usage: %s [options] [filename].  Available options are:\n"
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"
@@ -96,8 +95,9 @@ int Inject(Proto * fp, int functionnum) {
 	int f,i,c,n,at;
 	char number[255];
 	for (f=0;f<2;f++) {
-		for (i=0;i<255;i++)
+		for (i=0;i<255;i++) {
 			localdeclare[f][i] = -1;
+		}
 	}
 	f = 0;
 	i = 0;
@@ -106,41 +106,41 @@ int Inject(Proto * fp, int functionnum) {
 	at = 0;
 	while (LDS2[c]!='\0') {
 		switch (LDS2[c]) {
-			case '-':
-				if (n!=0) {
-					if (f==functionnum) {
-						localdeclare[at][i] = atoi(number);
-					}
+		case '-':
+			if (n!=0) {
+				if (f==functionnum) {
+					localdeclare[at][i] = atoi(number);
 				}
-				at=1;
-				n=0;
-				break;
-			case ',':
-				if (n!=0) {
-					if (f==functionnum) {
-						localdeclare[at][i] = atoi(number);
-					}
+			}
+			at=1;
+			n=0;
+			break;
+		case ',':
+			if (n!=0) {
+				if (f==functionnum) {
+					localdeclare[at][i] = atoi(number);
 				}
-				i++;
-				n=0;
-				at=0;
-				break;
-			case ';':
-				if (n!=0) {
-					if (f==functionnum) {
-						localdeclare[at][i] = atoi(number);
-					}
+			}
+			i++;
+			n=0;
+			at=0;
+			break;
+		case ';':
+			if (n!=0) {
+				if (f==functionnum) {
+					localdeclare[at][i] = atoi(number);
 				}
-				i=0;
-				n=0;
-				at=0;
-				f++;
-				break;
-			default:
-				number[n] = LDS2[c];
-				n++;
-				number[n] = '\0';
-				break;
+			}
+			i=0;
+			n=0;
+			at=0;
+			f++;
+			break;
+		default:
+			number[n] = LDS2[c];
+			n++;
+			number[n] = '\0';
+			break;
 		}
 		c++;
 	}
@@ -149,7 +149,6 @@ int Inject(Proto * fp, int functionnum) {
 			localdeclare[at][i] = atoi(number);
 		}
 	}
-
 
 	fp->sizelocvars = 0;
 	for (i=0; i<255;i++) {
@@ -169,10 +168,10 @@ int Inject(Proto * fp, int functionnum) {
 		}
 	}
 
-
 	for (f=0;f<2;f++) {
-		for (i=0;i<255;i++)
+		for (i=0;i<255;i++) {
 			localdeclare[f][i] = -1;
+		}
 	}
 
 	return 1;
@@ -181,12 +180,13 @@ int Inject(Proto * fp, int functionnum) {
 int LocalsLoad(const char* text) {
 	int f,i,c,n;
 	char number[255];
-	if (text == NULL || *text == NULL) {
+	if (text == NULL || *text == '\0') {
 		return 0;
 	}
 	for (f=0;f<255;f++) {
-		for (i=0;i<255;i++)
+		for (i=0;i<255;i++) {
 			localdeclare[f][i] = -1;
+		}
 	}
 	f = 0;
 	i = 0;
@@ -194,26 +194,26 @@ int LocalsLoad(const char* text) {
 	n = 0;
 	while (text[c]!='\0') {
 		switch (text[c]) {
-			case ',':
-				if (n!=0) {
-					localdeclare[f][i] = atoi(number);
-				}
-				i++;
-				n=0;
-				break;
-			case ';':
-				if (n!=0) {
-					localdeclare[f][i] = atoi(number);
-				}
-				i=0;
-				n=0;
-				f++;
-				break;
-			default:
-				number[n] = text[c];
-				n++;
-				number[n] = '\0';
-				break;
+		case ',':
+			if (n!=0) {
+				localdeclare[f][i] = atoi(number);
+			}
+			i++;
+			n=0;
+			break;
+		case ';':
+			if (n!=0) {
+				localdeclare[f][i] = atoi(number);
+			}
+			i=0;
+			n=0;
+			f++;
+			break;
+		default:
+			number[n] = text[c];
+			n++;
+			number[n] = '\0';
+			break;
 		}
 		c++;
 	}
@@ -224,16 +224,13 @@ int LocalsLoad(const char* text) {
 	return 1;
 }
 
-static int doargs(int argc, char* argv[])
-{
+static int doargs(int argc, char* argv[]) {
 	int i;
 	if (argv[0]!=NULL && *argv[0]!=0) progname=argv[0];
-	for (i=1; i<argc; i++)
-	{
+	for (i=1; i<argc; i++) {
 		if (*argv[i]!='-')			/* end of options; keep it */
 			break;
-		else if (IS("--"))			/* end of options; skip it */
-		{
+		else if (IS("--")) {		/* end of options; skip it */
 			++i;
 			break;
 		}
@@ -242,8 +239,8 @@ static int doargs(int argc, char* argv[])
 		else if (IS("-dis"))			/* list */
 			disassemble=1;
 		else if (IS("-d"))			/* list */
-			debugging=1;
-		else if (IS("-f"))	{		/* list */
+			debug=1;
+		else if (IS("-f")) {		/* list */
 			i++;
 			if (argv[i]==NULL || *argv[i]==0) {
 				usage("`-f' needs an argument",NULL);
@@ -251,7 +248,7 @@ static int doargs(int argc, char* argv[])
 				functions=atoi(argv[i]);
 			}
 		}
-		else if (IS("-nf")){
+		else if (IS("-nf")) {
 			i++;
 			if (argv[i]==NULL || *argv[i]==0) {
 				usage("`-nf' needs an argument",NULL);
@@ -263,7 +260,7 @@ static int doargs(int argc, char* argv[])
 			disnested=1;
 		else if (IS("-pn"))
 			printfuncnum=1;
-		else if (IS("-l"))	{		/* list */
+		else if (IS("-l")) {		/* list */
 			++i;
 			guess_locals = 0;
 			if (LocalsLoad(argv[i])==0) usage("`-l' needs argument",NULL);
@@ -280,8 +277,7 @@ static int doargs(int argc, char* argv[])
 		else if (IS("-a")) {
 			locals=1;
 		}
-		else if (IS("-o"))			/* output file */
-		{
+		else if (IS("-o")) {		/* output file */
 			output=argv[++i];
 			if (output==NULL || *output==0) usage("`-o' needs argument",NULL);
 		}
@@ -293,31 +289,28 @@ static int doargs(int argc, char* argv[])
 			guess_locals=0;
 		else if (IS("-s"))			/* strip debug information */
 			stripping=1;
-		else if (IS("-v"))			/* show version */
-		{
-			printf("LuaDec "VERSION"\n");
+		else if (IS("-v")) {		/* show version */
+			printf("LuaDec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION"\n");
 			if (argc==2) exit(EXIT_SUCCESS);
-		}else if (IS("-fc"))
-            func_check=1;
+		}
+		else if (IS("-fc"))
+			func_check=1;
 		else					/* unknown option */
 			usage("unrecognized option `%s'",argv[i]);
 	}
-	if (i==argc && (debugging || !dumping))
-	{
+	if (i==argc && (debug || !dumping))	{
 		dumping=0;
 		argv[--i]=Output;
 	}
 	return i;
 }
 
-static Proto* toproto(lua_State* L, int i)
-{
+static Proto* toproto(lua_State* L, int i) {
 	const Closure* c=(const Closure*)lua_topointer(L,i);
 	return c->l.p;
 }
 
-Proto* combine(lua_State* L, int n)
-{
+Proto* combine(lua_State* L, int n) {
 	if (n==1) {
 		int i;
 		Proto* f = toproto(L,-1);
@@ -328,9 +321,7 @@ Proto* combine(lua_State* L, int n)
 			}
 		}
 		return f;
-	}
-	else
-	{
+	} else {
 		int i,pc=0;
 		Proto* f=luaF_newproto(L);
 		f->source=luaS_newliteral(L,"=(" PROGNAME ")");
@@ -339,8 +330,7 @@ Proto* combine(lua_State* L, int n)
 		f->sizep=n;
 		f->sizecode=2*n+1;
 		f->code=luaM_newvector(L,f->sizecode,Instruction);
-		for (i=0; i<n; i++)
-		{
+		for (i=0; i<n; i++) {
 			f->p[i]=toproto(L,i-n);
 			f->code[pc++]=CREATE_ABx(OP_CLOSURE,0,i);
 			f->code[pc++]=CREATE_ABC(OP_CALL,0,1,1);
@@ -356,8 +346,7 @@ Proto* combine(lua_State* L, int n)
 	}
 }
 
-static void strip(lua_State* L, Proto* f)
-{
+static void strip(lua_State* L, Proto* f) {
 	int i,n=f->sizep;
 	luaM_freearray(L, f->lineinfo, f->sizelineinfo, int);
 	luaM_freearray(L, f->locvars, f->sizelocvars, struct LocVar);
@@ -366,12 +355,14 @@ static void strip(lua_State* L, Proto* f)
 	f->locvars=NULL;  f->sizelocvars=0;
 	f->upvalues=NULL; f->sizeupvalues=0;
 	f->source=luaS_newliteral(L,"=(none)");
-	for (i=0; i<n; i++) strip(L,f->p[i]);
+	for (i=0; i<n; i++) {
+		strip(L,f->p[i]);
+	}
 }
 
 int luaU_guess_locals(Proto * f, int main);
 
-void printFuncStructure(Proto * f, char* indent){
+void printFuncStructure(Proto * f, char* indent) {
 	int i;
 	char* newindent = (char*)calloc(strlen(indent)+10, sizeof(char));
 	for (i=0;i<f->sizep;i++) {
@@ -387,8 +378,7 @@ extern int gargc;
 extern char** gargv;
 #endif
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 	int oargc;
 	char** oargv;
 	char tmp[256];
@@ -402,19 +392,21 @@ int main(int argc, char* argv[])
 	oargc = argc;
 	oargv = argv;
 	LDS2 = NULL;
-	i=doargs(argc,argv);
-	argc-=i; argv+=i;
-	if (argc<=0) usage("no input files given",NULL);
-	L=lua_open();
+	i = doargs(argc,argv);
+	argc -= i;
+	argv += i;
+	if (argc<=0) {
+		usage("no input files given",NULL);
+	}
+	L = lua_open();
 	glstate = L;
 	luaB_opentests(L);
-	for (i=0; i<argc; i++)
-	{
+	for (i=0; i<argc; i++) {
 		const char* filename=IS("-") ? NULL : argv[i];
 		if (luaL_loadfile(L,filename)!=0) fatal(lua_tostring(L,-1));
 	}
-	f=combine(L,argc);
-	if (printfuncnum){
+	f = combine(L,argc);
+	if (printfuncnum) {
 		printf("%d\n",0);
 		printFuncStructure(f," ");
 		lua_close(L);
@@ -427,10 +419,10 @@ int main(int argc, char* argv[])
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION " r" SRCVERSION " from http://code.google.com/p/luadec\n");
+		printf("; Disassembled using luadec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION " from http://luadec.googlecode.com\n");
 		printf("; Command line: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION " r" SRCVERSION " from http://code.google.com/p/luadec\n");
+		printf("-- Decompiled using luadec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION " from http://luadec.googlecode.com\n");
 		printf("-- Command line: ");
 	}
 	for (i=1; i<oargc; i++) {
@@ -453,26 +445,26 @@ int main(int argc, char* argv[])
 		lua_close(L);
 		return 0;
 	}
-	if (funcnumstr){
-		luaU_decompileNestedFunctions(f, debugging, funcnumstr);
+	if (funcnumstr) {
+		luaU_decompileNestedFunctions(f, debug, funcnumstr);
 	}
 	else {
-	if (functions) {
-		if (disassemble) {
-			sprintf(tmp,"%d",functions);
-			luaU_disassemble(f,debugging,functions,tmp);
-		} else {
-			luaU_decompileFunctions(f, debugging, functions);
+		if (functions) {
+			if (disassemble) {
+				sprintf(tmp,"%d",functions);
+				luaU_disassemble(f,debug,functions,tmp);
+			} else {
+				luaU_decompileFunctions(f, debug, functions);
+			}
 		}
-	}
-	else {
-		if (disassemble) {
-			sprintf(tmp,"%s","");
-			luaU_disassemble(f,debugging,0,tmp);
-		} else {
-			luaU_decompile(f, debugging);
+		else {
+			if (disassemble) {
+				sprintf(tmp,"%s","");
+				luaU_disassemble(f,debug,0,tmp);
+			} else {
+				luaU_decompile(f, debug);
+			}
 		}
-	}
 	}
 	lua_close(L);
 	return 0;

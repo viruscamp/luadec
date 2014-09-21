@@ -1,6 +1,6 @@
-#ifndef _VERSION_H_
-#define _VERSION_H_
+#ifndef LUADEC_SRCVERSION_H
+#define LUADEC_SRCVERSION_H
 
 #define SRCVERSION "$WCREV$"
 
-#endif
+#endif // #ifndef LUADEC_SRCVERSION_H
