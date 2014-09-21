@@ -11,6 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\luadec\ast.h" />
     <ClInclude Include="..\src\luadec\common.h" />
     <ClInclude Include="..\src\luadec\decompile.h" />
     <ClInclude Include="..\src\luadec\disassemble.h" />
@@ -20,6 +21,7 @@
     <ClInclude Include="..\src\luadec\structs.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\luadec\ast.c" />
     <ClCompile Include="..\src\luadec\decompile.c" />
     <ClCompile Include="..\src\luadec\disassemble.c" />
     <ClCompile Include="..\src\luadec\guess.c" />
@@ -83,7 +85,8 @@
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>"C:\Program Files\TortoiseSVN\bin\SubWCRev.exe" ..\src ..\src\luadec\srcversion.h.template ..\src\luadec\srcversion.h</Command>
+      <Command>cd ..\src\luadec
+cmd /c gen-git-srcversion.cmd</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -105,7 +108,8 @@
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>"C:\Program Files\TortoiseSVN\bin\SubWCRev.exe" ..\src ..\src\luadec\srcversion.h.template ..\src\luadec\srcversion.h</Command>
+      <Command>cd ..\src\luadec
+cmd /c gen-git-srcversion.cmd</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -36,8 +36,14 @@
     <ClInclude Include="..\src\luadec\disassemble.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\luadec\ast.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\luadec\ast.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\luadec\guess.c">
       <Filter>Sources</Filter>
     </ClCompile>
