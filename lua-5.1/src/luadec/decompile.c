@@ -105,33 +105,6 @@ int GetJmpAddr(Function* F, int addr) {
 void RawAddStatement(Function* F, StringBuffer* str);
 void DeclareLocal(Function* F, int ixx, const char* value);
 
-Statement* NewStatement(char* code, int line, int indent) {
-	Statement* self = (Statement*)calloc(1, sizeof(Statement));
-	self->super.prev = NULL;
-	self->super.next = NULL;
-	self->code = code;
-	self->line = line;
-	self->indent = indent;
-	return self;
-}
-
-void ClearStatement(Statement* self, void* dummy) {
-	free(self->code);
-}
-
-void DeleteStatement(Statement* self) {
-	ClearStatement(self, NULL);
-	free(self);
-}
-
-void PrintStatement(Statement* self, Function* F) {
-	int i;
-	for (i = 0; i < self->indent; i++) {
-		StringBuffer_add(F->decompiledCode, "  ");
-	}
-	StringBuffer_addPrintf(F->decompiledCode, "%s\n", self->code);
-}
-
 LoopItem* NewLoopItem(LoopType type, int prep, int start, int body, int end, int out){
 	LoopItem* self = (LoopItem*)calloc(1, sizeof(LoopItem));
 
@@ -2313,7 +2286,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 					AddAstStatement(F, forstmt);
 					F->currStmt = forstmt;
 					break;
-				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
+				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) { // WHY
 					int boola = GETARG_A(code[pc+1]);
 					char* test = NULL;
 					/* skip */
@@ -2328,7 +2301,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 					TRY(UnsetPending(F, boola));
 					TRY(AssignReg(F, boola, StringBuffer_getRef(str), 0, 0));
 					ignoreNext = 2;
-				} else if (GET_OPCODE(idest) == OP_LOADBOOL) {
+				} else if (GET_OPCODE(idest) == OP_LOADBOOL) { // WHY
 					/*
 					* constant boolean value
 					*/
@@ -2336,7 +2309,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 				} else if (sbc == 0) {
 					/* dummy jump -- ignore it */
 					break;
-				} else {
+				} else { // WHY
 					int nextpc = pc+1;
 					int nextsbc = sbc-1;
 					for (;;) {

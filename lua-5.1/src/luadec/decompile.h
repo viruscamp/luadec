@@ -16,15 +16,6 @@ struct BoolOp_ {
 	int dest;
 };
 
-typedef struct Statement_ Statement;
-struct Statement_ {
-	ListItem super;
-	char* code;
-	int line;
-	int indent;
-	int backpatch;
-};
-
 typedef enum LoopType_ LoopType;
 enum LoopType_ {
 	FUNC_ROOT,
