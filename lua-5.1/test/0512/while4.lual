@@ -1,0 +1,55 @@
+; This file has been disassembled using luadec 2.0 UNICODE by sztupy (http://winmo.sztupy.hu)
+; Command line was: -dis 0512\while4.lua 
+
+; Name:            
+; Defined at line: 0
+; #Upvalues:       0
+; #Parameters:     0
+; Is_vararg:       2
+; Max Stack Size:  2
+
+  0 [-]: CLOSURE   R0 0         ; R0 := closure(Function #1)
+  1 [-]: CLOSURE   R1 1         ; R1 := closure(Function #2)
+  2 [-]: RETURN    R0 1         ; return 
+
+
+; Function #1:
+;
+; Name:            
+; Defined at line: 1
+; #Upvalues:       0
+; #Parameters:     0
+; Is_vararg:       0
+; Max Stack Size:  5
+
+  0 [-]: GETGLOBAL R3 K0        ; R3 := print
+  1 [-]: MOVE      R4 R0        ; R4 := R0
+  2 [-]: CALL      R3 2 1       ; R3(R4)
+  3 [-]: LT        0 K1 R2      ; if 0 >= R2 then PC := 0
+  4 [-]: JMP       0            ; PC := 0
+  5 [-]: JMP       7            ; PC := 7
+  6 [-]: JMP       0            ; PC := 0
+  7 [-]: RETURN    R0 1         ; return 
+
+
+; Function #2:
+;
+; Name:            
+; Defined at line: 11
+; #Upvalues:       0
+; #Parameters:     0
+; Is_vararg:       0
+; Max Stack Size:  5
+
+  0 [-]: LT        0 K0 R0      ; if 0 >= R0 then PC := 9
+  1 [-]: JMP       9            ; PC := 9
+  2 [-]: GETGLOBAL R3 K1        ; R3 := print
+  3 [-]: MOVE      R4 R0        ; R4 := R0
+  4 [-]: CALL      R3 2 1       ; R3(R4)
+  5 [-]: LT        0 K0 R2      ; if 0 >= R2 then PC := 0
+  6 [-]: JMP       0            ; PC := 0
+  7 [-]: JMP       9            ; PC := 9
+  8 [-]: JMP       0            ; PC := 0
+  9 [-]: RETURN    R0 1         ; return 
+
+

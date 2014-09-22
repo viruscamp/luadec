@@ -1,0 +1,22 @@
+; This file has been disassembled using luadec 2.0 UNICODE by sztupy (http://winmo.sztupy.hu)
+; Command line was: -dis logic\if2.lua 
+
+; Name:            
+; Defined at line: 0
+; #Upvalues:       0
+; #Parameters:     0
+; Is_vararg:       2
+; Max Stack Size:  8
+
+  1 [-]: TEST      R0 0         ; if not R0 then PC := 10
+  2 [-]: JMP       10           ; PC := 10
+  3 [-]: TEST      R1 0         ; if not R1 then PC := 8
+  4 [-]: JMP       8            ; PC := 8
+  5 [-]: MOVE      R7 R3        ; R7 := R3
+  6 [-]: CALL      R7 1 1       ; R7()
+  7 [-]: JMP       10           ; PC := 10
+  8 [-]: MOVE      R7 R4        ; R7 := R4
+  9 [-]: CALL      R7 1 1       ; R7()
+ 10 [-]: RETURN    R0 1         ; return 
+
+

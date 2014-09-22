@@ -1,0 +1,29 @@
+; This file has been disassembled using luadec 2.0 UNICODE by sztupy (http://winmo.sztupy.hu)
+; Command line was: -dis 0512\while-error.lua 
+
+; Name:            
+; Defined at line: 0
+; #Upvalues:       0
+; #Parameters:     0
+; Is_vararg:       2
+; Max Stack Size:  4
+
+  0 [-]: LOADK     R0 K0        ; R0 := 0
+  1 [-]: LOADK     R1 K0        ; R1 := 0
+  2 [-]: LOADK     R2 K1        ; R2 := 1
+  3 [-]: LT        0 R0 K2      ; if R0 >= 30 then PC := 14
+  4 [-]: JMP       14           ; PC := 14
+  5 [-]: LT        0 R1 K3      ; if R1 >= 8 then PC := 9
+  6 [-]: JMP       9            ; PC := 9
+  7 [-]: ADD       R2 R2 K1     ; R2 := R2 + 1
+  8 [-]: JMP       5            ; PC := 5
+  9 [-]: LE        0 K3 R1      ; if 8 > R1 then PC := 3
+ 10 [-]: JMP       3            ; PC := 3
+ 11 [-]: ADD       R0 R0 K1     ; R0 := R0 + 1
+ 12 [-]: JMP       9            ; PC := 9
+ 13 [-]: JMP       3            ; PC := 3
+ 14 [-]: GETGLOBAL R3 K4        ; R3 := v
+ 15 [-]: RETURN    R3 2         ; return R3
+ 16 [-]: RETURN    R0 1         ; return 
+
+
