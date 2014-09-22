@@ -33,6 +33,8 @@
 
 #define VERSION "2.2"
 
+#define VERSION_STRING VERSION " " MACRO_STR(STRING_LOCALE) " R" SRCVERSION
+
 int debug=0;					/* debug decompiler? */
 static int functions=0;			/* dump functions separately? */
 static char* funcnumstr=NULL;
@@ -66,7 +68,7 @@ static void usage(const char* message, const char* arg) {
 		fprintf(stderr,"%s: ",progname); fprintf(stderr,message,arg); fprintf(stderr,"\n");
 	}
 	fprintf(stderr,
-		"LuaDec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION "\n"
+		"LuaDec " VERSION_STRING "\n"
 		" Original by Hisham Muhammad (http://luadec.luaforge.net)\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
 		" by VirusCamp (http://luadec.googlecode.com)\n"
@@ -290,7 +292,7 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("-s"))			/* strip debug information */
 			stripping=1;
 		else if (IS("-v")) {		/* show version */
-			printf("LuaDec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION"\n");
+			printf("LuaDec " VERSION_STRING "\n");
 			if (argc==2) exit(EXIT_SUCCESS);
 		}
 		else if (IS("-fc"))
@@ -419,10 +421,10 @@ int main(int argc, char* argv[]) {
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION " from http://luadec.googlecode.com\n");
+		printf("; Disassembled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
 		printf("; Command line: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION " " MACRO_STR(STRING_LOCALE) " r" SRCVERSION " from http://luadec.googlecode.com\n");
+		printf("-- Decompiled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
 		printf("-- Command line: ");
 	}
 	for (i=1; i<oargc; i++) {
