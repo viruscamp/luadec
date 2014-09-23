@@ -1308,12 +1308,7 @@ char* RegisterOrConstant(Function* F, int r) {
 	if (IS_CONSTANT(r)) {
 		return DecompileConstant(F->f, INDEXK(r));
 	} else {
-		char* copy;
-		const char* reg = GetR(F, r);
-		if (error)
-			return NULL;
-		copy = luadec_strdup(reg);
-		return copy;
+		return luadec_strdup(GetR(F, r));
 	}
 }
 
@@ -2286,13 +2281,18 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 					AddAstStatement(F, forstmt);
 					F->currStmt = forstmt;
 					break;
-				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) { // WHY
+				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
+					/*
+					* JMP 2
+					* ?as TESTSET and no JMP
+					* LOADBOOL
+					* ::jmp_target
+					*/
 					int boola = GETARG_A(code[pc+1]);
 					char* test = NULL;
 					/* skip */
-					char* ra = luadec_strdup(REGISTER(boola));
-					char* rb = luadec_strdup(ra);
-					AddToList(&(F->bools), (ListItem*)MakeBoolOp(ra, rb, OP_TESTSET, c, pc+3, dest));
+					const char* ra = REGISTER(boola);
+					AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(ra), OP_TESTSET, c, pc+3, dest));
 					F->testpending = a+1;
 					F->testjump = dest;
 					TRY(test = OutputBoolean(F, NULL, 1));
@@ -2304,6 +2304,10 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 				} else if (GET_OPCODE(idest) == OP_LOADBOOL) { // WHY
 					/*
 					* constant boolean value
+					* JMP 
+					* ....skipped , not decompiled
+					* ::jmp_target
+					* LOADBOOL
 					*/
 					pc = dest - 2;
 				} else if (sbc == 0) {
