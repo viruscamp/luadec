@@ -406,8 +406,8 @@ static void		mwMutexLock( void );
 static void		mwMutexUnlock( void );
 #endif
 
-int gargc = 0;
-char** gargv = NULL;
+extern int gargc;
+extern char** gargv;
 
 /***********************************************************************
 ** System functions

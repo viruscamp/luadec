@@ -36,7 +36,6 @@
 #define VERSION_STRING VERSION " " MACRO_STR(STRING_LOCALE) " R" SRCVERSION
 
 int debug=0;					/* debug decompiler? */
-static int functions=0;			/* dump functions separately? */
 static char* funcnumstr=NULL;
 static int printfuncnum=0;      /* print function nums? */
 static int dumping=1;			/* dump bytecodes? */
@@ -76,7 +75,6 @@ static void usage(const char* message, const char* arg) {
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"
 		"  -dis     don't decompile, just disassemble\n"
-		"  -f num   decompile only num-th function (0=main block)\n"
 		"  -nf num  decompile only specific nested function, use -pn option to get available num\n"
 		"  -dn      disable nested functions being decompiled\n"
 		"  -pn      print nested functions structure and exit\n"
@@ -242,20 +240,12 @@ static int doargs(int argc, char* argv[]) {
 			disassemble=1;
 		else if (IS("-d"))			/* list */
 			debug=1;
-		else if (IS("-f")) {		/* list */
-			i++;
-			if (argv[i]==NULL || *argv[i]==0) {
-				usage("`-f' needs an argument",NULL);
-			} else {
-				functions=atoi(argv[i]);
-			}
-		}
 		else if (IS("-nf")) {
 			i++;
 			if (argv[i]==NULL || *argv[i]==0) {
 				usage("`-nf' needs an argument",NULL);
 			} else {
-				funcnumstr=argv[i];
+				funcnumstr=strdup(argv[i]);
 			}
 		}
 		else if (IS("-dn"))
@@ -368,35 +358,40 @@ void printFuncStructure(Proto * f, char* indent) {
 	int i;
 	char* newindent = (char*)calloc(strlen(indent)+10, sizeof(char));
 	for (i=0;i<f->sizep;i++) {
-		printf("%s%d\n",indent,i+1);
-		sprintf(newindent," %s%d_",indent,i+1);
+		printf("%s%d\n",indent,i);
+		sprintf(newindent,"  %s%d_",indent,i);
 		printFuncStructure(f->p[i],newindent);
 	}
 	free(newindent);
 }
 
-#ifdef MEMWATCH
-extern int gargc;
-extern char** gargv;
-#endif
+int gargc = 0;
+char** gargv = NULL;
+int filename_argv_from = 0;
+
+int printFileNames(FILE* out) {
+	int i;
+	if (gargc > filename_argv_from) {
+		fprintf(out, "%s", gargv[filename_argv_from]);
+		for (i = filename_argv_from+1; i < gargc; i++) {
+			fprintf(out, " , %s", gargv[i]);
+		}
+	}
+	return gargc - filename_argv_from;
+}
 
 int main(int argc, char* argv[]) {
-	int oargc;
-	char** oargv;
 	char tmp[256];
 	lua_State* L;
 	Proto* f;
 	int i;
-#ifdef MEMWATCH
 	gargc = argc;
 	gargv = argv;
-#endif
-	oargc = argc;
-	oargv = argv;
 	LDS2 = NULL;
 	i = doargs(argc,argv);
 	argc -= i;
 	argv += i;
+	filename_argv_from = i;
 	if (argc<=0) {
 		usage("no input files given",NULL);
 	}
@@ -410,7 +405,7 @@ int main(int argc, char* argv[]) {
 	f = combine(L,argc);
 	if (printfuncnum) {
 		printf("%d\n",0);
-		printFuncStructure(f," ");
+		printFuncStructure(f,"  0_");
 		lua_close(L);
 		return 0;
 	}
@@ -427,8 +422,8 @@ int main(int argc, char* argv[]) {
 		printf("-- Decompiled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
 		printf("-- Command line: ");
 	}
-	for (i=1; i<oargc; i++) {
-		printf("%s ",oargv[i]);
+	for (i=1; i<gargc; i++) {
+		printf("%s ",gargv[i]);
 	}
 	printf("\n\n");
 	if (lds2) {
@@ -449,23 +444,12 @@ int main(int argc, char* argv[]) {
 	}
 	if (funcnumstr) {
 		luaU_decompileNestedFunctions(f, debug, funcnumstr);
-	}
-	else {
-		if (functions) {
-			if (disassemble) {
-				sprintf(tmp,"%d",functions);
-				luaU_disassemble(f,debug,functions,tmp);
-			} else {
-				luaU_decompileFunctions(f, debug, functions);
-			}
-		}
-		else {
-			if (disassemble) {
-				sprintf(tmp,"%s","");
-				luaU_disassemble(f,debug,0,tmp);
-			} else {
-				luaU_decompile(f, debug);
-			}
+	} else {
+		if (disassemble) {
+			sprintf(tmp,"%s","");
+			luaU_disassemble(f,debug,0,tmp);
+		} else {
+			luaU_decompile(f, debug);
 		}
 	}
 	lua_close(L);

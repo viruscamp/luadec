@@ -1034,6 +1034,8 @@ Function* NewFunction(const Proto* f) {
 	InitList(&(self->bools));
 
 	self->intspos = 0;
+
+	self->funcnumstr = NULL;
 	return self;
 }
 
@@ -1058,6 +1060,9 @@ void DeleteFunction(Function* self) {
 	DeleteLoopTree(self->loop_tree);
 	DeleteIntSet(self->do_opens);
 	DeleteIntSet(self->do_closes);
+	if (self->funcnumstr){
+		free(self->funcnumstr);
+	}
 	free(self);
 }
 
@@ -1152,6 +1157,18 @@ void ReleaseLocals(Function* F) {
 		if (F->f->locvars[i].endpc == F->pc) {
 			int r;
 			F->freeLocal--;
+			if (F->freeLocal < 0) {
+				F->freeLocal = 0;
+				fprintf(stderr, "freeLocal<0 in void ReleaseLocals(Function* F)\n");
+				fprintf(stderr, " at line %d in file %s\n", __LINE__, __FILE__);
+				fprintf(stderr, " for lua files: ");
+				printFileNames(stderr);
+				fprintf(stderr, "\n");
+				fprintf(stderr, " at lua function %s pc=%d\n\n", F->funcnumstr, F->pc);
+				fflush(stderr);
+				SET_ERROR(F, "freeLocal<0 in void ReleaseLocals(Function* F)");
+				return;
+			}
 			r = F->freeLocal;
 			//fprintf(stderr,"%d %d %d\n",i,r, F->pc);
 			if (!IS_VARIABLE(r)) {
@@ -1518,13 +1535,13 @@ void DeclarePendingLocals(Function* F) {
 }
 
 Proto* combine(lua_State* L, int n);
-char* ProcessCode(const Proto* f, int indent, int func_checking);
+
 
 int FunctionCheck(const Proto* f, int indent, StringBuffer* str) {
 	lua_State* L;
 	Proto* fnew;
 	int check_result;
-	char* decompiled = ProcessCode(f, indent, 1);
+	char* decompiled = ProcessCode(f, indent, 1, luadec_strdup("0"));
 	L = lua_open();
 	if (luaL_loadstring(L, decompiled) != 0) {
 		//TODO check fail compile fail
@@ -1616,7 +1633,7 @@ int isTestOpCode(OpCode op) {
 	return ( op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET );
 }
 
-char* ProcessCode(const Proto* f, int indent, int func_checking) {
+char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int i = 0;
 
 	int ignoreNext = 0;
@@ -1633,6 +1650,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 	LoopItem* next_child;
 
 	F = NewFunction(f);
+	F->funcnumstr = funcnumstr;
 	F->indent = indent;
 	F->pc = 0;
 	error = NULL;
@@ -1650,11 +1668,13 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 	}
 	F->freeLocal = f->numparams;
 
+	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
+
 	if ( f->sizeupvalues > 0) {
 		if ( func_checking == 1) {
 			StringBuffer_set(str, "local ");
 		} else {
-			StringBuffer_set(str, "-- upvalues: ");
+			StringBuffer_add(str, " , upvalues : ");
 		}
 		listUpvalues(F, str);
 	}
@@ -1669,9 +1689,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 			TRY(FunctionHeader(F));
 		} else {
 			TRY(FunctionHeader(F));
-			if (f->sizeupvalues > 0) {
-				TRY(RawAddStatement(F, str));
-			}
+			TRY(RawAddStatement(F, str));
 		}
 	}
 	StringBuffer_prune(str);
@@ -2288,6 +2306,14 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 					* LOADBOOL
 					* ::jmp_target
 					*/
+					fprintf(stderr, "processing OP_JMP to } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) { \n");
+					fprintf(stderr, " at line %d in file %s\n", __LINE__, __FILE__);
+					fprintf(stderr, " for lua files: ");
+					printFileNames(stderr);
+					fprintf(stderr, "\n");
+					fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
+					fflush(stderr);
+					
 					int boola = GETARG_A(code[pc+1]);
 					char* test = NULL;
 					/* skip */
@@ -2309,11 +2335,26 @@ char* ProcessCode(const Proto* f, int indent, int func_checking) {
 					* ::jmp_target
 					* LOADBOOL
 					*/
+					fprintf(stderr, "processing OP_JMP to } else if (GET_OPCODE(idest) == OP_LOADBOOL) { \n");
+					fprintf(stderr, " at line %d in file %s\n", __LINE__, __FILE__);
+					fprintf(stderr, " for lua files: ");
+					printFileNames(stderr);
+					fprintf(stderr, "\n");
+					fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
+					fflush(stderr);
 					pc = dest - 2;
 				} else if (sbc == 0) {
 					/* dummy jump -- ignore it */
 					break;
 				} else { // WHY
+					fprintf(stderr, "processing OP_JMP to } else { \n");
+					fprintf(stderr, " at line %d in file %s\n", __LINE__, __FILE__);
+					fprintf(stderr, " for lua files: ");
+					printFileNames(stderr);
+					fprintf(stderr, "\n");
+					fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
+					fflush(stderr);
+
 					int nextpc = pc+1;
 					int nextsbc = sbc-1;
 					for (;;) {
@@ -2706,8 +2747,10 @@ LOGIC_NEXT_JMP:
 				}else{
 					char* code = NULL;
 					StringBuffer_set(str, "function");
-					functionnum = c+1;
-					code = ProcessCode(f->p[c], F->indent, 0);
+					functionnum = c;
+					char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+					sprintf(newfuncnumstr, "%s_%d", funcnumstr, functionnum);
+					code = ProcessCode(f->p[c], F->indent, 0, newfuncnumstr);
 					StringBuffer_add(str, code);
 					free(code);
 					functionnum = cfnum;
@@ -2800,7 +2843,7 @@ void luaU_decompile(Proto* f, int dflag) {
 	debug = dflag;
 	functionnum = 0;
 	errorStr = StringBuffer_new(NULL);
-	code = ProcessCode(f, 0, 0);
+	code = ProcessCode(f, 0, 0, luadec_strdup("0"));
 	StringBuffer_delete(errorStr);
 	printf("%s\n", code);
 	free(code);
@@ -2822,24 +2865,20 @@ void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr) {
 	functionnum = 0;
 
 	c = atoi(startstr);
-	if (c < 0 || c > cf->sizep) {
+	if (c != 0) {
 		fprintf(stderr, "No such nested function num : %s , use -pn option to get available num.\n", funcnumstr);
 		return;
-	}
-	if (c > 0 && c <= cf->sizep) {
-		cf = cf->p[c-1];
-		functionnum = c;
 	}
 	endstr = strchr(startstr, '_');
 	startstr = endstr+1;
 
 	while (!(endstr == NULL)) {
 		c = atoi(startstr);
-		if (c < 1 || c > cf->sizep) {
+		if (c < 0 || c >= cf->sizep) {
 			fprintf(stderr, "No such nested function num : %s , use -pn option to get available num.\n", funcnumstr);
 			return;
 		}
-		cf = cf->p[c-1];
+		cf = cf->p[c];
 		endstr = strchr(startstr, '_');
 		startstr = endstr+1;
 	}
@@ -2864,51 +2903,11 @@ void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr) {
 
 	debug = dflag;
 	printf("DecompiledFunction_%s = function", funcnumstr);
-	errorStr = StringBuffer_new(NULL);
-	code = ProcessCode(cf, 0, 0);
-	StringBuffer_delete(errorStr);
-	printf("%send\n", code);
-	free(code);
-	fflush(stdout);
-	fflush(stderr);
-}
-
-void luaU_decompileFunctions(Proto* f, int dflag, int functions) {
-	int i, c = f->sizep;
-	char* code;
-
-	int uvn;
-	//int cfnum = functionnum;
-
-	if (functions > f->sizep) {
-		fprintf(stderr,"No such function num, function num is from %d to %d.\n", 0, f->sizep);
-		return;
+	if (cf == f) { // lua main function
+		printf("(...)\n");
 	}
-
-	c = functions - 1;
-	uvn = f->p[c]->nups;
-
-	/* determining upvalues */
-
-	// upvalue names = next n opcodes after CLOSURE
-
-	if (!f->p[c]->upvalues) {
-		f->p[c]->sizeupvalues = uvn;
-		f->p[c]->upvalues = luaM_newvector(glstate, uvn, TString*);
-		for (i=0; i<uvn; i++) {
-			char names[10];
-			sprintf(names, "l_%d_%d", 0, i);
-			f->p[c]->upvalues[i] = luaS_new(glstate, names);
-			printf("local l_%d_%d = nil\n", 0, i);
-		}
-	}
-
-	i = functions - 1;
-	debug = dflag;
-	printf("DecompiledFunction_%d = function", functions);
-	functionnum = i + 1;
 	errorStr = StringBuffer_new(NULL);
-	code = ProcessCode(f->p[i], 0, 0);
+	code = ProcessCode(cf, 0, 0, funcnumstr);
 	StringBuffer_delete(errorStr);
 	printf("%send\n", code);
 	free(code);

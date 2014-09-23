@@ -108,6 +108,8 @@ struct Function_ {
 	int intspos;
 	int intbegin[100];
 	int intend[100];
+
+	char* funcnumstr;
 };
 
 typedef struct DecTableItem_ DecTableItem;
@@ -182,7 +184,6 @@ enum IndexType_ {
 void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type);
 
 void luaU_decompile(Proto* f, int lflag);
-void luaU_decompileFunctions(Proto* f, int lflag, int functions);
 void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr);
 
 BoolOp* NewBoolOp();
@@ -193,5 +194,7 @@ void DeleteBoolOp(BoolOp* ptr);
 int listUpvalues(Function* F, StringBuffer* str);
 int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str);
 int FunctionCheck(const Proto* f, int indent, StringBuffer* str);
+
+char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumstr);
 
 #endif // #ifndef LUADEC_DECOMPILE_H
