@@ -197,4 +197,6 @@ int FunctionCheck(const Proto* f, int indent, StringBuffer* str);
 
 char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumstr);
 
+int printFileNames(FILE* out);
+
 #endif // #ifndef LUADEC_DECOMPILE_H

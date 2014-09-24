@@ -29,7 +29,7 @@
 #endif // #ifndef cast
 
 #ifndef NULL
-	#define NULL    ((void *)0)
+	#define NULL ((void *)0)
 #endif // #ifndef NULL
 
 #endif // #ifndef LUADEC_COMMON_H

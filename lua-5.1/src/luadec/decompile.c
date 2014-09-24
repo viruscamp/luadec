@@ -2313,7 +2313,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 					fprintf(stderr, "\n");
 					fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
 					fflush(stderr);
-					
+					{
 					int boola = GETARG_A(code[pc+1]);
 					char* test = NULL;
 					/* skip */
@@ -2327,6 +2327,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 					TRY(UnsetPending(F, boola));
 					TRY(AssignReg(F, boola, StringBuffer_getRef(str), 0, 0));
 					ignoreNext = 2;
+					}
 				} else if (GET_OPCODE(idest) == OP_LOADBOOL) { // WHY
 					/*
 					* constant boolean value
@@ -2354,7 +2355,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 					fprintf(stderr, "\n");
 					fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
 					fflush(stderr);
-
+					{
 					int nextpc = pc+1;
 					int nextsbc = sbc-1;
 					for (;;) {
@@ -2378,6 +2379,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 						pc = dest-2;
 					}
 					TRY(AddStatement(F, str));
+					}
 				}
 				break;
 			}
@@ -2746,11 +2748,11 @@ LOGIC_NEXT_JMP:
 					StringBuffer_printf(str, "_decompied_function_%d_",c+1);
 				}else{
 					char* code = NULL;
-					StringBuffer_set(str, "function");
-					functionnum = c;
 					char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+					functionnum = c;
 					sprintf(newfuncnumstr, "%s_%d", funcnumstr, functionnum);
 					code = ProcessCode(f->p[c], F->indent, 0, newfuncnumstr);
+					StringBuffer_set(str, "function");
 					StringBuffer_add(str, code);
 					free(code);
 					functionnum = cfnum;
