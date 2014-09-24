@@ -2302,7 +2302,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 					/*
 					* JMP 2
-					* ?as TESTSET and no JMP
+					* LOADBOOL skip next , must be this and cannot be excuted, will be treat as TESTSET
 					* LOADBOOL
 					* ::jmp_target
 					*/
