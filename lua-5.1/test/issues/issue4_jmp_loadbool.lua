@@ -1,18 +1,18 @@
--- or²Ù×÷·û£¬ ²»ÄÜÓÃ if ±íÊ¾£¬ ĞèÒªÖĞ¼ä±äÁ¿
+-- oræ“ä½œç¬¦ï¼Œ ä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
 function debug_or()
   local f,a,b
   fg = ((not a) or b)
   -- if (a) then x = b else x = true end; fg = x
 end
 
--- and²Ù×÷·û£¬²»ÄÜÓÃ if ±íÊ¾£¬ ĞèÒªÖĞ¼ä±äÁ¿
+-- andæ“ä½œç¬¦ï¼Œä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
 function debug_and_call()
   local f,a,b,c
   fg = ((a<b) and c)
   -- if (a<b) then x = c else x = false end; fg = x
 end
 
--- and²Ù×÷·û£¬¿ÉÒÔÓÃ if ±íÊ¾£¬ÒÑ·´±àÒë³É if£¬Õı³£ÎŞÊÓÁËÒ»Ìõ LOADBOOL
+-- andæ“ä½œç¬¦ï¼Œå¯ä»¥ç”¨ if è¡¨ç¤ºï¼Œå·²åç¼–è¯‘æˆ ifï¼Œæ­£å¸¸æ— è§†äº†ä¸€æ¡ LOADBOOL
 function debug_and_set()
   local f,a,b,c
   f = ((a<b) and c)
