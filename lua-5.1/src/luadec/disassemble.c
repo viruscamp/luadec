@@ -77,13 +77,13 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
 			if (b) {
 				if (c) {
-					sprintf(lend,"%c%d := true; PC := %d",CC(a),CV(a),pc+2);
+					sprintf(lend,"%c%d := true; goto %d",CC(a),CV(a),pc+2);
 				} else {
 					sprintf(lend,"%c%d := true",CC(a),CV(a));
 				}
 			} else {
 				if (c) {
-					sprintf(lend,"%c%d := false; PC := %d",CC(a),CV(a),pc+2);
+					sprintf(lend,"%c%d := false; goto %d",CC(a),CV(a),pc+2);
 				} else {
 					sprintf(lend,"%c%d := false",CC(a),CV(a));
 				}
@@ -230,9 +230,9 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			break;
 		case OP_JMP:
 			{
-				int dest = sbc + pc + 1;
-				sprintf(line, "%d",dest);
-				sprintf(lend, "PC := %d",dest);
+				int dest = pc + sbc + 1;
+				sprintf(line, "%d", sbc);
+				sprintf(lend, "PC += %d , goto %d", sbc, dest);
 			}
 			break;
 		case OP_EQ:
@@ -254,9 +254,9 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 					free(tmpconstant2);
 				}
 				if (a) {
-					sprintf(lend,"if %s %s %s then PC := %d else PC := %d",tmp,invopstr(o),tmp2,pc+2,dest);
+					sprintf(lend,"if %s %s %s then goto %d else goto %d",tmp,invopstr(o),tmp2,pc+2,dest);
 				} else {
-					sprintf(lend,"if %s %s %s then PC := %d else PC := %d",tmp,opstr(o),tmp2,pc+2,dest);
+					sprintf(lend,"if %s %s %s then goto %d else goto %d",tmp,opstr(o),tmp2,pc+2,dest);
 				}
 			}
 			break;
@@ -271,9 +271,9 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 					free(tmpconstant1);
 				}
 				if (c) {
-					sprintf(lend,"if not %s then PC := %d else PC := %d",tmp,pc+2,dest);
+					sprintf(lend,"if not %s then goto %d else goto %d",tmp,pc+2,dest);
 				} else {
-					sprintf(lend,"if %s then PC := %d else PC := %d",tmp,pc+2,dest);
+					sprintf(lend,"if %s then goto %d else goto %d",tmp,pc+2,dest);
 				}
 			}
 			break;
@@ -294,9 +294,9 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 					free(tmpconstant2);
 				}
 				if (c) {
-					sprintf(lend,"if %s then %s := %s ; PC := %d else PC := %d",tmp2,tmp,tmp2,pc+2,dest);
+					sprintf(lend,"if %s then %s := %s ; goto %d else goto %d",tmp2,tmp,tmp2,pc+2,dest);
 				} else {
-					sprintf(lend,"if not %s then %s := %s ; PC := %d else PC := %d",tmp2,tmp,tmp2,pc+2,dest);
+					sprintf(lend,"if not %s then %s := %s ; goto %d else goto %d",tmp2,tmp,tmp2,pc+2,dest);
 				}
 			}
 			break;
@@ -343,13 +343,13 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			break;
 		case OP_FORLOOP:
 			{
-				sprintf(line,"R%d %d",a,pc+sbc+1);
-				sprintf(lend,"R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
+				int dest = pc + sbc + 1;
+				sprintf(line, "R%d %d", a, sbc);
+				sprintf(lend, "R%d += R%d; if R%d <= R%d then R%d := R%d; PC += %d , goto %d end", a, a+2, a, a+1, a+3, a, sbc, dest);
 			}
 			break;
 		case OP_TFORLOOP:
 			{
-				//int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
 				sprintf(line,"R%d %d",a,c);
 				if (c>=1) {
 					sprintf(tmp2,"%s","");
@@ -362,13 +362,13 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 				} else {
 					sprintf(tmp2,"R%d to top := ",a);
 				}
-				sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
+				sprintf(lend,"%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else goto %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
 			}
 			break;
 		case OP_FORPREP:
 			{
-				sprintf(line,"R%d %d",a,pc+sbc+1);
-				sprintf(lend,"R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
+				sprintf(line,"R%d %d",a,sbc);
+				sprintf(lend,"R%d -= R%d; goto %d",a,a+2,pc+sbc+1);
 			}
 			break;
 		case OP_SETLIST:
