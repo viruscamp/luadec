@@ -44,7 +44,7 @@ static int disassemble=0;		/* disassemble? */
 int locals=0;					/* strip debug information? */
 int localdeclare[255][255];
 int functionnum;
-int disnested=0;				/* don't decompile nested functions? */
+int process_sub = 1;            /* process sub functions? */
 int func_check=0;				/* compile decompiled function and compare */
 int guess_locals=1;
 lua_State* glstate;
@@ -75,9 +75,9 @@ static void usage(const char* message, const char* arg) {
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"
 		"  -dis     don't decompile, just disassemble\n"
-		"  -nf num  decompile only specific nested function, use -pn option to get available num\n"
-		"  -dn      disable nested functions being decompiled\n"
-		"  -pn      print nested functions structure and exit\n"
+		"  -fn num  decompile only specific function, use -pn option to get available num\n"
+		"  -ns      donot process sub functions\n"
+		"  -pn      print all sub function numbers and exit\n"
 		"  -l LDS   declare locals as defined by LDS\n"
 		"  -l2 LDS2 declare locals as defined by LDS2\n"
 		"  -dg      disable built-in local guessing\n"
@@ -240,28 +240,28 @@ static int doargs(int argc, char* argv[]) {
 			disassemble=1;
 		else if (IS("-d"))			/* list */
 			debug=1;
-		else if (IS("-nf")) {
+		else if (IS("-fn")) {
 			i++;
 			if (argv[i]==NULL || *argv[i]==0) {
-				usage("`-nf' needs an argument",NULL);
+				usage("'-fn' needs an argument",NULL);
 			} else {
-				funcnumstr=strdup(argv[i]);
+				funcnumstr=argv[i];
 			}
 		}
-		else if (IS("-dn"))
-			disnested=1;
+		else if (IS("-ns"))
+			process_sub=0;
 		else if (IS("-pn"))
 			printfuncnum=1;
 		else if (IS("-l")) {		/* list */
 			++i;
 			guess_locals = 0;
-			if (LocalsLoad(argv[i])==0) usage("`-l' needs argument",NULL);
+			if (LocalsLoad(argv[i])==0) usage("'-l' needs argument",NULL);
 		}
 		else if (IS("-l2"))	{		/* list */
 			++i;
 			guess_locals = 0;
 			if (argv[i]==NULL || *argv[i]==0) {
-				usage("`-l2' needs an argument",NULL);
+				usage("'-l2' needs an argument",NULL);
 			} else {
 				LDS2=argv[i];
 			}
@@ -271,7 +271,7 @@ static int doargs(int argc, char* argv[]) {
 		}
 		else if (IS("-o")) {		/* output file */
 			output=argv[++i];
-			if (output==NULL || *output==0) usage("`-o' needs argument",NULL);
+			if (output==NULL || *output==0) usage("'-o' needs argument",NULL);
 		}
 		else if (IS("-p"))			/* parse only */
 			dumping=0;
@@ -288,7 +288,7 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("-fc"))
 			func_check=1;
 		else					/* unknown option */
-			usage("unrecognized option `%s'",argv[i]);
+			usage("unrecognized option '%s'",argv[i]);
 	}
 	if (i==argc && (debug || !dumping))	{
 		dumping=0;
@@ -381,7 +381,6 @@ int printFileNames(FILE* out) {
 }
 
 int main(int argc, char* argv[]) {
-	char tmp[256];
 	lua_State* L;
 	Proto* f;
 	int i;
@@ -443,11 +442,14 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 	if (funcnumstr) {
-		luaU_decompileNestedFunctions(f, debug, funcnumstr);
+		if (disassemble) {
+			luadec_disassembleSubFunction(f, debug, funcnumstr);
+		} else {
+			luaU_decompileSubFunction(f, debug, funcnumstr);
+		}
 	} else {
 		if (disassemble) {
-			sprintf(tmp,"%s","");
-			luaU_disassemble(f,debug,0,tmp);
+			luadec_disassemble(f, debug, "0");
 		} else {
 			luaU_decompile(f, debug);
 		}

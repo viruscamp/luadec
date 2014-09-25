@@ -28,8 +28,8 @@
 extern int locals;
 extern int localdeclare[255][255];
 extern int functionnum;
-extern int disnested;			/* don't decompile nested functions? */
-extern int func_check;           /* compile decompiled function and compare */
+extern int process_sub;           /* process sub functions? */
+extern int func_check;            /* compile decompiled function and compare */
 extern int guess_locals;
 extern lua_State* glstate;
 
@@ -2744,8 +2744,8 @@ LOGIC_NEXT_JMP:
 					StringBuffer_add(str, "end");
 					if (F->indent == 0)
 						StringBuffer_add(str, "\n");
-				}else if (disnested){
-					StringBuffer_printf(str, "_decompied_function_%d_",c+1);
+				}else if (!process_sub){
+					StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, c);
 				}else{
 					char* code = NULL;
 					char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
@@ -2853,36 +2853,45 @@ void luaU_decompile(Proto* f, int dflag) {
 	fflush(stderr);
 }
 
-void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr) {
-	int i, c = f->sizep;
-	char* code;
-
-	int uvn;
-	//int cfnum = functionnum;
-
+Proto* findSubFunction(Proto* f, const char* funcnumstr, char* realfuncnumstr) {
 	Proto* cf = f;
-	char* startstr = funcnumstr;
-	char* endstr;
+	const char* startstr = funcnumstr;
+	const char* endstr;
 
-	functionnum = 0;
-
-	c = atoi(startstr);
+	int c = atoi(startstr);
 	if (c != 0) {
-		fprintf(stderr, "No such nested function num : %s , use -pn option to get available num.\n", funcnumstr);
-		return;
+		return NULL;
 	}
 	endstr = strchr(startstr, '_');
-	startstr = endstr+1;
+	startstr = endstr + 1;
+	sprintf(realfuncnumstr, "0");
+	functionnum = 0;
 
 	while (!(endstr == NULL)) {
 		c = atoi(startstr);
 		if (c < 0 || c >= cf->sizep) {
-			fprintf(stderr, "No such nested function num : %s , use -pn option to get available num.\n", funcnumstr);
-			return;
+			return NULL;
 		}
 		cf = cf->p[c];
 		endstr = strchr(startstr, '_');
-		startstr = endstr+1;
+		startstr = endstr + 1;
+		sprintf(realfuncnumstr + strlen(realfuncnumstr), "_%d", c);
+		functionnum = c + 1;
+	}
+	return cf;
+}
+
+void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
+	int i, c = f->sizep;
+	char* code;
+	int uvn;
+	char* realfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+
+	Proto* cf = findSubFunction(f, funcnumstr, realfuncnumstr);
+	if (cf == NULL) {
+		fprintf(stderr, "No such sub function num : %s , use -pn option to get available num.\n", funcnumstr);
+		free(realfuncnumstr);
+		return;
 	}
 
 	uvn = cf->nups;
@@ -2904,12 +2913,12 @@ void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr) {
 	}
 
 	debug = dflag;
-	printf("DecompiledFunction_%s = function", funcnumstr);
+	printf("DecompiledFunction_%s = function", realfuncnumstr);
 	if (cf == f) { // lua main function
 		printf("(...)\n");
 	}
 	errorStr = StringBuffer_new(NULL);
-	code = ProcessCode(cf, 0, 0, funcnumstr);
+	code = ProcessCode(cf, 0, 0, realfuncnumstr);
 	StringBuffer_delete(errorStr);
 	printf("%send\n", code);
 	free(code);

@@ -17,18 +17,32 @@
 #include "proto.h"
 #include "disassemble.h"
 
-void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
+extern int process_sub;           /* process sub functions? */
+
+Proto* findSubFunction(Proto* f, const char* funcnumstr, char* realfuncnumstr);
+
+void luadec_disassembleSubFunction(Proto* f, int dflag, const char* funcnumstr) {
+	char* realfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+	Proto* cf = findSubFunction(f, funcnumstr, realfuncnumstr);
+	if (cf == NULL) {
+		fprintf(stderr, "No such sub function num : %s , use -pn option to get available num.\n", funcnumstr);
+		free(realfuncnumstr);
+		return;
+	}
+	luadec_disassemble(cf, dflag, realfuncnumstr);
+	free(realfuncnumstr);
+}
+
+void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	char tmp[MAXCONSTSIZE+128];
 	char tmp2[MAXCONSTSIZE+128];
 	char* tmpconstant1 = NULL;
 	char* tmpconstant2 = NULL;
 	Proto* f = fwork;
 	int pc,l;
-	if (functions!=0) {
-		f = fwork->p[functions-1];
-	}
+	int name_len = name ? strlen(name) : 0;
 
-	printf("; Name:            %s\n", "");
+	printf("; Function:        %s\n", name);
 	printf("; Defined at line: %d\n", f->linedefined);
 	printf("; #Upvalues:       %d\n", f->nups);
 	printf("; #Parameters:     %d\n", f->numparams);
@@ -380,10 +394,10 @@ void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
 			break;
 		case OP_CLOSURE:
 			sprintf(line,"R%d %d",a,bc);
-			if (strlen(name)==0) {
-				sprintf(lend,"R%d := closure(Function #%d)",a,bc+1);
+			if (name_len>0) {
+				sprintf(lend, "R%d := closure(Function #%s_%d)", a, name, bc);
 			} else {
-				sprintf(lend,"R%d := closure(Function #%s_%d)",a,name,bc+1);
+				sprintf(lend, "R%d := closure(Function #%d)", a, bc);
 			}
 			break;
 		default:
@@ -392,17 +406,16 @@ void luaU_disassemble(Proto* fwork, int dflag, int functions, char* name) {
 		printf("%5d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,lend);
 	}
 	printf("\n\n");
-	if (f->sizep !=0) {
+	if (process_sub && f->sizep != 0) {
+		char* subname = (char*)calloc(name_len + 10, sizeof(char));
 		for (pc=0; pc < f->sizep; pc++) {
-			char n[256];
-			if (strlen(name)==0) {
-				sprintf(n,"%d",pc + 1);
+			if (name_len > 0){
+				sprintf(subname, "%s_%d", name, pc);
 			} else {
-				sprintf(n,"%s_%d",name,pc + 1);
+				sprintf(subname, "%d", pc);
 			}
-			printf("; Function #%s:\n",n);
-			printf(";\n");
-			luaU_disassemble(f->p[pc],dflag,0,n);
+			luadec_disassemble(f->p[pc], dflag, subname);
 		}
+		free(subname);
 	}
 }

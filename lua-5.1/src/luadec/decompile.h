@@ -184,7 +184,7 @@ enum IndexType_ {
 void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type);
 
 void luaU_decompile(Proto* f, int lflag);
-void luaU_decompileNestedFunctions(Proto* f, int dflag, char* funcnumstr);
+void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr);
 
 BoolOp* NewBoolOp();
 BoolOp* MakeBoolOp(char* op1, char* op2, OpCode op, int neg, int pc, int dest);
