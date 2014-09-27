@@ -13,6 +13,8 @@ struct StringBuffer_ {
 	int usedSize;
 };
 
+StringBuffer* StringBuffer_newBySize(int size);
+
 StringBuffer* StringBuffer_new(const char* data);
 
 void StringBuffer_delete(StringBuffer* self);

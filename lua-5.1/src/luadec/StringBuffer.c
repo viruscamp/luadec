@@ -13,6 +13,14 @@
 
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+StringBuffer* StringBuffer_newBySize(int size) {
+	StringBuffer* self = (StringBuffer*)calloc(1, sizeof(StringBuffer));
+	self->bufferSize = MAX(STRINGBUFFER_BLOCK, size + 1);
+	self->buffer = (char*)calloc(self->bufferSize, sizeof(char));
+	self->usedSize = 0;
+	return self;
+}
+
 StringBuffer* StringBuffer_new(const char* data) {
 	StringBuffer* self = (StringBuffer*) calloc(1, sizeof(StringBuffer));
 	if (data != NULL) {
