@@ -8,6 +8,7 @@ extern int debug;
 
 static const char* stmttype[22] = {
 	"SIMPLE_STMT",
+	"FUNCTION_STMT",
 	"BLOCK_STMT",
 	"WHILE_STMT",
 	"REPEAT_STMT",
@@ -26,7 +27,8 @@ void PrintIndent(StringBuffer* buff, int indent) {
 	}
 }
 
-void PrintAstSub(List* sub, StringBuffer* buff, int indent) {
+void PrintAstSub(AstStatement* blockstmt, StringBuffer* buff, int indent) {
+	List* sub = blockstmt->sub;
 	ListItem* walk;
 	if (sub == NULL) {
 		return;
@@ -34,6 +36,7 @@ void PrintAstSub(List* sub, StringBuffer* buff, int indent) {
 	walk = sub->head;
 	while (walk) {
 		PrintAstStatement(cast(AstStatement*, walk), buff, indent);
+		blockstmt->sub_print_count ++;
 		walk = walk->next;
 	}
 }
@@ -46,32 +49,19 @@ AstStatement* MakeSimpleStatement(char* code) {
 	return stmt;
 }
 
-AstStatement* MakeBlockStatement() {
-	AstStatement* stmt = (AstStatement*)calloc(1, sizeof(AstStatement));
-	stmt->type = BLOCK_STMT;
-	stmt->code = NULL;
-	stmt->sub = NewList();
-	return stmt;
-}
-
-AstStatement* MakeLoopStatement(StatementType type, char* test) {
+AstStatement* MakeBlockStatement(StatementType type, char* code) {
 	AstStatement* stmt = (AstStatement*)calloc(1, sizeof(AstStatement));
 	stmt->type = type;
-	stmt->code = test;
+	stmt->code = code;
 	stmt->sub = NewList();
+	stmt->sub_print_count = 0;
 	return stmt;
 }
 
 AstStatement* MakeIfStatement(char* test) {
-	AstStatement* ifstmt = (AstStatement*)calloc(1, sizeof(AstStatement));
-
-	ifstmt->type = IF_STMT;
-	ifstmt->code = test;
-	ifstmt->sub = NewList();
-
-	AddToStatement(ifstmt, MakeLoopStatement(IF_THEN_STMT, NULL));
-	AddToStatement(ifstmt, MakeLoopStatement(IF_ELSE_STMT, NULL));
-
+	AstStatement* ifstmt = MakeBlockStatement(IF_STMT, test);
+	AddToStatement(ifstmt, MakeBlockStatement(IF_THEN_STMT, NULL));
+	AddToStatement(ifstmt, MakeBlockStatement(IF_ELSE_STMT, NULL));
 	return ifstmt;
 }
 
@@ -81,13 +71,16 @@ void ClearAstStatement(AstStatement* stmt, void* dummy) {
 	}
 	stmt->type = SIMPLE_STMT;
 	stmt->line = 0;
-	free(stmt->code);
-	stmt->code = NULL;
+	if (stmt->code) {
+		free(stmt->code);
+		stmt->code = NULL;
+	}
 	if (stmt->sub) {
 		ClearList(stmt->sub, (ListItemFn)ClearAstStatement);
 		free(stmt->sub);
 		stmt->sub = NULL;
 	}
+	stmt->sub_print_count = 0;
 }
 
 void DeleteAstStatement(AstStatement* stmt) {
@@ -96,16 +89,28 @@ void DeleteAstStatement(AstStatement* stmt) {
 }
 
 void PrintSimpleStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
+	// not the first statement of the block , and start with '('
+	if (stmt->parent->sub_print_count > 0 && stmt->code[0] == '(') {
+		PrintIndent(buff, indent);
+		StringBuffer_addPrintf(buff, ";\n");
+	}
 	PrintIndent(buff, indent);
 	StringBuffer_addPrintf(buff, "%s\n", stmt->code);
+	if (strncmp("--", stmt->code, 2) == 0) {
+		stmt->parent->sub_print_count--;
+	}
 }
 
-void PrintLoopStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
+void PrintBlockStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 	StringBuffer* startCode = StringBuffer_new(NULL);
 	StringBuffer* endCode = StringBuffer_new(NULL);
 	switch (stmt->type) {
 	case BLOCK_STMT:
 		StringBuffer_printf(startCode, "do");
+		StringBuffer_printf(endCode, "end");
+		break;
+	case FUNCTION_STMT:
+		StringBuffer_printf(startCode, "function(%s)", stmt->code);
 		StringBuffer_printf(endCode, "end");
 		break;
 	case WHILE_STMT:
@@ -131,7 +136,7 @@ void PrintLoopStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 	}
 	PrintIndent(buff, indent);
 	StringBuffer_addPrintf(buff, "%s\n", StringBuffer_getRef(startCode));
-	PrintAstSub(stmt->sub, buff, indent + 1);
+	PrintAstSub(stmt, buff, indent + 1);
 	PrintIndent(buff, indent);
 	StringBuffer_addPrintf(buff, "%s\n", StringBuffer_getRef(endCode));
 PrintLoopStatement_ERROR_HANDLER:
@@ -158,7 +163,7 @@ void PrintIfStatement(AstStatement* stmt, StringBuffer* buff, int indent, int el
 		StringBuffer_addPrintf(buff, "-- AstStatement type=IF_THEN_STMT line=%d size=%d\n",
 			thenstmt->line, thensub->size);
 	}
-	PrintAstSub(thensub, buff, indent + 1);
+	PrintAstSub(thenstmt, buff, indent + 1);
 	if (elsesize == 0) {
 		PrintIndent(buff, indent);
 		StringBuffer_add(buff, "end\n");
@@ -172,7 +177,7 @@ void PrintIfStatement(AstStatement* stmt, StringBuffer* buff, int indent, int el
 			StringBuffer_addPrintf(buff, "-- AstStatement type=IF_ELSE_STMT line=%d size=%d\n",
 				elsestmt->line, elsesize);
 		}
-		PrintAstSub(elsesub, buff, indent + 1);
+		PrintAstSub(elsestmt, buff, indent + 1);
 		PrintIndent(buff, indent);
 		StringBuffer_add(buff, "end\n");
 	}
@@ -200,28 +205,17 @@ void PrintJmpDestStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 }
 
 void PrintAstStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
-	if (stmt == NULL) {
-		return;
-	}
-	if (debug) {
-		PrintIndent(buff, indent);
-		StringBuffer_addPrintf(buff, "-- AstStatement type=%s line=%d size=%d\n",
-			stmttype[stmt->type], stmt->line, (stmt->sub)?(stmt->sub->size):0);
-		/**
-		StringBuffer_addPrintf(buff, "-- stmt->type=%s stmt->line=%d stmt->sub->size=%d stmt=%08x stmt->code=%08x stmt->sub=%08x\n",
-			stmttype[stmt->type], stmt->line, (stmt->sub)?(stmt->sub->size):0, stmt, stmt->code, stmt->sub);
-		**/
-	}
 	switch (stmt->type) {
 	case SIMPLE_STMT:
 		PrintSimpleStatement(stmt, buff, indent);
 		break;
 	case BLOCK_STMT:
+	case FUNCTION_STMT:
 	case WHILE_STMT:
 	case REPEAT_STMT:
 	case FORLOOP_STMT:
 	case TFORLOOP_STMT:
-		PrintLoopStatement(stmt, buff, indent);
+		PrintBlockStatement(stmt, buff, indent);
 		break;
 	case IF_STMT:
 		PrintIfStatement(stmt, buff, indent, 0);

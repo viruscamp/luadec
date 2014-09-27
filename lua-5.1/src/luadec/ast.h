@@ -9,6 +9,7 @@
 typedef enum StatementType_ StatementType;
 enum StatementType_ {
 	SIMPLE_STMT,
+	FUNCTION_STMT,
 	BLOCK_STMT,
 	WHILE_STMT,
 	REPEAT_STMT,
@@ -28,11 +29,11 @@ struct AstStatement_ {
 	char* code;
 	List* sub;
 	int line;
+	int sub_print_count;
 };
 
 AstStatement* MakeSimpleStatement(char* code);
-AstStatement* MakeBlockStatement();
-AstStatement* MakeLoopStatement(StatementType type, char* test);
+AstStatement* MakeBlockStatement(StatementType type, char* code);
 AstStatement* MakeIfStatement(char* test);
 
 #define ThenStmt(ifstmt) cast(AstStatement*, (ifstmt)->sub->head)
@@ -43,9 +44,9 @@ AstStatement* MakeIfStatement(char* test);
 void ClearAstStatement(AstStatement* stmt, void* dummy);
 void DeleteAstStatement(AstStatement* stmt);
 
+void PrintIndent(StringBuffer* buff, int indent);
 void PrintAstStatement(AstStatement* stmt, StringBuffer* buff, int indent);
-
-void PrintAstSub(List* sub, StringBuffer* buff, int indent);
+void PrintAstSub(AstStatement* blockstmt, StringBuffer* buff, int indent);
 
 void AddToStatement(AstStatement* stmt, AstStatement* sub);
 

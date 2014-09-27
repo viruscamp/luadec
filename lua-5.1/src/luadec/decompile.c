@@ -584,7 +584,7 @@ void RawAddAstStatement(Function* F, AstStatement* stmt) {
 			//TODO check list.size
 			int blockSize = block->sub->size;
 
-			AstStatement* dostmt = MakeBlockStatement();
+			AstStatement* dostmt = MakeBlockStatement(BLOCK_STMT, NULL);
 			dostmt->line = lpc;
 
 			while (curr) {
@@ -613,7 +613,7 @@ void FlushWhile1(Function* F) {
 	StringBuffer* str = StringBuffer_new(NULL);
 
 	if (walk->type == WHILE && walk->start <= F->pc && walk->body == -1) {
-		AstStatement* whilestmt = MakeLoopStatement(WHILE_STMT, strdup("1"));
+		AstStatement* whilestmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
 		RawAddAstStatement(F, whilestmt);
 		F->currStmt = whilestmt;
 		walk->body = walk->start;
@@ -651,7 +651,7 @@ void FlushBoolean(Function* F) {
 		}
 
 		if (flushWhile){
-			AstStatement* whilestmt = MakeLoopStatement(WHILE_STMT, test);
+			AstStatement* whilestmt = MakeBlockStatement(WHILE_STMT, test);
 			test = NULL;
 			RawAddAstStatement(F, whilestmt);
 			F->currStmt = whilestmt;
@@ -1021,7 +1021,7 @@ Function* NewFunction(const Proto* f) {
 	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
-	self->funcBlock = MakeBlockStatement();
+	self->funcBlock = MakeBlockStatement(FUNCTION_STMT, NULL);
 	self->currStmt = self->funcBlock;
 
 	InitList(&(self->breaks));
@@ -1310,12 +1310,21 @@ void PrintFunctionCheck(Function* F) {
 }
 
 char* PrintFunction(Function* F) {
-	char* result;
+	StringBuffer* buff = F->decompiledCode;
+	int indent = F->indent;
 	PrintFunctionCheck(F);
-	StringBuffer_prune(F->decompiledCode);
-	PrintAstSub(F->funcBlock->sub, F->decompiledCode, 0);
-	result = StringBuffer_getBuffer(F->decompiledCode);
-	return result;
+	StringBuffer_prune(buff);
+
+	if (IsMain(F->f)) {
+		PrintAstSub(F->funcBlock, buff, 0);
+	} else {
+		StringBuffer_addPrintf(buff, "function(%s)\n", F->funcBlock->code);
+		PrintAstSub(F->funcBlock, buff, indent+1);
+		PrintIndent(buff, indent);
+		StringBuffer_add(buff, "end\n");
+	}
+
+	return StringBuffer_getBuffer(F->decompiledCode);
 }
 
 /*
@@ -1427,30 +1436,24 @@ void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
 }
 
 void FunctionHeader(Function* F) {
-	int saveIndent = F->indent;
 	const Proto* f = F->f;
 	StringBuffer* str = StringBuffer_new(NULL);
-	F->indent = 0;
 	if (f->numparams > 0) {
 		int i = 0;
-		StringBuffer_printf(str, "function(%s", LOCAL(i));
+		StringBuffer_set(str, LOCAL(i));
 		for (i = 1; i < f->numparams; i++){
 			StringBuffer_addPrintf(str, ", %s", LOCAL(i));
 		}
 		if (f->is_vararg) {
 			StringBuffer_add(str, ", ...");
 		}
-		StringBuffer_add(str, ")");
 	} else if (f->is_vararg) {
-		StringBuffer_set(str, "function(...)");
+		StringBuffer_set(str, "...");
 	} else {
-		StringBuffer_set(str, "function()");
+		StringBuffer_set(str, "");
 	}
-	RawAddStatement(F, str);
+	F->funcBlock->code = StringBuffer_getBuffer(str);
 	StringBuffer_delete(str);
-	if (error) return;
-
-	F->indent = saveIndent;
 }
 
 void ShowState(Function* F) {
@@ -1615,8 +1618,6 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcn
 	}
 
 	F->indent--;
-	StringBuffer_set(str, "end");
-	TRY(RawAddStatement(F, str));
 
 errorHandler:
 	output = PrintFunction(F);
@@ -1730,7 +1731,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 				jmpdest = cast(AstStatement*, jmpdest->super.prev);
 			}
 			if (jmpdest == NULL || jmpdest->line < dest) {
-				AstStatement* newjmpdest = MakeLoopStatement(JMP_DEST_STMT, NULL);
+				AstStatement* newjmpdest = MakeBlockStatement(JMP_DEST_STMT, NULL);
 				newjmpdest->line = dest;
 				AddAllAfterListItem(&(F->jmpdests), (ListItem*)jmpdest, (ListItem*)newjmpdest);
 				jmpdest = newjmpdest;
@@ -1857,7 +1858,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 		TRY(ReleaseLocals(F));
 
 		while (RemoveFromSet(F->do_opens, pc)) {
-			AstStatement* blockstmt = MakeBlockStatement();
+			AstStatement* blockstmt = MakeBlockStatement(BLOCK_STMT, NULL);
 			AddAstStatement(F, cast(AstStatement*, blockstmt));
 			F->currStmt = blockstmt;
 		}
@@ -1893,9 +1894,9 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 				AstStatement* loopstmt = NULL;
 				if (walk->type == WHILE) {
 					walk->body = walk->start;
-					loopstmt = MakeLoopStatement(WHILE_STMT, strdup("1"));
+					loopstmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
 				} else if (walk->type == REPEAT) {
-					loopstmt = MakeLoopStatement(REPEAT_STMT, NULL);
+					loopstmt = MakeBlockStatement(REPEAT_STMT, NULL);
 				}
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
@@ -1903,7 +1904,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 			}
 
 			if (walk->type == REPEAT) {
-				AstStatement* loopstmt = MakeLoopStatement(REPEAT_STMT, NULL);
+				AstStatement* loopstmt = MakeBlockStatement(REPEAT_STMT, NULL);
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
 			} else if (walk->type == WHILE) { 
@@ -1924,7 +1925,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 				** 	end
 				** end
 				*/
-				AstStatement* loopstmt = MakeLoopStatement(WHILE_STMT, strdup("1"));
+				AstStatement* loopstmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
 				walk->body = walk->start;
@@ -2288,7 +2289,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 
 					F->intbegin[F->intspos] = a;
 					F->intend[F->intspos] = a+2+c;
-					forstmt = MakeLoopStatement(TFORLOOP_STMT, StringBuffer_getBuffer(str));
+					forstmt = MakeBlockStatement(TFORLOOP_STMT, StringBuffer_getBuffer(str));
 					AddAstStatement(F, forstmt);
 					F->currStmt = forstmt;
 					break;
@@ -2681,7 +2682,7 @@ LOGIC_NEXT_JMP:
 				F->Rinternal[a + 3] = 1;
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+3;
-				forstmt = MakeLoopStatement(FORLOOP_STMT, StringBuffer_getBuffer(str));
+				forstmt = MakeBlockStatement(FORLOOP_STMT, StringBuffer_getBuffer(str));
 				AddAstStatement(F, forstmt);
 				F->currStmt = forstmt;
 				break;
@@ -2756,7 +2757,7 @@ LOGIC_NEXT_JMP:
 				break;
 			}
 		default:
-			StringBuffer_printf(str, "-- unhandled opcode? : %-9s\t\n", luaP_opnames[o]);
+			StringBuffer_printf(str, "-- unhandled opcode? : %-9s", luaP_opnames[o]);
 			TRY(AddStatement(F, str));
 			break;
 		}
@@ -2800,8 +2801,6 @@ LOGIC_NEXT_JMP:
 
 	if (!IsMain(f)) {
 		F->indent--;
-		StringBuffer_set(str, "end");
-		TRY(AddStatement(F, str));
 	}
 
 	output = PrintFunction(F);
@@ -2899,14 +2898,13 @@ void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
 	}
 
 	debug = dflag;
-	printf("DecompiledFunction_%s = function", realfuncnumstr);
-	if (cf == f) { // lua main function
-		printf("(...)\n");
+	if (!IsMain(cf)) {
+		printf("DecompiledFunction_%s = ", realfuncnumstr);
 	}
 	errorStr = StringBuffer_new(NULL);
 	code = ProcessCode(cf, 0, 0, realfuncnumstr);
 	StringBuffer_delete(errorStr);
-	printf("%send\n", code);
+	printf("%s\n", code);
 	free(code);
 	fflush(stdout);
 	fflush(stderr);
