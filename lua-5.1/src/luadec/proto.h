@@ -10,7 +10,7 @@
 #define IS_CONSTANT(r) (ISK(r))
 #define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
 #define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
-#define IsMain(f) (f->linedefined==0)
+#define IsMain(f) ((f)==glproto)
 
 #define CC(r) (IS_CONSTANT((r)) ? 'K' : 'R')
 #define CV(r) (IS_CONSTANT((r)) ? INDEXK(r) : r)

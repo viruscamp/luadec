@@ -32,6 +32,7 @@ extern int process_sub;           /* process sub functions? */
 extern int func_check;            /* compile decompiled function and compare */
 extern int guess_locals;
 extern lua_State* glstate;
+extern Proto* glproto;
 
 char* nilstr = "nil";
 char* unknown_local = "ERROR_unknown_local_Rxxxx";
@@ -1423,36 +1424,25 @@ void FunctionHeader(Function* F) {
 	StringBuffer* str = StringBuffer_new(NULL);
 	F->indent = 0;
 	if (f->numparams > 0) {
-		int i;
-		StringBuffer_addPrintf(str, "(");
-		for (i = 0; i < f->numparams - 1; i++){
-			StringBuffer_addPrintf(str, "%s, ", LOCAL(i));
-			//StringBuffer_addPrintf(str, "l_%d_%d, ", functionnum, i);
+		int i = 0;
+		StringBuffer_printf(str, "function(%s", LOCAL(i));
+		for (i = 1; i < f->numparams; i++){
+			StringBuffer_addPrintf(str, ", %s", LOCAL(i));
 		}
-		StringBuffer_addPrintf(str, "%s", LOCAL(i));
-		//StringBuffer_addPrintf(str, "l_%d_%d", functionnum, i);
 		if (f->is_vararg) {
 			StringBuffer_add(str, ", ...");
 		}
-		StringBuffer_addPrintf(str, ")");
-		AddStatement(F, str);
-		if (error) return;
-		StringBuffer_prune(str);
-	} else if (!IsMain(f)) {
-		if (f->is_vararg) {
-			StringBuffer_add(str, "(...)");
-		} else {
-			StringBuffer_add(str, "()");
-		}
-		AddStatement(F, str);
-		if (error) return;
-		StringBuffer_prune(str);
+		StringBuffer_add(str, ")");
+	} else if (f->is_vararg) {
+		StringBuffer_set(str, "function(...)");
+	} else {
+		StringBuffer_set(str, "function()");
 	}
-	F->indent = saveIndent;
-	if (!IsMain(f)) {
-		F->indent++;
-	}
+	RawAddStatement(F, str);
 	StringBuffer_delete(str);
+	if (error) return;
+
+	F->indent = saveIndent;
 }
 
 void ShowState(Function* F) {
@@ -1580,7 +1570,7 @@ int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str) {
 	return diff;
 }
 
-char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent) {
+char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcnumstr) {
 	int i = 0;
 	int baseIndent = indent;
 	char* output = NULL;
@@ -1588,6 +1578,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent) {
 	Function* F = NewFunction(f);
 	F->loop_tree->indent = indent;
 	F->indent = indent;
+	F->funcnumstr = funcnumstr;
 	error = NULL;
 
 	/*
@@ -1603,13 +1594,21 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent) {
 	F->freeLocal = f->numparams;
 
 	TRY(FunctionHeader(F));
+	F->indent++;
+
+	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
+	TRY(RawAddStatement(F, str));
 
 	if (f->sizeupvalues > 0) {
-		StringBuffer_set(str, "_function_use_upvalues_as_params_(");
+		StringBuffer_set(str, "");
 		listUpvalues(F, str);
-		StringBuffer_add(str, ")");
+		StringBuffer_add(str, " = nil -- upvalues");
 		TRY(RawAddStatement(F, str));
 	}
+
+	F->indent--;
+	StringBuffer_set(str, "end");
+	TRY(RawAddStatement(F, str));
 
 errorHandler:
 	output = PrintFunction(F);
@@ -1620,12 +1619,10 @@ errorHandler:
 
 int listUpvalues(Function* F, StringBuffer* str) {
 	int i = 0;
-	for (i = 0; i < F->f->sizeupvalues - 1; i++) {
-		StringBuffer_add(str,UPVALUE(i));
-		StringBuffer_add(str," , ");
+	StringBuffer_add(str, UPVALUE(i));
+	for (i = 1; i < F->f->sizeupvalues; i++) {
+		StringBuffer_addPrintf(str, ", %s", UPVALUE(i));
 	}
-	i = F->f->sizeupvalues - 1;
-	StringBuffer_add(str,UPVALUE(i));
 	return F->f->sizeupvalues;
 }
 
@@ -1668,30 +1665,18 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 	}
 	F->freeLocal = f->numparams;
 
-	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
+	if (!IsMain(f)) {
+		TRY(FunctionHeader(F));
+		F->indent++;
+	}
 
-	if ( f->sizeupvalues > 0) {
-		if ( func_checking == 1) {
-			StringBuffer_set(str, "local ");
-		} else {
-			StringBuffer_add(str, " , upvalues : ");
-		}
+	// make function comment
+	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
+	if (f->sizeupvalues > 0) {
+		StringBuffer_add(str, " , upvalues : ");
 		listUpvalues(F, str);
 	}
-
-	if (!IsMain(f)) {
-		if (func_checking == 1) {
-			if (f->sizeupvalues > 0) {
-				TRY(RawAddStatement(F, str));
-			}
-			StringBuffer_set(str, "function _function_to_compare_");
-			TRY(RawAddStatement(F, str));
-			TRY(FunctionHeader(F));
-		} else {
-			TRY(FunctionHeader(F));
-			TRY(RawAddStatement(F, str));
-		}
-	}
+	TRY(RawAddStatement(F, str));
 	StringBuffer_prune(str);
 
 	if (func_check == 1 && func_checking == 0) {
@@ -2731,37 +2716,24 @@ LOGIC_NEXT_JMP:
 						}
 					}
 				}
-
 				/* upvalue determinition end */
+
 				if ( func_checking == 1){
-					StringBuffer_set(str, "function");
-					functionnum = c+1;
-					StringBuffer_add(str, PrintFunctionOnlyParamsAndUpvalues(f->p[c], F->indent));
-					functionnum = cfnum;
-					for (i = 0; i < F->indent; i++) {
-						StringBuffer_add(str, "  ");
-					}
-					StringBuffer_add(str, "end");
-					if (F->indent == 0)
-						StringBuffer_add(str, "\n");
+					char* code = NULL;
+					char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+					functionnum = c;
+					sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
+					code = PrintFunctionOnlyParamsAndUpvalues(f->p[c], F->indent, newfuncnumstr);
+					StringBuffer_setBuffer(str, code);
 				}else if (!process_sub){
 					StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, c);
 				}else{
 					char* code = NULL;
 					char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
 					functionnum = c;
-					sprintf(newfuncnumstr, "%s_%d", funcnumstr, functionnum);
+					sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
 					code = ProcessCode(f->p[c], F->indent, 0, newfuncnumstr);
-					StringBuffer_set(str, "function");
-					StringBuffer_add(str, code);
-					free(code);
-					functionnum = cfnum;
-					for (i = 0; i < F->indent; i++) {
-						StringBuffer_add(str, "  ");
-					}
-					StringBuffer_add(str, "end");
-					if (F->indent == 0)
-						StringBuffer_add(str, "\n");
+					StringBuffer_setBuffer(str, code);
 				}
 				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 				/* need to add upvalue handling */
@@ -2813,7 +2785,8 @@ LOGIC_NEXT_JMP:
 		}
 	}
 
-	if (!IsMain(f) && func_checking) {
+	if (!IsMain(f)) {
+		F->indent--;
 		StringBuffer_set(str, "end");
 		TRY(AddStatement(F, str));
 	}

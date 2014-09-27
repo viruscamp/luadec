@@ -13,7 +13,7 @@ struct StringBuffer_ {
 	int usedSize;
 };
 
-StringBuffer* StringBuffer_new(char* data);
+StringBuffer* StringBuffer_new(const char* data);
 
 void StringBuffer_delete(StringBuffer* self);
 
@@ -42,6 +42,8 @@ void StringBuffer_addPrintf(StringBuffer* self, char* format, ...) PRINTF_FUNCTI
 char* StringBuffer_getCopy(StringBuffer* self);
 
 char* StringBuffer_getBuffer(StringBuffer* self);
+
+StringBuffer* StringBuffer_setBuffer(StringBuffer* self, char* data);
 
 const char* StringBuffer_getRef(StringBuffer* self);
 

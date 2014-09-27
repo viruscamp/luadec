@@ -48,6 +48,7 @@ int process_sub = 1;            /* process sub functions? */
 int func_check=0;				/* compile decompiled function and compare */
 int guess_locals=1;
 lua_State* glstate;
+Proto* glproto;
 static int lds2=0;
 char* LDS2;
 static char Output[]={ OUTPUT };		/* default output file name */
@@ -402,6 +403,7 @@ int main(int argc, char* argv[]) {
 		if (luaL_loadfile(L,filename)!=0) fatal(lua_tostring(L,-1));
 	}
 	f = combine(L,argc);
+	glproto = f;
 	if (printfuncnum) {
 		printf("%d\n",0);
 		printFuncStructure(f,"  0_");
