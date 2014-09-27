@@ -14,6 +14,7 @@
 #include "lstring.h"
 #include "lundump.h"
 
+#include "proto.h"
 #include "decompile.h"
 #include "disassemble.h"
 
@@ -46,6 +47,7 @@ int localdeclare[255][255];
 int functionnum;
 int process_sub = 1;            /* process sub functions? */
 int func_check=0;				/* compile decompiled function and compare */
+int string_encoding=GBK;
 int guess_locals=1;
 lua_State* glstate;
 Proto* glproto;
@@ -86,6 +88,7 @@ static void usage(const char* message, const char* arg) {
 		"  -s       strip compiled code before decompiling\n"
 		"  -a       always declare all register as locals\n"
 		"  -fc      compile decompiled function and compare\n"
+		"  -se      output strings using selected encoding, available encodings are "ENCODINGS"\n"
 		"  --       stop handling options\n", progname);
 	exit(EXIT_FAILURE);
 }
@@ -286,9 +289,21 @@ static int doargs(int argc, char* argv[]) {
 			printf("LuaDec " VERSION_STRING "\n");
 			if (argc==2) exit(EXIT_SUCCESS);
 		}
-		else if (IS("-fc"))
-			func_check=1;
-		else					/* unknown option */
+		else if (IS("-fc")) {
+			func_check = 1;
+		}
+		else if (IS("-se")) {
+			++i;
+			if (argv[i] == NULL || *argv[i] == 0) {
+				usage("'-se' needs an argument", NULL);
+			} else {
+				string_encoding = getEncoding(argv[i]);
+				if (string_encoding == 0){
+					string_encoding = ASCII;
+					usage("'-se' unknown argument: %s, available encodings are "ENCODINGS, argv[i]);
+				}
+			}
+		} else					/* unknown option */
 			usage("unrecognized option '%s'",argv[i]);
 	}
 	if (i==argc && (debug || !dumping))	{

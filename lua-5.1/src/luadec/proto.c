@@ -27,6 +27,38 @@ const int priorities[22] = {
 	2, 5
 }; // Lua5.1 specific
 
+char* convertToUpper(const char* str){
+	char *newstr, *p;
+	p = newstr = strdup(str);
+	while (*p++ = toupper(*p));
+	return newstr;
+}
+
+int getEncoding(const char* enc) {
+	char* src = convertToUpper(enc);
+	if (strcmp(src, "ASCII") == 0) {
+		return ASCII;
+	}
+	if (strcmp(src, "GB2312") == 0) {
+		return GB2312;
+	}
+	if (strcmp(src, "GBK") == 0) {
+		return GBK;
+	}
+	if (strcmp(src, "GB18030") == 0) {
+		return GB18030;
+	}
+	if (strcmp(src, "BIG5") == 0) {
+		return BIG5;
+	}
+	if (strcmp(src, "UTF8") == 0) {
+		return UTF8;
+	}
+	free(src);
+	return 0;
+}
+
+
 int isUTF8(const unsigned char* buff, int size) {
 	int utf8length;
 	const unsigned char* currchr = buff;
@@ -63,13 +95,6 @@ int isUTF8(const unsigned char* buff, int size) {
 	}
 	return utf8length;
 }
-
-#define ASCII 437
-#define GB2312 20936
-#define GBK 936
-#define GB18030 54936
-#define BIG5 950
-#define UTF8 65001
 
 // PrintString from luac is not 8-bit clean
 char* DecompileString(const Proto* f, int n) {
@@ -124,26 +149,21 @@ char* DecompileString(const Proto* f, int n) {
 		default:
 			if (*s >= 0x20 && *s < 0x7F) {
 				ret[p++] = *s;
-#if STRING_LOCALE == GB2312
-			} else if ( i+1 < len
+			} else if ( string_encoding == GB2312 && i+1 < len
 				&& *s >= 0xA1 && *s <= 0xF7
 				&& *(s+1) >= 0xA1 && *(s+1) <= 0xFE
 				) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-#endif
-#if STRING_LOCALE == GBK || STRING_LOCALE == GB18030
-			} else if ( i+1 < len
+			} else if ( (string_encoding == GBK || string_encoding == GB18030) && i+1 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& *(s+1) >= 0x40 && *(s+1) <= 0xFE && *(s+1) != 0x7F
 				) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-#endif
-#if STRING_LOCALE == GB18030
-			} else if ( i+3 < len
+			} else if ( string_encoding == GB18030 && i+3 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& *(s+1) >= 0x30 && *(s+1) <= 0x39
 				&& *(s+2) >= 0x81 && *(s+2) <= 0xFE
@@ -156,25 +176,20 @@ char* DecompileString(const Proto* f, int n) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-#endif
-#if STRING_LOCALE == BIG5
-			} else if ( i+1 < len
+			} else if ( string_encoding == BIG5 && i+1 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& ((*(s+1) >= 0x40 && *(s+1) <= 0x7E) || (*(s+1) >= 0xA1 && *(s+1) <= 0xFE))
 				) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-#endif
-#if STRING_LOCALE == UTF8
-			} else if ((utf8length = isUTF8(s, len-i)) > 1) {
+			} else if (string_encoding == UTF8 && (utf8length = isUTF8(s, len-i)) > 1) {
 				int j;
 				ret[p++] = *s;
 				for (j = 0; j < utf8length-1; j++) {
 					i++; s++;
 					ret[p++] = *s;
 				}
-#endif
 			} else {
 				char* pos = &(ret[p]);
 				sprintf(pos, "\\%03d", *s);
