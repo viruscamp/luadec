@@ -1350,6 +1350,29 @@ const char* keywords[] = {
 	"while", "continue", "goto"
 };
 
+int isIdentifier(const char* src) {
+	int dot = 0;
+	if (luadec_isalpha(src[0]) || src[0] == '_') {
+		int i;
+		const char *at;
+		int len = strlen(src);
+		dot = 1;
+		for (at = src + 1; at < src + len; at++) {
+			if (!(luadec_isalnum(*at) || *at == '_')) {
+				dot = 0;
+				break;
+			}
+		}
+		for (i = 0; i < numofkeywords; i++){
+			if (strcmp(keywords[i], src) == 0){
+				dot = 0;
+				break;
+			}
+		}
+	}
+	return dot;
+}
+
 /*
 ** type: DOT=0,SELF=1,TABLE=2
 ** input and output
@@ -1359,43 +1382,28 @@ const char* keywords[] = {
 ** TABLE  a   [" a"}  ["not"]  [a]
 */
 void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
-	int len, dot, i;
+	int len, dot;
 	char lastchar;
 	char* rawrstr;
-	StringBuffer* rawrstrbuff;
+	StringBuffer* tmpstrbuff;
 
 	len = strlen(rstr);
 	lastchar = rstr[len - 1];
 	rstr[len - 1] = '\0';
-	rawrstrbuff = StringBuffer_new((rstr + 1));
-	rawrstr = StringBuffer_getBuffer(rawrstrbuff);
+	tmpstrbuff = StringBuffer_new((rstr + 1));
+	rawrstr = StringBuffer_getBuffer(tmpstrbuff);
 	rstr[len - 1] = lastchar;
 
-	dot = 0;
 	/*
 	* see if index can be expressed without quotes
 	*/
-	if (rstr[0] == '\"') {
-		if (luadec_isalpha(rstr[1]) || rstr[1] == '_') {
-			char *at;
-			dot = 1;
-			for (at = rstr + 1; at < rstr + len - 1; at++) {
-				if (!luadec_isalnum(*at) && *at != '_') {
-					dot = 0;
-					break;
-				}
-			}
-			for (i = 0; i < numofkeywords; i++){
-				if(strcmp(keywords[i],rawrstr) == 0){
-					dot = 0;
-					break;
-				}
-			}
-		}
+	dot = 0;
+	if (rstr[0] == '\"' && rstr[len-1] == '\"') {
+		dot = isIdentifier(rawrstr);
 	}
 	if (dot == 1) {
+		// type value DOT=0;SELF=1;TABLE=2;
 		switch (type) {
-			// type value DOT=0;SELF=1;TABLE=2;
 		case SELF:
 			StringBuffer_addPrintf(str, ":%s", rawrstr);
 			break;
@@ -1406,16 +1414,16 @@ void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
 			StringBuffer_addPrintf(str, "%s", rawrstr);
 			break;
 		}
-	} else{
+	} else {
 		StringBuffer_addPrintf(str, "[%s]", rstr);
 		if (type == SELF){
-			StringBuffer_printf(rawrstrbuff,"[%s] should be a SELF Operator",rstr);
-			SET_ERROR(F,StringBuffer_getRef(rawrstrbuff));
+			StringBuffer_printf(tmpstrbuff, "[%s] should be a SELF Operator", rstr);
+			SET_ERROR(F, StringBuffer_getRef(tmpstrbuff));
 		}
 	}
 
 	free(rawrstr);
-	StringBuffer_delete(rawrstrbuff);
+	StringBuffer_delete(tmpstrbuff);
 }
 
 void FunctionHeader(Function* F) {
@@ -2470,17 +2478,22 @@ LOGIC_NEXT_JMP:
 				self = 0;
 
 				if (b == 0) {
-
 					limit = a + 1;
 					while (PENDING(limit) || IS_VARIABLE(limit)) limit++;
-				} else
+				} else {
 					limit = a + b;
+				}
+				StringBuffer_prune(str);
 				if (o == OP_TAILCALL) {
 					StringBuffer_set(str, "return ");
 					ignoreNext = 1;
 				}
 				TRY(astr = GetR(F, a));
-				StringBuffer_addPrintf(str, "%s(", astr);
+				if (isIdentifier(astr)) {
+					StringBuffer_addPrintf(str, "%s(", astr);
+				} else {
+					StringBuffer_addPrintf(str, "(%s)(", astr);
+				}
 
 				{
 					const char* at = astr + strlen(astr) - 1;
