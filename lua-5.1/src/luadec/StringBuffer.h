@@ -41,12 +41,16 @@ void StringBuffer_printf(StringBuffer* self, char* format, ...) PRINTF_FUNCTION;
 
 void StringBuffer_addPrintf(StringBuffer* self, char* format, ...) PRINTF_FUNCTION;
 
+// get a copy of StringBuffer.buffer
 char* StringBuffer_getCopy(StringBuffer* self);
 
+// transfer the ownership of self->buffer to return, leave a empty StringBuffer
 char* StringBuffer_getBuffer(StringBuffer* self);
 
+// self will get the ownership of data
 StringBuffer* StringBuffer_setBuffer(StringBuffer* self, char* data);
 
+// return self->buffer , you shuold use it readonly
 const char* StringBuffer_getRef(StringBuffer* self);
 
 void StringBuffer_prune(StringBuffer* self);

@@ -43,18 +43,18 @@ StringBuffer* errorStr;
 * -------------------------------------------------------------------------
 */
 
-const char* getUpvalName(Function* F, int r) {
-	if (F->f->upvalues && r < F->f->sizeupvalues) {
-		return (char*)getstr(F->f->upvalues[r]);
+const char* getUpvalName(const Proto* f, int r) {
+	if (f->upvalues && r < f->sizeupvalues) {
+		return (char*)getstr(f->upvalues[r]);
 	} else {
 		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_R%d", r);
 		return unknown_upvalue;
 	}
 }
 
-const char* getLocalName(Function* F, int r) {
-	if (F->f->locvars && r < F->f->sizelocvars) {
-		return (char*)getstr(F->f->locvars[r].varname);
+const char* getLocalName(const Proto* f, int r) {
+	if (f->locvars && r < f->sizelocvars) {
+		return (char*)getstr(f->locvars[r].varname);
 	} else {
 		sprintf(unknown_local, "ERROR_unknown_local_R%d", r);
 		return unknown_local;
@@ -65,10 +65,10 @@ char* luadec_strdup(const char* src) {
 	return ((src) ? strdup(src) : NULL);
 }
 
-#define UPVALUE(r) (getUpvalName(F,r))
+#define UPVALUE(r) (getUpvalName(F->f,r))
 #define REGISTER(r) F->R[r]
 #define PRIORITY(r) (r>=MAXSTACK ? 0 : F->Rprio[r])
-#define LOCAL(r) (getLocalName(F,r))
+#define LOCAL(r) (getLocalName(F->f,r))
 #define LOCAL_STARTPC(r) F->f->locvars[r].startpc
 #define PENDING(r) F->Rpend[r]
 #define CALL(r) F->Rcall[r]
@@ -1612,7 +1612,7 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcn
 
 	if (f->sizeupvalues > 0) {
 		StringBuffer_set(str, "");
-		listUpvalues(F, str);
+		listUpvalues(F->f, str);
 		StringBuffer_add(str, " = nil -- upvalues");
 		TRY(RawAddStatement(F, str));
 	}
@@ -1626,13 +1626,13 @@ errorHandler:
 	return output;
 }
 
-int listUpvalues(Function* F, StringBuffer* str) {
+int listUpvalues(const Proto* f, StringBuffer* str) {
 	int i = 0;
-	StringBuffer_add(str, UPVALUE(i));
-	for (i = 1; i < F->f->sizeupvalues; i++) {
-		StringBuffer_addPrintf(str, ", %s", UPVALUE(i));
+	StringBuffer_add(str, getUpvalName(f, i));
+	for (i = 1; i < f->sizeupvalues; i++) {
+		StringBuffer_addPrintf(str, ", %s", getUpvalName(f, i));
 	}
-	return F->f->sizeupvalues;
+	return f->sizeupvalues;
 }
 
 int isTestOpCode(OpCode op) {
@@ -1683,7 +1683,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
 	if (f->sizeupvalues > 0) {
 		StringBuffer_add(str, " , upvalues : ");
-		listUpvalues(F, str);
+		listUpvalues(f, str);
 	}
 	TRY(RawAddStatement(F, str));
 	StringBuffer_prune(str);
@@ -2866,10 +2866,42 @@ Proto* findSubFunction(Proto* f, const char* funcnumstr, char* realfuncnumstr) {
 	return cf;
 }
 
-void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
-	int i, c = f->sizep;
+char* ProcessSubFunction(Proto* cf, int indent, int func_checking, char* funcnumstr) {
+	int i;
+	int uvn = cf->nups;
 	char* code;
-	int uvn;
+	StringBuffer* buff = StringBuffer_newBySize(128);
+
+	/* determining upvalues */
+
+	// upvalue names = next n opcodes after CLOSURE
+
+	if (!cf->upvalues) {
+		cf->sizeupvalues = uvn;
+		cf->upvalues = luaM_newvector(glstate, uvn, TString*);
+
+		for (i = 0; i<uvn; i++) {
+			char names[10];
+			sprintf(names, "l_%d_%d", 0, i);
+			cf->upvalues[i] = luaS_new(glstate, names);
+		}
+	}
+
+	if (!IsMain(cf)) {
+		StringBuffer_set(buff, "local ");
+		listUpvalues(cf, buff);
+		StringBuffer_addPrintf(buff, "\nDecompiledFunction_%s = ", funcnumstr);
+	}
+	code = ProcessCode(cf, 0, func_checking, funcnumstr);
+	StringBuffer_addPrintf(buff, "%s\n", code);
+	free(code);
+	code = StringBuffer_getBuffer(buff);
+	StringBuffer_delete(buff);
+	return code;
+}
+
+void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
+	char* code;
 	char* realfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
 
 	Proto* cf = findSubFunction(f, funcnumstr, realfuncnumstr);
@@ -2879,30 +2911,8 @@ void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
 		return;
 	}
 
-	uvn = cf->nups;
-
-	/* determining upvalues */
-
-	// upvalue names = next n opcodes after CLOSURE
-
-	if (!cf->upvalues) {
-		cf->sizeupvalues = uvn;
-		cf->upvalues = luaM_newvector(glstate ,uvn, TString*);
-
-		for (i=0; i<uvn; i++) {
-			char names[10];
-			sprintf(names ,"l_%d_%d", 0, i);
-			cf->upvalues[i] = luaS_new(glstate, names);
-			printf("local l_%d_%d = nil\n", 0, i);
-		}
-	}
-
-	debug = dflag;
-	if (!IsMain(cf)) {
-		printf("DecompiledFunction_%s = ", realfuncnumstr);
-	}
 	errorStr = StringBuffer_new(NULL);
-	code = ProcessCode(cf, 0, 0, realfuncnumstr);
+	code = ProcessSubFunction(cf, 0, 0, realfuncnumstr);
 	StringBuffer_delete(errorStr);
 	printf("%s\n", code);
 	free(code);

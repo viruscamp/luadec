@@ -34,7 +34,7 @@
 
 #define VERSION "2.2"
 
-#define VERSION_STRING VERSION " " MACRO_STR(STRING_LOCALE) " R" SRCVERSION
+#define VERSION_STRING VERSION " rev: " SRCVERSION
 
 int debug=0;					/* debug decompiler? */
 static char* funcnumstr=NULL;

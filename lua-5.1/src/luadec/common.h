@@ -20,10 +20,6 @@
 #define MACRO_STR_RAW(tok) #tok
 #define MACRO_STR(tok) MACRO_STR_RAW(tok)
 
-#ifndef STRING_LOCALE
-	#define STRING_LOCALE ASCII
-#endif // #ifndef STRING_LOCALE
-
 #ifndef cast
 	#define cast(t,exp) ((t)(exp))
 #endif // #ifndef cast

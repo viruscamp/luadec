@@ -191,7 +191,7 @@ BoolOp* MakeBoolOp(char* op1, char* op2, OpCode op, int neg, int pc, int dest);
 void ClearBoolOp(BoolOp* ptr, void* dummy);
 void DeleteBoolOp(BoolOp* ptr);
 
-int listUpvalues(Function* F, StringBuffer* str);
+int listUpvalues(const Proto* f, StringBuffer* str);
 int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str);
 int FunctionCheck(const Proto* f, int indent, StringBuffer* str);
 
