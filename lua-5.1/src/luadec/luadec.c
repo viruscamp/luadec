@@ -46,7 +46,7 @@ int locals=0;					/* strip debug information? */
 int localdeclare[255][255];
 int functionnum;
 int process_sub = 1;            /* process sub functions? */
-int func_check=0;				/* compile decompiled function and compare */
+int func_check=0;				/* compile decompiled function and compare? */
 int string_encoding=GBK;
 int guess_locals=1;
 lua_State* glstate;
@@ -313,7 +313,7 @@ static int doargs(int argc, char* argv[]) {
 	return i;
 }
 
-static Proto* toproto(lua_State* L, int i) {
+Proto* toproto(lua_State* L, int i) {
 	const Closure* c=(const Closure*)lua_topointer(L,i);
 	return c->l.p;
 }

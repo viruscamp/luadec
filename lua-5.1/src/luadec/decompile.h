@@ -192,10 +192,12 @@ void ClearBoolOp(BoolOp* ptr, void* dummy);
 void DeleteBoolOp(BoolOp* ptr);
 
 int listUpvalues(const Proto* f, StringBuffer* str);
-int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str);
-int FunctionCheck(const Proto* f, int indent, StringBuffer* str);
 
-char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumstr);
+char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr);
+char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr);
+
+int FunctionCheck(Proto* f, const char* funcnumstr, StringBuffer* str);
+int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str);
 
 int printFileNames(FILE* out);
 

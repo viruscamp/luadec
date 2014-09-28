@@ -34,9 +34,9 @@ extern int guess_locals;
 extern lua_State* glstate;
 extern Proto* glproto;
 
-char* nilstr = "nil";
-char* unknown_local = "ERROR_unknown_local_Rxxxx";
-char* unknown_upvalue = "ERROR_unknown_upvalue_Rxxxx";
+const char* nilstr = "nil";
+char unknown_local[] = { "ERROR_unknown_local_Rxxxx" };
+char unknown_upvalue[] = { "ERROR_unknown_upvalue_Rxxxx" };
 StringBuffer* errorStr;
 
 /*
@@ -78,6 +78,7 @@ char* luadec_strdup(const char* src) {
 #define fb2int(x) (luaO_fb2int(x))
 #define int2fb(x) (luaO_int2fb(x))
 #define MAX(a,b) (((a)>(b))?(a):(b))
+#define MIN(a,b) (((a)<(b))?(a):(b))
 
 #define SET_ERROR(F,e) { StringBuffer_printf(errorStr,"-- DECOMPILER ERROR: %s\n", (e)); RawAddStatement((F),errorStr); }
 /*  error = e; errorCode = __LINE__; */ /*if (debug) { printf("DECOMPILER ERROR: %s\n", e);  }*/
@@ -1535,48 +1536,64 @@ void DeclarePendingLocals(Function* F) {
 	StringBuffer_delete(str);
 }
 
-Proto* combine(lua_State* L, int n);
+Proto* toproto(lua_State* L, int i);
 
-
-int FunctionCheck(const Proto* f, int indent, StringBuffer* str) {
-	lua_State* L;
-	Proto* fnew;
+int FunctionCheck(Proto* f, const char* funcnumstr, StringBuffer* str) {
+	lua_State* newState;
 	int check_result;
-	char* decompiled = ProcessCode(f, indent, 1, luadec_strdup("0"));
-	L = lua_open();
-	if (luaL_loadstring(L, decompiled) != 0) {
-		//TODO check fail compile fail
-		StringBuffer_set(str, "-- check fail : cannot compile");
+	char* decompiled = ProcessSubFunction(f, 1, luadec_strdup(funcnumstr));
+	newState = lua_open();
+	if (luaL_loadstring(newState, decompiled) != 0) {
 		check_result = -1;
+		StringBuffer_printf(str, "-- function check fail %s : cannot compile", funcnumstr);
 	} else {
-		fnew = combine(L, 1);
+		StringBuffer* compare_result_str = StringBuffer_newBySize(127);
+		Proto* newProto = toproto(newState, -1);;
 		if (!IsMain(f)) {
-			fnew = fnew->p[0];
+			newProto = newProto->p[0];
 		}
-		check_result = CompareProto(f, fnew, str);
+		check_result = CompareProto(f, newProto, compare_result_str);
+		if (check_result == 0) {
+			StringBuffer_printf(str, "-- function check pass %s", funcnumstr);
+		} else {
+			StringBuffer_printf(str, "-- function check fail %s : %s", funcnumstr, StringBuffer_getRef(compare_result_str));
+		}
+		StringBuffer_delete(compare_result_str);
 	}
-	lua_close(L);
+
+	lua_close(newState);
 	free(decompiled);
-	if (check_result == 0) {
-		StringBuffer_set(str, "-- check ok");
-	}
 	return check_result;
 }
 
-int CompareProto(const Proto* f1, const Proto* f2, StringBuffer* str) {
+int CompareProto(const Proto* forg, const Proto* fnew, StringBuffer* str) {
+	int sizesame, pc, minsizecode;
 	int diff = 0;
-	StringBuffer_set(str, "-- check fail :");
-	if (f1->numparams != f2->numparams) {
-		diff = 1;
+	StringBuffer_set(str, "");
+	if (forg->numparams != fnew->numparams) {
+		diff++;
 		StringBuffer_add(str, " different params size;");
 	}
-	if (f1->sizeupvalues != f2->sizeupvalues) {
-		diff = 1;
+	if (forg->nups != fnew->nups) {
+		diff++;
 		StringBuffer_add(str, " different upvalues size;");
 	}
-	if (f1->sizecode != f2->sizecode) {
-		diff = 1;
+	if (forg->sizecode != fnew->sizecode) {
+		diff++;
 		StringBuffer_add(str, " different code size;");
+	}
+	sizesame = 0;
+	minsizecode = MIN(forg->sizecode, fnew->sizecode);
+	for (pc = 0; pc < minsizecode; pc++){
+		Instruction iorg = forg->code[pc];
+		Instruction inew = fnew->code[pc];
+		if (iorg == inew) {
+			sizesame++;
+		}
+	}
+	if (sizesame != forg->sizecode) {
+		diff++;
+		StringBuffer_addPrintf(str, " sizecode org: %d, decompiled: %d, same: %d;", forg->sizecode, fnew->sizecode, sizesame);
 	}
 	return diff;
 }
@@ -1639,7 +1656,7 @@ int isTestOpCode(OpCode op) {
 	return ( op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET );
 }
 
-char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumstr) {
+char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int i = 0;
 
 	int ignoreNext = 0;
@@ -1689,7 +1706,7 @@ char* ProcessCode(const Proto* f, int indent, int func_checking, char* funcnumst
 	StringBuffer_prune(str);
 
 	if (func_check == 1 && func_checking == 0) {
-		int func_check_result = FunctionCheck(f, indent, str);
+		int func_check_result = FunctionCheck(f, funcnumstr, str);
 		TRY(RawAddStatement(F, str));
 	}
 
@@ -2866,7 +2883,7 @@ Proto* findSubFunction(Proto* f, const char* funcnumstr, char* realfuncnumstr) {
 	return cf;
 }
 
-char* ProcessSubFunction(Proto* cf, int indent, int func_checking, char* funcnumstr) {
+char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	int i;
 	int uvn = cf->nups;
 	char* code;
@@ -2912,7 +2929,7 @@ void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr) {
 	}
 
 	errorStr = StringBuffer_new(NULL);
-	code = ProcessSubFunction(cf, 0, 0, realfuncnumstr);
+	code = ProcessSubFunction(cf, 0, realfuncnumstr);
 	StringBuffer_delete(errorStr);
 	printf("%s\n", code);
 	free(code);
