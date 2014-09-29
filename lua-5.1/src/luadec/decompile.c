@@ -1578,6 +1578,10 @@ int CompareProto(const Proto* forg, const Proto* fnew, StringBuffer* str) {
 		diff++;
 		StringBuffer_add(str, " different upvalues size;");
 	}
+	if (forg->is_vararg != fnew->is_vararg) {
+		diff++;
+		StringBuffer_add(str, " different is_vararg;");
+	}
 	if (forg->sizecode != fnew->sizecode) {
 		diff++;
 		StringBuffer_add(str, " different code size;");
