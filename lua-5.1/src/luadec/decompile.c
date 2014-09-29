@@ -2510,16 +2510,16 @@ LOGIC_NEXT_JMP:
 				if (isIdentifier(astr)) {
 					StringBuffer_addPrintf(str, "%s(", astr);
 				} else {
-					StringBuffer_addPrintf(str, "(%s)(", astr);
-				}
-
-				{
 					const char* at = astr + strlen(astr) - 1;
-					while (at > astr && (luadec_isalpha(*at) || *at == '_')) {
+					while (at > astr && (luadec_isalnum(*at) || *at == '_')) {
 						at--;
 					}
-					if (*at == ':')
+					if (*at == ':') {
 						self = 1;
+						StringBuffer_addPrintf(str, "%s(", astr);
+					} else {
+						StringBuffer_addPrintf(str, "(%s)(", astr);
+					}
 				}
 
 				for (i = a + 1; i < limit; i++) {
