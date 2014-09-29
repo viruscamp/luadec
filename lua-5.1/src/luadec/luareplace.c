@@ -217,7 +217,7 @@ static int writer(lua_State* L, const void* p, size_t size, void* u)
 
 int main(int argc, char* argv[]) {
 	lua_State* L;
-	Proto *ftemp, *fparent, *fdest, *fsrc;
+	Proto *fdestroot, *fsrcroot, *fparent, *fdest, *fsrc;
 	int cdest, csrc;
 	char *realdestnum = NULL, *realsrcnum = NULL;
 	int diff;
@@ -238,21 +238,21 @@ int main(int argc, char* argv[]) {
 	if (luaL_loadfile(L, argv[0]) != 0) {
 		fatal(lua_tostring(L, -1));
 	}
-	ftemp = toproto(L, -1);
-	realdestnum = (char*)calloc(strlen(argv[1]), sizeof(char));
-	fparent = findParentFunction(ftemp, argv[1], &cdest, realdestnum);
+	fdestroot = toproto(L, -1);
+	realdestnum = (char*)calloc(strlen(argv[1])+1, sizeof(char));
+	fparent = findParentFunction(fdestroot, argv[1], &cdest, realdestnum); // TODO replace_sub can use 0
 	if (fparent == NULL) {
 		if (realdestnum) { free(realdestnum); realdestnum = NULL; }
 		fatal("cannot find dest function");
 	}
 	fdest = fparent->p[cdest];
 
-	if (luaL_loadfile(L, argv[2]) != 0) {
+	if (luaL_loadfile(L, argv[2]) != 0) { // TODO when using same file as dest and src
 		fatal(lua_tostring(L, -1));
 	}
-	ftemp = toproto(L, -1);
-	realsrcnum = (char*)calloc(strlen(argv[3]), sizeof(char));
-	fsrc = findParentFunction(ftemp, argv[3], &csrc, realsrcnum);
+	fsrcroot = toproto(L, -1);
+	realsrcnum = (char*)calloc(strlen(argv[3])+1, sizeof(char));
+	fsrc = findParentFunction(fsrcroot, argv[3], &csrc, realsrcnum);
 	if (fsrc == NULL) {
 		if (realdestnum) { free(realdestnum); realdestnum = NULL; }
 		if (realsrcnum) { free(realsrcnum); realsrcnum = NULL; }
@@ -269,14 +269,14 @@ int main(int argc, char* argv[]) {
 	if (realdestnum) { free(realdestnum); realdestnum = NULL; }
 	if (realsrcnum) { free(realsrcnum); realsrcnum = NULL; }
 
-	if (diff > 0){
+	if (strict == 1 && diff > 0){
 		fatal("strip mode on, stop on replacing incompatible function with different numparams nups or is_vararg");
 	}
 
 	FILE* D = (output == NULL) ? stdout : fopen(output, "wb");
 	if (D == NULL) cannot("open");
 	lua_lock(L);
-	luaU_dump(L, fdest, writer, D, 0);
+	luaU_dump(L, fdestroot, writer, D, 0);
 	lua_unlock(L);
 	if (ferror(D)) cannot("write");
 	if (fclose(D)) cannot("close");
