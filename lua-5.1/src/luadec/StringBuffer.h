@@ -13,6 +13,12 @@ struct StringBuffer_ {
 	int usedSize;
 };
 
+#define StringBuffer_strlen(self) ((self)->usedSize)
+
+#define StringBuffer_firstChar(self) ((self)->buffer[0])
+
+#define StringBuffer_lastChar(self) ((self)->buffer[(self)->usedSize - 1])
+
 StringBuffer* StringBuffer_newBySize(int size);
 
 StringBuffer* StringBuffer_new(const char* data);
@@ -48,7 +54,7 @@ char* StringBuffer_getCopy(StringBuffer* self);
 char* StringBuffer_getBuffer(StringBuffer* self);
 
 // self will get the ownership of data
-StringBuffer* StringBuffer_setBuffer(StringBuffer* self, char* data);
+void StringBuffer_setBuffer(StringBuffer* self, char* data);
 
 // return self->buffer , you shuold use it readonly
 const char* StringBuffer_getRef(StringBuffer* self);

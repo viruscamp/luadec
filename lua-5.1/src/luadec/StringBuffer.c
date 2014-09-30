@@ -153,12 +153,11 @@ char* StringBuffer_getBuffer(StringBuffer* self) {
 	return result;
 }
 
-StringBuffer* StringBuffer_setBuffer(StringBuffer* self, char* data) {
+void StringBuffer_setBuffer(StringBuffer* self, char* data) {
 	free(self->buffer);
 	self->buffer = data;
 	self->usedSize = strlen(data);
 	self->bufferSize = self->usedSize + 1;
-	return self;
 }
 
 void StringBuffer_prune(StringBuffer* self) {

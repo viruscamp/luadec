@@ -436,7 +436,11 @@ int main(int argc, char* argv[]) {
 		printf("; Command line: ");
 	} else {
 		printf("-- Decompiled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
-		printf("-- Command line: ");
+		if (func_check) {
+			printf("-- function check Command line: ");
+		} else {
+			printf("-- Command line: ");
+		}
 	}
 	for (i=1; i<gargc; i++) {
 		printf("%s ",gargv[i]);

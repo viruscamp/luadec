@@ -808,6 +808,29 @@ void CloseTable(Function* F, int r) {
 	F->Rtabl[r] = 0;
 }
 
+void PrintTableItemNumeric(StringBuffer* str, DecTableItem* item) {
+	char* value = item->value;
+	if (value[0] == '{' && StringBuffer_lastChar(str) != '\n') {
+		StringBuffer_add(str, "\n");
+	}
+	StringBuffer_add(str, value);
+	if (value[strlen(value) - 1] == '}') {
+		StringBuffer_add(str, "\n");
+	}
+}
+
+void PrintTableItemKeyed(Function* F, StringBuffer* str, DecTableItem* item) {
+	char* value = item->value;
+	if (value[0] == '{' && StringBuffer_lastChar(str) != '\n') {
+		StringBuffer_add(str, "\n");
+	}
+	MakeIndex(F, str, item->key, TABLE);
+	StringBuffer_addPrintf(str, " = %s", item->value);
+	if (value[strlen(value) - 1] == '}') {
+		StringBuffer_add(str, "\n");
+	}
+}
+
 char* PrintTable(Function* F, int r, int returnCopy) {
 	char* result = NULL;
 	int numerics = 0;
@@ -820,39 +843,25 @@ char* PrintTable(Function* F, int r, int returnCopy) {
 	}
 	item = cast(DecTableItem*, tbl->numeric.head);
 	if (item) {
-		if (item->value[strlen(item->value)-1] == '}') {
-			StringBuffer_add(str, "\n");
-		}
-		StringBuffer_add(str, item->value);
-		item = cast(DecTableItem*, item->super.next);
 		numerics = 1;
+		PrintTableItemNumeric(str, item);
+		item = cast(DecTableItem*, item->super.next);
 		while (item) {
 			StringBuffer_add(str, ", ");
-			if (item->value[strlen(item->value)-1] == '}') {
-				StringBuffer_add(str, "\n");
-			}
-			StringBuffer_add(str, item->value);
+			PrintTableItemNumeric(str, item);
 			item = cast(DecTableItem*, item->super.next);
 		}
 	}
 	item = cast(DecTableItem*, tbl->keyed.head);
 	if (item) {
-		int first;
 		if (numerics) {
 			StringBuffer_add(str, "; ");
 		}
-		first = 1;
+		PrintTableItemKeyed(F, str, item);
+		item = cast(DecTableItem*, item->super.next);
 		while (item) {
-			if (first) {
-				first = 0;
-			} else {
-				StringBuffer_add(str, ", ");
-			}
-			if (item->value[strlen(item->value)-1] == '}') {
-				StringBuffer_add(str, "\n");
-			}
-			MakeIndex(F,str,item->key,TABLE);
-			StringBuffer_addPrintf(str, " = %s", item->value);
+			StringBuffer_add(str, ", ");
+			PrintTableItemKeyed(F, str, item);
 			item = cast(DecTableItem*, item->super.next);
 		}
 	}
@@ -1079,11 +1088,9 @@ const char* GetR(Function* F, int r) {
 	if (error) return NULL;
 
 	if (F->R[r] == NULL) {
-		StringBuffer* sb = StringBuffer_new("R%rrrrr%_PC%pcccccccc%");
-		StringBuffer_printf(sb, "R%d_PC%d", r, F->pc);
-		DeclareVariable(F, sb->buffer, r);
-		//return sb->buffer;
-		StringBuffer_delete(sb);
+		char sb[] = { "R%rrrrr%_PC%pcccccccc%" };
+		sprintf(sb, "R%d_PC%d", r, F->pc);
+		DeclareVariable(F, sb, r);
 	}//dirty hack , some numeric FOR loops may cause error
 	return F->R[r];
 }
@@ -1386,54 +1393,47 @@ int isIdentifier(const char* src) {
 /*
 ** type: DOT=0,SELF=1,TABLE=2
 ** input and output
-** rstr  "a"  " a"    "not"    a
-** SELF  :a   ERROR   ERROR    ERROR
-** DOT   .a   [" a"]  ["not"]  [a]
-** TABLE  a   [" a"}  ["not"]  [a]
+** rstr   "a"  " a"    "or"    a       a+2
+** SELF   :a   ERROR   ERROR   ERROR   ERROR
+** DOT    .a   [" a"]  ["or"]  [a]     [a+2]
+** TABLE   a   [" a"]  ["or"]  [a]     [a+2]
 */
 void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
-	int len, dot;
-	char lastchar;
-	char* rawrstr;
-	StringBuffer* tmpstrbuff;
-
-	len = strlen(rstr);
-	lastchar = rstr[len - 1];
-	rstr[len - 1] = '\0';
-	tmpstrbuff = StringBuffer_new((rstr + 1));
-	rawrstr = StringBuffer_getBuffer(tmpstrbuff);
-	rstr[len - 1] = lastchar;
-
+	int len = strlen(rstr);
 	/*
 	* see if index can be expressed without quotes
 	*/
-	dot = 0;
 	if (rstr[0] == '\"' && rstr[len-1] == '\"') {
-		dot = isIdentifier(rawrstr);
-	}
-	if (dot == 1) {
-		// type value DOT=0;SELF=1;TABLE=2;
-		switch (type) {
-		case SELF:
-			StringBuffer_addPrintf(str, ":%s", rawrstr);
-			break;
-		case DOT:
-			StringBuffer_addPrintf(str, ".%s", rawrstr);
-			break;
-		case TABLE:
-			StringBuffer_addPrintf(str, "%s", rawrstr);
-			break;
+		rstr[len - 1] = '\0';
+		if (isIdentifier((rstr + 1))) {
+			// type value DOT=0;SELF=1;TABLE=2;
+			switch (type) {
+			case SELF:
+				StringBuffer_addPrintf(str, ":%s", (rstr + 1));
+				break;
+			case DOT:
+				StringBuffer_addPrintf(str, ".%s", (rstr + 1));
+				break;
+			case TABLE:
+				StringBuffer_addPrintf(str, "%s", (rstr + 1));
+				break;
+			}
+			rstr[len - 1] = '\"';
+			return;
 		}
-	} else {
-		StringBuffer_addPrintf(str, "[%s]", rstr);
-		if (type == SELF){
-			StringBuffer_printf(tmpstrbuff, "[%s] should be a SELF Operator", rstr);
-			SET_ERROR(F, StringBuffer_getRef(tmpstrbuff));
-		}
+		rstr[len - 1] = '\"';
 	}
 
-	free(rawrstr);
-	StringBuffer_delete(tmpstrbuff);
+	if (type != SELF) {
+		StringBuffer_addPrintf(str, "[%s]", rstr);
+		return;
+	} else {
+		char* errorbuff = (char*)calloc((len + 50), sizeof(char));
+		StringBuffer_addPrintf(str, ":[%s]", rstr);
+		sprintf(errorbuff, "[%s] should be a SELF Operator", rstr);
+		SET_ERROR(F, errorbuff);
+		free(errorbuff);
+	}
 }
 
 void FunctionHeader(Function* F) {
@@ -1632,9 +1632,9 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcn
 	TRY(RawAddStatement(F, str));
 
 	if (f->sizeupvalues > 0) {
-		StringBuffer_set(str, "");
+		StringBuffer_set(str, "local _upvalues_ = {");
 		listUpvalues(F->f, str);
-		StringBuffer_add(str, " = nil -- upvalues");
+		StringBuffer_add(str, "}");
 		TRY(RawAddStatement(F, str));
 	}
 
@@ -2058,10 +2058,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				char* cstr;
 				TRY(cstr = RegisterOrConstant(F, c));
 				TRY(bstr = GetR(F, b));
-				if (bstr[0] == '{') {
-					StringBuffer_printf(str, "(%s)", bstr);
-				} else {
+				if (isIdentifier(bstr)) {
 					StringBuffer_set(str, bstr);
+				} else {
+					StringBuffer_printf(str, "(%s)", bstr);
 				}
 				MakeIndex(F, str, cstr, DOT);
 				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
@@ -2092,6 +2092,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			}
 		case OP_SETTABLE:
 			{
+				const char *astr;
 				char *bstr, *cstr;
 				int settable;
 				TRY(bstr = RegisterOrConstant(F, b));
@@ -2104,7 +2105,12 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					/*
 					* if failed, just output an assignment
 					*/
-					StringBuffer_set(str, REGISTER(a));
+					TRY(astr = GetR(F, a));
+					if (isIdentifier(astr)) {
+						StringBuffer_set(str, astr);
+					} else {
+						StringBuffer_printf(str, "(%s)", astr);
+					}
 					MakeIndex(F, str, bstr, DOT);
 					TRY(AssignGlobalOrUpvalue(F, StringBuffer_getRef(str), cstr));
 				}
@@ -2128,8 +2134,11 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				TRY(bstr = GetR(F, b));
 
 				TRY(AssignReg(F, a+1, bstr, PRIORITY(b), 0));
-
-				StringBuffer_set(str, bstr);
+				if (isIdentifier(bstr)) {
+					StringBuffer_set(str, bstr);
+				} else {
+					StringBuffer_addPrintf(str, "(%s)", bstr);
+				}
 				MakeIndex(F, str, cstr, SELF);
 				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 				free(cstr);
