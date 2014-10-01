@@ -1,0 +1,6 @@
+[submodule "LuaAssemblyTools"]
+	path = LuaAssemblyTools
+	url = https://github.com/mlnlover11/LuaAssemblyTools
+[submodule "ilua"]
+	path = ilua
+	url = https://github.com/ilua/ilua
