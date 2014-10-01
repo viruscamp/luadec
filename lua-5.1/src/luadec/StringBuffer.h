@@ -56,7 +56,7 @@ char* StringBuffer_getBuffer(StringBuffer* self);
 // self will get the ownership of data
 void StringBuffer_setBuffer(StringBuffer* self, char* data);
 
-// return self->buffer , you shuold use it readonly
+// return self->buffer , you should use it readonly
 const char* StringBuffer_getRef(StringBuffer* self);
 
 void StringBuffer_prune(StringBuffer* self);

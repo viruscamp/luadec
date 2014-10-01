@@ -714,10 +714,13 @@ void AssignReg(Function* F, int reg, const char* src, int prio, int mayTest) {
 	char* nsrc = NULL;
 
 	if (PENDING(reg)) {
+		char errortmp[128];
 		if (guess_locals) {
-			SET_ERROR(F,"Overwrote pending register.");
+			sprintf(errortmp, "Overwrote pending register: R%d .", reg);
+			SET_ERROR(F, errortmp);
 		} else {
-			SET_ERROR(F,"Overwrote pending register. Missing locals? Creating them");
+			sprintf(errortmp, "Overwrote pending register: R%d . Missing locals? Creating them.", reg);
+			SET_ERROR(F, errortmp);
 			DeclareLocal(F,reg,dest);
 		}
 		return;
@@ -921,7 +924,7 @@ void SetList(Function* F, int a, int b, int c) {
 	int i;
 	DecTable* tbl = (DecTable*)FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &a);
 	if (tbl == NULL) {
-		SET_ERROR(F,"Unhandled construct in list (SETLIST)");
+		SET_ERROR(F,"No list found. SetList fails");
 		return;
 	}
 	if (b == 0) {
