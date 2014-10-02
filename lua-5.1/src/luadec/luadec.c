@@ -73,7 +73,7 @@ static void usage(const char* message, const char* arg) {
 		"LuaDec " VERSION_STRING "\n"
 		" Original by Hisham Muhammad (http://luadec.luaforge.net)\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
-		" by VirusCamp (http://luadec.googlecode.com)\n"
+		" by VirusCamp (https://github.com/viruscamp/luadec)\n"
 		"usage: %s [options] [filename].  Available options are:\n"
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"

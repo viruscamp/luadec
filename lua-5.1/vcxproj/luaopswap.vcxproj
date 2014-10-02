@@ -74,7 +74,9 @@
     <PreBuildEvent />
     <PreBuildEvent>
       <Command>cd ..\src\luadec
-cmd /c gen-git-srcversion.cmd</Command>
+cmd /c gen-git-srcversion.cmd
+cmd /c gen-allopcodes-h.cmd
+</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -97,7 +99,9 @@ cmd /c gen-git-srcversion.cmd</Command>
     <PreBuildEvent />
     <PreBuildEvent>
       <Command>cd ..\src\luadec
-cmd /c gen-git-srcversion.cmd</Command>
+cmd /c gen-git-srcversion.cmd
+cmd /c gen-allopcodes-h.cmd
+</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

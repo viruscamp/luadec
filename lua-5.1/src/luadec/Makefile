@@ -3,6 +3,9 @@
 LIBDIR=..
 BINDIR=.
 
+LUA= ../../bin/lua
+LUAC= ../../bin/luac
+BIN2C = $(LUA) bin2c.lua
 CC= gcc
 CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
 LDFLAGS= $(MYLDFLAGS)
@@ -54,6 +57,20 @@ memwatch.o: ../memwatch/memwatch.c ../memwatch/memwatch.h
 
 $(LIBDIR)/liblua.a:
 	cd ..; $(MAKE)
+
+luareplace.o: luareplace.c
+luareplace: luareplace.o $(LIBDIR)/liblua.a
+
+allopcodes_lua.h: allopcodes.lua
+	$(BIN2C) allopcodes.lua allopcodes_lua > allopcodes_lua.h
+allopcodes.luac: allopcodes.lua
+	$(LUAC) -o allopcodes.luac allopcodes.lua
+allopcodes_luac.h: allopcodes.luac
+	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
+
+luaopswap.o: luaopswap.c allopcodes_lua.h allopcodes_luac.h
+lundump.o: lundump.c
+luaopswap: luaopswap.o lundump.o $(LIBDIR)/liblua.a
 
 clean:
 	rm -f $(OBJS) $T

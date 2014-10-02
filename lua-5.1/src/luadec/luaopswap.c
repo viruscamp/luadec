@@ -34,11 +34,19 @@
 
 #define VERSION_STRING VERSION " rev: " SRCVERSION
 
+static int cmp_gen_luac = 0;           /* -gs  compare <input.luac> with x86-standard allopcodes.luac to generate a opcodes.txt */
+static int cmp_gen_lua = 0;            /* -gf  compare <input.luac> with a fresh compiled allopcodes.lua to generate a opcodes.txt*/
 lua_State* glstate;
 
 static char Output[] = { OUTPUT };		/* default output file name */
 static const char* output = Output;		/* output file name */
 static const char* progname = PROGNAME;	/* actual program name */
+
+unsigned char allopcodes_lua[];
+#include "allopcodes_lua.h"
+
+unsigned char allopcodes_luac[];
+#include "allopcodes_luac.h"
 
 static void fatal(const char* message) {
 	fprintf(stderr, "%s: %s\n", progname, message);
@@ -63,10 +71,12 @@ static void usage(const char* message, const char* arg) {
 		"LuaOpSwap " VERSION_STRING "\n"
 		" by VirusCamp (https://github.com/viruscamp/luadec)\n"
 		"usage: %s [options] <input.luac> [opcodes.txt]\n"
-		" Swap the opcodes in <input.luac> using method in [opcodes.txt] .\n"
+		" Swap the opcodes in <input.luac> using method in [opcodes.txt]\n"
 		" Default [opcodes.txt] is '"OPCODES_TXT"'.\n"
 		" Available options are:\n"
 		"  -o name  output to file 'name' (default is \"%s\")\n"
+		"  -gs      compare <input.luac> with x86-standard allopcodes.luac to generate a opcodes.txt\n"
+		"  -gf      compare <input.luac> with a fresh compiled allopcodes.lua to generate a opcodes.txt\n"
 		"  -v       show version information\n"
 		"  --       stop handling options\n",
 		progname, Output);
@@ -93,6 +103,12 @@ static int doargs(int argc, char* argv[]) {
 			if (output == NULL || *output == 0) {
 				usage("'-o' needs argument", NULL);
 			}
+		}
+		else if (IS("-gs")) {		/* compare <input.luac> with x86-standard allopcodes.luac to generate a opcodes.txt */
+			cmp_gen_luac = 1;
+		}
+		else if (IS("-gf")) {		/* compare <input.luac> with a fresh compiled allopcodes.luac to generate a opcodes.txt */
+			cmp_gen_lua = 1;
 		}
 		else if (IS("-v")) {		/* show version */
 			printf("LuaOpSwap " VERSION_STRING "\n");
@@ -173,8 +189,80 @@ void swapOpCode(Proto* f) {
 	}
 }
 
+int CompareAndGenOp2op(const Proto* input_proto, const Proto* allopcodes_proto) {
+	int i = 0, pc = 0, diff = 0;
+	int sizecode = input_proto->sizecode;
+	for (i = 0; i < OP2OP_SIZE; i++){
+		op2op[i] = i;
+	}
+	for (pc = 0; pc < sizecode; pc++){
+		OpCode leftop = GET_OPCODE(input_proto->code[pc]);
+		OpCode rightop = GET_OPCODE(allopcodes_proto->code[pc]);
+		op2op[leftop] = rightop;
+	}
+	return diff;
+}
+
+int PrintOp2op() {
+	int count = 0, i = 0;
+	for (i = 0; i < OP2OP_SIZE; i++){
+		int j = op2op[i];
+		if (i != j) {
+			count++;
+			if (i < NUM_OPCODES && j < NUM_OPCODES) {
+				printf("%s %s\n", luaP_opnames[i], luaP_opnames[j]);
+			} else if (i < NUM_OPCODES) {
+				printf("%s %d\n", luaP_opnames[i], j);
+			} else if (j < NUM_OPCODES) {
+				printf("%d %s\n", i, luaP_opnames[j]);
+			} else {
+				printf("%d %ds\n", i, j);
+			}			
+		}
+	}
+	return count;
+}
+
+int CompareAndGenOpcodes(const Proto* input_proto, const Proto* allopcodes_proto) {
+	int diff = 0, count = 0;
+	char errorstr[128] = { "cannot generate opcodes.txt. Cause protos to compare have" };
+	if (!(input_proto->sizep > 0 && allopcodes_proto->sizep > 0)) {
+		strcat(errorstr, " null function 0_0 .");
+		fatal(errorstr);
+	}
+	input_proto = input_proto->p[0];
+	allopcodes_proto = allopcodes_proto->p[0];
+	if (!(input_proto && allopcodes_proto)) {
+		strcat(errorstr, " null function 0_0 .");
+		fatal(errorstr);
+	}
+	if (input_proto->numparams != allopcodes_proto->numparams) {
+		diff++;
+		strcat(errorstr, " different params size;");
+	}
+	if (input_proto->nups != allopcodes_proto->nups) {
+		diff++;
+		strcat(errorstr, " different upvalues size;");
+	}
+	if (input_proto->is_vararg != allopcodes_proto->is_vararg) {
+		diff++;
+		strcat(errorstr, " different is_vararg;");
+	}
+	if (input_proto->sizecode != allopcodes_proto->sizecode) {
+		diff++;
+		strcat(errorstr, " different code size;");
+	}
+	if (diff > 0) {
+		fatal(errorstr);
+	}
+	diff = CompareAndGenOp2op(input_proto, allopcodes_proto);
+	count = PrintOp2op();
+	fprintf(stderr, " %d OpCodes swapped", count);
+	return diff;
+}
+
 Proto* toproto(lua_State* L, int i) {
-	const Closure* c=(const Closure*)lua_topointer(L,i);
+	const Closure* c = (const Closure*)lua_topointer(L, i);
 	return c->l.p;
 }
 
@@ -203,12 +291,6 @@ int main(int argc, char* argv[]) {
 		usage("need 1 arguments at least", NULL);
 	}
 
-	opcodes_def = (argv[1]) ? (argv[1]) : OPCODES_TXT;
-	if (!generateOp2op(opcodes_def)) {
-		fprintf(stderr, "opcodes.txt file: %s format error!", opcodes_def);
-		return EXIT_FAILURE;
-	}
-
 	L = lua_open();
 	glstate = L;
 	//luaB_opentests(L);
@@ -219,15 +301,32 @@ int main(int argc, char* argv[]) {
 	}
 	f = toproto(L, -1);
 
-	swapOpCode(f);
+	if (cmp_gen_lua || cmp_gen_luac) {
+		Proto* input_proto = f;
+		Proto* allopcodes_proto;
+		const char* buff = cmp_gen_lua ? allopcodes_lua : allopcodes_luac;
+		int bufflen = cmp_gen_lua ? allopcodes_lua_len : allopcodes_luac_len;		
+		if (luaL_loadbuffer(L, buff, bufflen, "allopcodes.lua") != 0) {
+			fatal(lua_tostring(L, -1));
+		}
+		allopcodes_proto = toproto(L, -1);
+		CompareAndGenOpcodes(input_proto, allopcodes_proto);
+	} else {
+		opcodes_def = (argv[1]) ? (argv[1]) : OPCODES_TXT;
+		if (!generateOp2op(opcodes_def)) {
+			fprintf(stderr, "opcodes.txt file: %s format error!", opcodes_def);
+			return EXIT_FAILURE;
+		}
+		swapOpCode(f);
 
-	D = (output == NULL) ? stdout : fopen(output, "wb");
-	if (D == NULL) cannot("open", output);
-	lua_lock(L);
-	luaU_dump(L, f, writer, D, 0);
-	lua_unlock(L);
-	if (ferror(D)) cannot("write", output);
-	if (fclose(D)) cannot("close", output);
+		D = (output == NULL) ? stdout : fopen(output, "wb");
+		if (D == NULL) cannot("open", output);
+		lua_lock(L);
+		luaU_dump(L, f, writer, D, 0);
+		lua_unlock(L);
+		if (ferror(D)) cannot("write", output);
+		if (fclose(D)) cannot("close", output);
+	}
 
 	lua_close(L);
 	return EXIT_SUCCESS;
