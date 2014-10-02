@@ -38,6 +38,7 @@ const char* nilstr = "nil";
 char unknown_local[] = { "ERROR_unknown_local_Rxxxx" };
 char unknown_upvalue[] = { "ERROR_unknown_upvalue_Rxxxx" };
 StringBuffer* errorStr;
+char errortmp[256];
 
 /*
 * -------------------------------------------------------------------------
@@ -80,7 +81,7 @@ char* luadec_strdup(const char* src) {
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
-#define SET_ERROR(F,e) { StringBuffer_printf(errorStr,"-- DECOMPILER ERROR: %s\n", (e)); RawAddStatement((F),errorStr); }
+#define SET_ERROR(F,e) { StringBuffer_printf(errorStr,"-- DECOMPILER ERROR at PC%d: %s\n", (F)->pc, (e)); RawAddStatement((F),errorStr); }
 /*  error = e; errorCode = __LINE__; */ /*if (debug) { printf("DECOMPILER ERROR: %s\n", e);  }*/
 
 extern int debug;
@@ -419,7 +420,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 			if (endif) {
 				if ((op->op != OP_TEST) && (op->op != OP_TESTSET)) {
 					if (*endif != 0 && *endif != dest) {
-						SET_ERROR(F,"unhandled construct in 'MakeBoolean'");
+						SET_ERROR(F,"Unhandled construct in 'MakeBoolean' P1");
 						//return NULL;
 					}
 				}
@@ -449,7 +450,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 				currExp = currExp->parent;
 				if (!currExp->is_chain) {
 					DeleteLogicExpTree(firstExp);
-					SET_ERROR(F,"unhandled construct in 'MakeBoolean'");
+					SET_ERROR(F,"Unhandled construct in 'MakeBoolean' P2");
 					return NULL;
 				};
 				prevParent = currExp->parent;
@@ -460,7 +461,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 						prevParent = prevParent->subexp;
 				TieAsSubExp(chain, currExp);
 
-				//curr->parent = prevParent;
+				currExp->parent = prevParent; // WHY comment line 483 to avoid a memory leak, but may cause logic expression output error
 				if (prevParent == NULL) {
 					firstExp = chain;
 				} else {
@@ -468,7 +469,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 					TieAsNext(prevParent, chain);
 				}
 			} else {
-				SET_ERROR(F,"unhandled construct in 'MakeBoolean'");
+				SET_ERROR(F,"Unhandled construct in 'MakeBoolean' P3");
 				DeleteLogicExpSubTree(exp);
 			}
 		} else if (dest > firstaddr && dest < currExp->dest) {
@@ -480,7 +481,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 		} else {
 			DeleteLogicExpSubTree(exp);
 			DeleteLogicExpTree(firstExp);
-			SET_ERROR(F,"unhandled construct in 'MakeBoolean'");
+			SET_ERROR(F,"Unhandled construct in 'MakeBoolean' P4");
 			return NULL;
 		}
 
@@ -528,14 +529,14 @@ char* WriteBoolean(LogicExp* exp, int* thenaddr, int* endif, int test) {
 	if (exp) {
 		PrintLogicExp(str, *thenaddr, exp, 0, test);
 		if (test && endif && *endif == 0) {
-			//SET_ERROR(F,"Unhandled construct in boolean test");
+			//SET_ERROR(F, "Unhandled construct in 'WriteBoolean'");
 			result = (char*)calloc(30, sizeof(char));
-			sprintf(result," --UNHANDLEDCONTRUCT-- ");
+			sprintf(result,"__UNHANDLEDCONTRUCT_1__");
 			goto WriteBoolean_CLEAR_HANDLER1;
 		}
 	} else {
 		result = (char*)calloc(30, sizeof(char));
-		sprintf(result,"error_maybe_false");
+		sprintf(result, "__UNHANDLEDCONTRUCT_2__");
 		goto WriteBoolean_CLEAR_HANDLER1;
 	}
 	result = StringBuffer_getBuffer(str);
@@ -714,14 +715,13 @@ void AssignReg(Function* F, int reg, const char* src, int prio, int mayTest) {
 	char* nsrc = NULL;
 
 	if (PENDING(reg)) {
-		char errortmp[128];
 		if (guess_locals) {
-			sprintf(errortmp, "Overwrote pending register: R%d .", reg);
+			sprintf(errortmp, "Overwrote pending register: R%d in 'AssignReg'", reg);
 			SET_ERROR(F, errortmp);
 		} else {
-			sprintf(errortmp, "Overwrote pending register: R%d . Missing locals? Creating them.", reg);
+			sprintf(errortmp, "Overwrote pending register: R%d in 'AssignReg'. Creating missing local", reg);
 			SET_ERROR(F, errortmp);
-			DeclareLocal(F,reg,dest);
+			DeclareLocal(F, reg, dest);
 		}
 		return;
 	}
@@ -924,7 +924,8 @@ void SetList(Function* F, int a, int b, int c) {
 	int i;
 	DecTable* tbl = (DecTable*)FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &a);
 	if (tbl == NULL) {
-		SET_ERROR(F,"No list found. SetList fails");
+		sprintf(errortmp, "No list found for R%d , SetList fails", a);
+		SET_ERROR(F, errortmp);
 		return;
 	}
 	if (b == 0) {
@@ -953,12 +954,12 @@ void UnsetPending(Function* F, int r) {
 	if (!IS_VARIABLE(r)) {
 		if (!PENDING(r) && !CALL(r)) {
 			if (guess_locals) {
-				SET_ERROR(F,"Confused about usage of registers!");
+				sprintf(errortmp, "Confused about usage of register: R%d in 'UnsetPending'", r);
+				SET_ERROR(F, errortmp);
 			} else {
-				char* s;
-				SET_ERROR(F,"Confused about usage of registers, missing locals? Creating them");
-				s = luadec_strdup(REGISTER(r));
-				DeclareLocal(F,r,s);
+				sprintf(errortmp, "Confused about usage of register: R%d in 'UnsetPending'. Creating missing local", r);
+				SET_ERROR(F, errortmp);
+				DeclareLocal(F, r, REGISTER(r));
 			}
 			return;
 		}
@@ -1126,7 +1127,8 @@ void OutputAssignments(Function* F) {
 		char* src = cast(VarListItem*, walk)->src;
 		char* dest = cast(VarListItem*, walk)->dest;
 		if (!(r == -1 || PENDING(r))) {
-			SET_ERROR(F,"Attempted to generate an assignment, but got confused about usage of registers");
+			sprintf(errortmp, "Confused about usage of register: R%d in 'OutputAssignments'", r);
+			SET_ERROR(F, errortmp);
 			goto OutputAssignments_ERROR_HANDLER;
 		}
 
@@ -1178,14 +1180,15 @@ void ReleaseLocals(Function* F) {
 				fprintf(stderr, "\n");
 				fprintf(stderr, " at lua function %s pc=%d\n\n", F->funcnumstr, F->pc);
 				fflush(stderr);
-				SET_ERROR(F, "freeLocal<0 in void ReleaseLocals(Function* F)");
+				SET_ERROR(F, "freeLocal<0 in 'ReleaseLocals'");
 				return;
 			}
 			r = F->freeLocal;
 			//fprintf(stderr,"%d %d %d\n",i,r, F->pc);
 			if (!IS_VARIABLE(r)) {
 				// fprintf(stderr,"--- %d %d\n",i,r);
-				SET_ERROR(F,"Confused about usage of registers for local variables.");
+				sprintf(errortmp, "Confused about usage of register R%d for local variables in 'ReleaseLocals'", r);
+				SET_ERROR(F, errortmp);
 				return;
 			}
 			F->Rvar[r] = 0;
@@ -1479,7 +1482,8 @@ void ShowState(Function* F) {
 		char* src = cast(VarListItem*, walk)->src;
 		char* dest = cast(VarListItem*, walk)->dest;
 		if (r != -1 && !PENDING(r)) {
-			SET_ERROR(F,"Confused about usage of registers for variables");
+			sprintf(errortmp, "Confused about usage of register R%d for variables", r);
+			SET_ERROR(F, errortmp);
 			return;
 		}
 		fprintf(stddebug, "%d{%s=%s} ", r, dest, src);
@@ -1492,7 +1496,8 @@ void ShowState(Function* F) {
 		int r = cast(IntSetItem*, walk)->value;
 		fprintf(stddebug, "%d{%s} ", r, REGISTER(r));
 		if (!PENDING(r)) {
-			SET_ERROR(F,"Confused about usage of registers for temporaries");
+			sprintf(errortmp, "Confused about usage of register R%d for temporaries", r);
+			SET_ERROR(F, errortmp);
 			return;
 		}
 		walk = walk->next;

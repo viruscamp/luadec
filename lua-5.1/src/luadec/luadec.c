@@ -245,7 +245,7 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("-d"))			/* list */
 			debug=1;
 		else if (IS("-fn")) {
-			i++;
+			++i;
 			if (argv[i]==NULL || *argv[i]==0) {
 				usage("'-fn' needs an argument",NULL);
 			} else {
@@ -303,8 +303,9 @@ static int doargs(int argc, char* argv[]) {
 					usage("'-se' unknown argument: %s, available encodings are "ENCODINGS, argv[i]);
 				}
 			}
-		} else					/* unknown option */
-			usage("unrecognized option '%s'",argv[i]);
+		}
+		else					/* unknown option */
+			usage("unrecognized option '%s'", argv[i]);
 	}
 	if (i==argc && (debug || !dumping))	{
 		dumping=0;
