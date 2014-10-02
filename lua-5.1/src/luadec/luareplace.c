@@ -335,6 +335,8 @@ int main(int argc, char* argv[]) {
 	if (ferror(D)) cannot("write");
 	if (fclose(D)) cannot("close");
 
+	printf("%s generated!\n", output);
+
 	lua_close(L);
 	return EXIT_SUCCESS;
 }
