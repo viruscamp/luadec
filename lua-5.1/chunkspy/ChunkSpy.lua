@@ -102,6 +102,16 @@ CONFIGURATION = {
     number_type = "int",
   },
   -- you can add more platforms here
+  ["x86 single"] = {
+    description = "x86 single (32-bit, little endian, singles)",
+    endianness = 1,
+    size_int = 4,
+    size_size_t = 4,
+    size_Instruction = 4,
+    size_lua_Number = 4,
+    integral = 0,
+    number_type = "single",
+  },
 }
 
 -----------------------------------------------------------------------
@@ -2120,6 +2130,27 @@ end
 
 function ChunkSpy_DoFiles(files)
   local binary_chunks = {}
+  
+  -- Search for signature used with --sign
+  local function CheckAndAdd(binchunk, filename)
+    if config.SearchSign then
+      local i,j = string.find(binchunk, string.gsub(config.SearchSign, "(%W)", "%%%1"))
+      if i then
+        binary_chunks[filename] = binchunk
+        config.SIGNATURE = string.sub(binchunk, 1, j)
+        print(string.format("--sign=%q found at %d for %s", config.SearchSign, i-1, filename))
+        return true
+      end
+      print(string.format("--sign=%q not found for %s", config.SearchSign, filename))
+    else
+      local sign = string.sub(binchunk, 1, string.len(config.SIGNATURE))
+      if sign == config.SIGNATURE then
+        binary_chunks[filename] = binchunk
+        return true
+      end
+    end
+    return false
+  end
   ---------------------------------------------------------------
   -- pre-processing of file list
   ---------------------------------------------------------------
@@ -2138,12 +2169,7 @@ function ChunkSpy_DoFiles(files)
       binchunk = v
     end
     if binchunk then
-      local sig = string.sub(binchunk, 1, string.len(config.SIGNATURE))
-      -- identify all binary chunks via signature
-      if sig == config.SIGNATURE then
-        -- duplicate filenames eliminated here
-        binary_chunks[filename] = binchunk
-      else
+      if not CheckAndAdd(binchunk, filename) then
         --try to compile file
         local func, msg = loadstring(binchunk, filename)
         if not func then
@@ -2151,10 +2177,8 @@ function ChunkSpy_DoFiles(files)
         end
         binchunk = func and string.dump(func)
         if binchunk then
-          local sig = string.sub(binchunk, 1, string.len(config.SIGNATURE))
-          if sig == config.SIGNATURE then
-            binary_chunks[filename] = binchunk
-          end
+          print(string.format("success compiling %s", filename))
+          binary_chunks[filename] = binchunk
         else
           -- may be a source code listing
           table.insert(other_files, filename)
@@ -2274,6 +2298,19 @@ function CompileSourceFile(filename)
   return string.dump(func)
 end
 
+function unescape(str)
+  str = string.gsub(str, [[\(%d%d?%d?)]],
+    function (c)
+      local n = tonumber (c)
+      if (n and 0 <= n and n < 256) then
+        return string.char(n)
+      else
+        return '\\'..c
+      end
+    end)
+  return str
+end
+
 --[[-------------------------------------------------------------------
 -- Command-line interface
 --]]-------------------------------------------------------------------
@@ -2327,6 +2364,11 @@ function main()
             if binchunk then files[b] = binchunk; gotfile = true end
           end
           i = i + 1
+        ---------------------------------------------------------
+        elseif a == "--sign" then
+          config.SearchSign = config.SIGNATURE
+        elseif string.sub(a, 1, string.len("--sign:")) == "--sign:" then
+          config.SearchSign = string.sub(a, string.len("--sign:")+1)
         ---------------------------------------------------------
         elseif a == "--rewrite" then
           if not b then error("--rewrite option needs a profile name") end
