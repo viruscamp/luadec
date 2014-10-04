@@ -1199,7 +1199,7 @@ function ChunkSpy(chunk_name, chunk)
   ---------------------------------------------------------------
   TestChunk(1, idx, "version byte")
   result.version = LoadByte()
-  if result.version ~= config.VERSION then
+  if not config.IgnoreVersion and result.version ~= config.VERSION then
     error(string.format("ChunkSpy cannot read version %02X chunks", result.version))
   end
   FormatLine(1, "version (major:minor hex digits)", previdx)
@@ -1211,7 +1211,7 @@ function ChunkSpy(chunk_name, chunk)
   ---------------------------------------------------------------
   TestChunk(1, idx, "format byte")
   result.format = LoadByte()
-  if result.format ~= config.FORMAT then
+  if not config.IgnoreFormat and result.format ~= config.FORMAT then
     error(string.format("ChunkSpy cannot read format %02X chunks", result.format))
   end
   FormatLine(1, "format (0=official)", previdx)
@@ -2369,8 +2369,12 @@ function main()
         ---------------------------------------------------------
         elseif a == "--sign" then
           config.SearchSign = config.SIGNATURE
+          config.IgnoreVersion = true
+          config.IgnoreFormat = true
         elseif string.sub(a, 1, string.len("--sign:")) == "--sign:" then
           config.SearchSign = string.sub(a, string.len("--sign:")+1)
+          config.IgnoreVersion = true
+          config.IgnoreFormat = true
         ---------------------------------------------------------
         elseif a == "--rewrite" then
           if not b then error("--rewrite option needs a profile name") end
