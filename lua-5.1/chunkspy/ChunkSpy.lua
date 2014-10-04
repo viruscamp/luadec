@@ -537,13 +537,11 @@ function DecodeInit()
   -- build opcode name table
   ---------------------------------------------------------------
   config.opnames = {}
-  config.opcodes = {}
   config.NUM_OPCODES = 0
   if not config.WIDTH_OPCODE then config.WIDTH_OPCODE = 0 end
   for v in string.gmatch(op, "[^%s]+") do
     if config.DISPLAY_LOWERCASE then v = string.lower(v) end
     config.opnames[config.NUM_OPCODES] = v
-	config.opcodes[v] = config.NUM_OPCODES
     local vlen = string.len(v)
     -- find maximum opcode length
     if vlen > config.WIDTH_OPCODE then
@@ -554,20 +552,6 @@ function DecodeInit()
   -- opmode: 0=ABC, 1=ABx, 2=AsBx
   config.opmode = "01000101000000000000002000000002200010"
 
-  config.operators={
-    [config.opcodes["add"]]="+",
-	[config.opcodes["sub"]]="-",
-	[config.opcodes["mul"]]="*",
-	[config.opcodes["div"]]="/",
-	[config.opcodes["mod"]]="%",
-	[config.opcodes["pow"]]="^",
-	[config.opcodes["unm"]]="-",
-	[config.opcodes["not"]]="not ",
-	[config.opcodes["len"]]="#",
-	[config.opcodes["eq"]]="==",
-	[config.opcodes["lt"]]="<",
-	[config.opcodes["le"]]="<=",
-  }
   ---------------------------------------------------------------
   -- initialize text widths and formats for display
   ---------------------------------------------------------------
@@ -696,7 +680,7 @@ function DescribeInst(inst, pos, func)
     if index >= config.BITRK then
       return CommentK(index - config.BITRK, quoted)
     else
-      return "R"..tostring(index)
+      return ""
     end
   end
 
@@ -723,52 +707,7 @@ function DescribeInst(inst, pos, func)
     if e == 0 then return x end
     return math.ldexp((x % 8) + 8, e - 1)
   end
- 
-  local function IS_CONSTANT(r)
-	return (r >= config.BITRK)
-  end
-  local function CC(r)
-	return (IS_CONSTANT(r) and 'K' or 'R')
-  end
-  local function CV(r)
-	return (IS_CONSTANT(r) and (r-config.BITRK) or r)
-  end
 
-  local function Kst(x)
-	return CommentK(x,true)
-  end
-  local function RK(r)
-	local str=''
-	if r >= config.BITRK then
-		str = 'K'..(r-config.BITRK).."("..Kst(r-config.BITRK)..")"
-	else
-		str = 'R'..r
-	end
-	return str
-  end
-  local function Rlist(start,num)
-	local str=""
-	for l = start, start+num-2 do
-		str = str.."R"..l..", "
-	end
-	str = str.."R"..l.." "
-	return str
-  end
-
-  
-  local a=inst.A
-  local b=inst.B
-  local c=inst.C
-  local bc=inst.Bx
-  local sbc=inst.sBx
-  local o=inst.OP
-  local pc=pos
-  
-  local isop_opc = config.opcodes
-  local isop_lower = string.lower
-  local function isop(opname)
-	return o == isop_opc[isop_lower(opname)]
-  end
   ---------------------------------------------------------------
   -- yeah, I know this is monstrous...
   -- * see the descriptions in lopcodes.h for more information
@@ -776,181 +715,114 @@ function DescribeInst(inst, pos, func)
   if inst.prev then -- continuation of SETLIST
     Operand = string.format(config.FORMAT_Bx, func.code[pos])..config.PAD_Bx
   ---------------------------------------------------------------
-  elseif isop("MOVE") then -- MOVE A B
+  elseif inst.OP ==  0 then -- MOVE A B
     Operand = OperandAB(inst)
-	Comment = string.format("%s%d := %s%d",CC(a),CV(a),CC(b),CV(b))
   ---------------------------------------------------------------
-  elseif isop("LOADK") then -- LOADK A Bx
+  elseif inst.OP ==  1 then -- LOADK A Bx
     Operand = OperandABx(inst)
-    Comment = string.format("%s%d := %s",CC(a),CV(a),CommentK(inst.Bx, true))
+    Comment = CommentK(inst.Bx, true)
   ---------------------------------------------------------------
-  elseif isop("LOADBOOL") then -- LOADBOOL A B C
+  elseif inst.OP ==  2 then -- LOADBOOL A B C
     Operand = OperandABC(inst)
-	local v
-    if inst.B == 0 then v = "false" else v = "true" end
-    if inst.C > 0 then
-		Comment = string.format("%s%d := %s; PC := %s",CC(a),CV(a),v,CommentLoc(1));
-	else
-		Comment = string.format("%s%d := %s",CC(a),CV(a),v)
-	end
-	v=nil
+    if inst.B == 0 then Comment = "false" else Comment = "true" end
+    if inst.C > 0 then Comment = Comment..", "..CommentLoc(1) end
   ---------------------------------------------------------------
-  elseif isop("LOADNIL") then -- LOADNIL A B
+  elseif inst.OP ==  3 then -- LOADNIL A B
     Operand = OperandAB(inst)
-	Comment = ''
-	for l = a ,b do
-		Comment = Comment..string.format("R%d, ",l)
-	end
-	Comment = Comment.." := nil"
   ---------------------------------------------------------------
-  elseif isop("GETUPVAL") then -- GETUPVAL A B
+  elseif inst.OP ==  4 then -- GETUPVAL A B
     Operand = OperandAB(inst)
-	Comment = string.format("%s%d := U%d , %s", CC(a), CV(a), b, func.upvalues[inst.B + 1] or "unknown upval");
-	  ---------------------------------------------------------------
-  elseif isop("SETUPVAL") then -- SETUPVAL A B
-    Operand = OperandAB(inst)
-    Comment = string.format("U%d := %s%d , %s", b, CC(a), CV(a), func.upvalues[inst.B + 1] or "unknown upval")
+    Comment = func.upvalues[inst.B + 1]
   ---------------------------------------------------------------
-  elseif isop("GETGLOBAL") then -- GETGLOBAL A Bx
+  elseif inst.OP ==  5 or   -- GETGLOBAL A Bx
+         inst.OP ==  7 then -- SETGLOBAL A Bx
     Operand = OperandABx(inst)
-    Comment = string.format("%s%d := %s",CC(a),CV(a),CommentK(inst.Bx))
-  ---------------------------------------------------------------  
-  elseif isop("SETGLOBAL") then -- SETGLOBAL A Bx
-    Operand = OperandABx(inst)
-    Comment = string.format("%s := %s%d",CommentK(inst.Bx),CC(a),CV(a))
+    Comment = CommentK(inst.Bx)
   ---------------------------------------------------------------
-  elseif isop("GETTABLE") then -- GETTABLE A B C
+  elseif inst.OP ==  6 then -- GETTABLE A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d[%s]",a,b,CommentRK(inst.C, true))
+    Comment = CommentRK(inst.C, true)
   ---------------------------------------------------------------
-  elseif isop("SETTABLE") then -- SETTABLE A B C
+  elseif inst.OP ==  8 then -- SETUPVAL A B
+    Operand = OperandAB(inst)
+    Comment = func.upvalues[inst.B + 1]
+  ---------------------------------------------------------------
+  elseif inst.OP ==  9 then -- SETTABLE A B C
     Operand = OperandABC(inst)
     Comment = CommentBC(inst)
-	Comment = string.format("R%d[%s] := %s",a,CommentRK(inst.B, true),CommentRK(inst.C, true))
   ---------------------------------------------------------------
-  elseif isop("NEWTABLE") then -- NEWTABLE A B C
+  elseif inst.OP == 10 then -- NEWTABLE A B C
     Operand = OperandABC(inst)
     local ar = fb2int(inst.B)  -- array size
     local hs = fb2int(inst.C)  -- hash size
-    Comment = string.format("%s%d := {} , ",CC(a),CV(a)).."array="..ar..", hash="..hs
+    Comment = "array="..ar..", hash="..hs
   ---------------------------------------------------------------
-  elseif isop("SELF") then -- SELF A B C
+  elseif inst.OP == 11 then -- SELF A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,CommentRK(inst.C, true))
+    Comment = CommentRK(inst.C, true)
   ---------------------------------------------------------------
-  elseif isop("ADD") or   -- ADD A B C
-         isop("SUB") or   -- SUB A B C
-         isop("MUL") or   -- MUL A B C
-         isop("DIV") or   -- DIV A B C
-         isop("MOD") or   -- MOD A B C
-         isop("POW") then -- POW A B C
+  elseif inst.OP == 12 or   -- ADD A B C
+         inst.OP == 13 or   -- SUB A B C
+         inst.OP == 14 or   -- MUL A B C
+         inst.OP == 15 or   -- DIV A B C
+         inst.OP == 16 or   -- MOD A B C
+         inst.OP == 17 then -- POW A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := %s %s %s",a,CommentRK(inst.B, true),config.operators[inst.OP],CommentRK(inst.C, true))
+    Comment = CommentBC(inst)
   ---------------------------------------------------------------
-  elseif isop("UNM") or   -- UNM A B
-         isop("NOT") or   -- NOT A B
-         isop("LEN") then -- LEN A B
+  elseif inst.OP == 18 or   -- UNM A B
+         inst.OP == 19 or   -- NOT A B
+         inst.OP == 20 then -- LEN A B
     Operand = OperandAB(inst)
-	Comment = string.format("R%d := %s%s",a,config.operators[inst.OP],CommentRK(inst.B,true))
   ---------------------------------------------------------------
-  elseif isop("CONCAT") then -- CONCAT A B C
+  elseif inst.OP == 21 then -- CONCAT A B C
     Operand = OperandABC(inst)
-	Comment = string.format("R%d := ",a)
-	for l = b,c-1 do
-		Comment = string.format("%sR%d..",Comment,l)
-	end
-	Comment = string.format("%sR%d",Comment,c)
-	
   ---------------------------------------------------------------
-  elseif isop("JMP") then -- JMP sBx
+  elseif inst.OP == 22 then -- JMP sBx
     Operand = string.format(config.FORMAT_Bx, inst.sBx)..config.PAD_Bx
     Comment = CommentLoc(inst.sBx)
   ---------------------------------------------------------------
-  elseif isop("EQ") or   -- EQ A B C
-         isop("LT") or   -- LT A B C
-         isop("LE") then -- LE A B C
+  elseif inst.OP == 23 or   -- EQ A B C
+         inst.OP == 24 or   -- LT A B C
+         inst.OP == 25 or   -- LE A B C
+         inst.OP == 27 then -- TESTSET A B C
     Operand = OperandABC(inst)
-	Comment = string.format("%s %s %s, ",CommentRK(b),config.operators[inst.OP],CommentRK(c, true))
+    if inst.OP ~= 27 then Comment = CommentBC(inst) end
+    if Comment ~= "" then Comment = Comment..", " end
+    -- since the pc++ is in the 'else' path, the sense is opposite
     local sense = " if false"
-    if inst.A == 0 then sense = " if true" end
+    if inst.OP == 27 then
+      if inst.C == 0 then sense = " if true" end
+    else
+      if inst.A == 0 then sense = " if true" end
+    end
     Comment = Comment..CommentLoc(1, sense)
-  elseif isop("TESTSET") then -- TESTSET A B C
-	Operand = OperandABC(inst)
-    local sense = " "
-	if c == 0 then sense = " not " end
-    Comment = string.format("if%sR%d then R%d = R%d else ",sense,b,a,b)
-    Comment = Comment..CommentLoc(1)
-  elseif isop("TEST") then -- TEST A C
+  elseif inst.OP == 26 then -- TEST A C
     Operand = OperandAC(inst)
-    local sense = " not "
-	if c == 0 then sense = " " end
-    Comment = string.format("if%sR%d then ",sense,a)
-    Comment = Comment..CommentLoc(1)
+    local sense = " if false"
+    if inst.C == 0 then sense = " if true" end
+    Comment = Comment..CommentLoc(1, sense)
   ---------------------------------------------------------------
-  elseif isop("CALL") or   -- CALL A B C
-         isop("TAILCALL") then -- TAILCALL A B C
+  elseif inst.OP == 28 or   -- CALL A B C
+         inst.OP == 29 then -- TAILCALL A B C
     Operand = OperandABC(inst)
-	CommentArg=""
-	if ( b >= 2 ) then
-		for l=a+1,a+b-2 do
-			CommentArg = CommentArg.."R"..l..", "
-		end
-		CommentArg = CommentArg .. "R"..a+b-1
-	elseif (b==0) then
-		CommentArg = "R"..(a+1).." to top"
-	elseif (b==1) then
-		CommentArg = ""
-	end
-	CommentRtn = ""
-	if ( c >= 2 ) then
-		for l=a,a+c-3 do
-			CommentRtn = CommentRtn.."R"..l..", "
-		end
-		CommentRtn = CommentRtn .. "R"..(a+c-2).." := "
-	elseif (c==0) then
-		CommentRtn = "R"..a.." to top := "
-	elseif (c==1) then
-		CommentRtn = ""
-	end
-	Comment = string.format("%sR%d(%s)",CommentRtn,a,CommentArg);
   ---------------------------------------------------------------
-  elseif isop("RETURN") then -- RETURN A B
+  elseif inst.OP == 30 then -- RETURN A B
     Operand = OperandAB(inst)
-	CommentArg=""
-	if ( b >= 2 ) then
-		for l=a,a+b-3 do
-			CommentArg = CommentArg.."R"..l..", "
-		end
-		CommentArg = CommentArg .. "R"..a+b-2
-	elseif (b==0) then
-		CommentArg = "R"..a.." to top"
-	elseif (b==1) then
-		CommentArg = ""
-	end
-	Comment = "return "..CommentArg
   ---------------------------------------------------------------
-  elseif isop("FORLOOP") then -- FORLOOP A sBx
+  elseif inst.OP == 31 then -- FORLOOP A sBx
     Operand = OperandAsBx(inst)
-	Comment = string.format("R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
+    Comment = CommentLoc(inst.sBx, " if loop")
   ---------------------------------------------------------------
-  elseif isop("FORPREP") then -- FORPREP A sBx
+  elseif inst.OP == 32 then -- FORPREP A sBx
     Operand = OperandAsBx(inst)
-	Comment = string.format("R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
+    Comment = CommentLoc(inst.sBx)
   ---------------------------------------------------------------
-  elseif isop("TFORLOOP") then -- TFORLOOP A C
+  elseif inst.OP == 33 then -- TFORLOOP A C
     Operand = OperandAC(inst)
-    CommentRtn = ""
-	if ( c >= 1 ) then
-		for l=a+3,a+c+1 do
-			CommentRtn = CommentRtn.."R"..l..", "
-		end
-		CommentRtn = CommentRtn .. "R"..(a+c+2).." := "
-	elseif (c==0) then
-		CommentRtn = "R"..a.." to top := "
-	end
-	Comment = string.format("%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",CommentRtn, a,a+1,a+2, a+3, a+2, a+3, pc+2);
+    Comment = CommentLoc(1, " if exit")
   ---------------------------------------------------------------
-  elseif isop("SETLIST") then -- SETLIST A B C
+  elseif inst.OP == 34 then -- SETLIST A B C
     Operand = OperandABC(inst)
     -- R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B
     local n = inst.B
@@ -962,44 +834,27 @@ function DescribeInst(inst, pos, func)
     end
     local start = (c - 1) * config.FPF + 1
     local last = start + n - 1
-    Comment = start.." to "
+    Comment = "index "..start.." to "
     if n ~= 0 then
       Comment = Comment..last
-	  EndReg = "R"..a+last
     else
       Comment = Comment.."top"
-	  EndReg = "top"
     end
-	Comment = string.format("R%d[%s] := R%d to %s",a,Comment,a+1,EndReg)
   ---------------------------------------------------------------
-  elseif isop("CLOSE") then -- CLOSE A
+  elseif inst.OP == 35 then -- CLOSE A
     Operand = string.format(config.FORMAT_A, inst.A)
-	Comment = string.format("SAVE R%d to top",a)
   ---------------------------------------------------------------
-  elseif isop("CLOSURE") then -- CLOSURE A Bx
+  elseif inst.OP == 36 then -- CLOSURE A Bx
     Operand = OperandABx(inst)
     -- lets user know how many following instructions are significant
     Comment = func.p[inst.Bx + 1].nups.." upvalues"
-	Comment = string.format("R%d := closure(function[%d]) %s",a,bc,Comment)
   ---------------------------------------------------------------
-  elseif isop("VARARG") then -- VARARG A B
+  elseif inst.OP == 37 then -- VARARG A B
     Operand = OperandAB(inst)
-	CommentArg=""
-	if ( b >= 2 ) then
-		for l=a,a+b-3 do
-			CommentArg = CommentArg.."R"..l..", "
-		end
-		CommentArg = CommentArg .. "R"..a+b-2
-	elseif (b==0) then
-		CommentArg = "R"..a.." to top"
-	else
-		CommentArg = "Error Regs"
-	end
-	Comment = CommentArg.." := ..."
   ---------------------------------------------------------------
   else
     -- add your VM extensions here
-    Operand = string.format("OP %d %s", inst.OP, config.opnames[inst.OP])
+    Operand = string.format("OP %d", inst.OP)
   end
 
   ---------------------------------------------------------------
@@ -2180,18 +2035,8 @@ function ChunkSpy_DoFiles(files)
         -- duplicate filenames eliminated here
         binary_chunks[filename] = binchunk
       else
-	    --try to compile file
-	    local f = loadstring(binchunk,filename)
-		binchunk = f and string.dump(f)
-        if binchunk then
-          local sig = string.sub(binchunk, 1, string.len(config.SIGNATURE))
-          if sig == config.SIGNATURE then
-            binary_chunks[filename] = binchunk
-	      end
-	    else
-          -- may be a source code listing
-          table.insert(other_files, filename)
-		end
+        -- may be a source code listing
+        table.insert(other_files, filename)
       end
     end
   end
