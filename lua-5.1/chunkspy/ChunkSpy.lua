@@ -127,6 +127,7 @@ function SetProfile(profile)
     config.DISPLAY_FLAG, config.AUTO_DETECT = false, true
     local LUA_SAMPLE = string.dump(function() end)
     -- config.* profile parms set in ChunkSpy() call...
+    config.SIGNATURE = "\27Lua"
     local ok, _ = pcall(ChunkSpy, "", LUA_SAMPLE)
     if not ok then error("error compiling sample to test local profile") end
     config.DISPLAY_FLAG, config.AUTO_DETECT = flag1, flag2
@@ -134,6 +135,7 @@ function SetProfile(profile)
   else
     local c = CONFIGURATION[profile]
     if not c then return false end
+    if not c.SIGNATURE then c.SIGNATURE = "\27Lua" end
     for i, v in pairs(c) do config[i] = v end
   end
   return true
