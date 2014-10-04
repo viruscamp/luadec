@@ -656,6 +656,8 @@ end
 function DescribeInst(inst, pos, func)
   local Operand
   local Comment = ""
+  local CommentArg = ""
+  local CommentRtn = ""
 
   ---------------------------------------------------------------
   -- operand formatting helpers
@@ -747,16 +749,20 @@ function DescribeInst(inst, pos, func)
     end
     return str
   end
-  local function Rlist(start,num)
-    local str=""
-    for l = start, start+num-2 do
-      str = str.."R"..l..", "
+  local function RList(start,num)
+    if (num>2) then
+      return "R"..start.." to R"..(start+num-1)
+    elseif (num==2) then
+      return "R"..start..", R"..(start+1)
+    elseif (num==1) then
+      return "R"..start
+    elseif (num==0) then
+      return ""
+    else
+      return "R"..start.." to top"
     end
-    str = str.."R"..l.." "
-    return str
   end
 
-  
   local a=inst.A
   local b=inst.B
   local c=inst.C
@@ -890,44 +896,14 @@ function DescribeInst(inst, pos, func)
   elseif isop("CALL") or   -- CALL A B C
          isop("TAILCALL") then -- TAILCALL A B C
     Operand = OperandABC(inst)
-    CommentArg=""
-    if ( b >= 2 ) then
-      for l=a+1,a+b-2 do
-        CommentArg = CommentArg.."R"..l..", "
-      end
-      CommentArg = CommentArg .. "R"..a+b-1
-    elseif (b==0) then
-      CommentArg = "R"..(a+1).." to top"
-    elseif (b==1) then
-      CommentArg = ""
-    end
-    CommentRtn = ""
-    if ( c >= 2 ) then
-      for l=a,a+c-3 do
-        CommentRtn = CommentRtn.."R"..l..", "
-      end
-      CommentRtn = CommentRtn .. "R"..(a+c-2).." := "
-    elseif (c==0) then
-      CommentRtn = "R"..a.." to top := "
-    elseif (c==1) then
-      CommentRtn = ""
-    end
-    Comment = string.format("%sR%d(%s)",CommentRtn,a,CommentArg);
+    CommentArg = RList(a+1,b-1)
+    CommentRtn = RList(a,c-1)
+    Comment = string.format("%s := R%d(%s)",CommentRtn,a,CommentArg);
   ---------------------------------------------------------------
   elseif isop("RETURN") then -- RETURN A B
     Operand = OperandAB(inst)
-    CommentArg=""
-    if ( b >= 2 ) then
-      for l=a,a+b-3 do
-        CommentArg = CommentArg.."R"..l..", "
-      end
-      CommentArg = CommentArg .. "R"..a+b-2
-    elseif (b==0) then
-      CommentArg = "R"..a.." to top"
-    elseif (b==1) then
-      CommentArg = ""
-    end
-    Comment = "return "..CommentArg
+    CommentRtn = RList(a,b-1)
+    Comment = "return "..CommentRtn
   ---------------------------------------------------------------
   elseif isop("FORLOOP") then -- FORLOOP A sBx
     Operand = OperandAsBx(inst)
@@ -939,42 +915,37 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("TFORLOOP") then -- TFORLOOP A C
     Operand = OperandAC(inst)
-    CommentRtn = ""
-    if ( c >= 1 ) then
-      for l=a+3,a+c+1 do
-        CommentRtn = CommentRtn.."R"..l..", "
-      end
-      CommentRtn = CommentRtn .. "R"..(a+c+2).." := "
-    elseif (c==0) then
-      CommentRtn = "R"..a.." to top := "
+    if (c>0) then
+      CommentRtn = RList(a+3,c)
+    else
+      CommentRtn = "Error Regs"
     end
-    Comment = string.format("%s R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d",CommentRtn, a,a+1,a+2, a+3, a+2, a+3, pc+2);
+    Comment = string.format("%s := R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d", CommentRtn, a, a+1,a+2, a+3, a+2, a+3, pc+2);
   ---------------------------------------------------------------
   elseif isop("SETLIST") then -- SETLIST A B C
     Operand = OperandABC(inst)
     -- R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B
-    local n = inst.B
-    local c = inst.C
     if c == 0 then
       -- grab next inst when index position is large
       c = func.code[pos + 1]
       func.inst[pos + 1].prev = true
     end
     local start = (c - 1) * config.FPF + 1
-    local last = start + n - 1
-    Comment = start.." to "
-    if n ~= 0 then
-      Comment = Comment..last
-      EndReg = "R"..a+last
+    local last = start + b - 1
+    CommentArg = start.." to "
+    local EndReg
+    if b ~= 0 then
+      CommentArg = CommentArg..last
+      EndReg = "R"..(a+last)
     else
-      Comment = Comment.."top"
+      CommentArg = CommentArg.."top"
       EndReg = "top"
     end
-    Comment = string.format("R%d[%s] := R%d to %s",a,Comment,a+1,EndReg)
+    Comment = string.format("R%d[%s] := R%d to %s",a,CommentArg,a+1,EndReg)
   ---------------------------------------------------------------
   elseif isop("CLOSE") then -- CLOSE A
     Operand = string.format(config.FORMAT_A, inst.A)
-    Comment = string.format("SAVE R%d to top",a)
+    Comment = string.format("SAVE all upvalues from R%d to top",a)
   ---------------------------------------------------------------
   elseif isop("CLOSURE") then -- CLOSURE A Bx
     Operand = OperandABx(inst)
@@ -984,18 +955,11 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("VARARG") then -- VARARG A B
     Operand = OperandAB(inst)
-    CommentArg=""
-    if ( b >= 2 ) then
-      for l=a,a+b-3 do
-        CommentArg = CommentArg.."R"..l..", "
-      end
-      CommentArg = CommentArg .. "R"..a+b-2
-    elseif (b==0) then
-      CommentArg = "R"..a.." to top"
-    else
-      CommentArg = "Error Regs"
+    CommentRtn = RList(a,b-1)
+    if ( b==1 or b<0 ) then
+      CommentRtn = "Error Regs"
     end
-    Comment = CommentArg.." := ..."
+    Comment = CommentRtn.." := ..."
   ---------------------------------------------------------------
   else
     -- add your VM extensions here
@@ -2181,8 +2145,11 @@ function ChunkSpy_DoFiles(files)
         binary_chunks[filename] = binchunk
       else
         --try to compile file
-        local f = loadstring(binchunk,filename)
-        binchunk = f and string.dump(f)
+        local func, msg = loadstring(binchunk, filename)
+        if not func then
+          print(string.format("failed to compile %s", msg))
+        end
+        binchunk = func and string.dump(func)
         if binchunk then
           local sig = string.sub(binchunk, 1, string.len(config.SIGNATURE))
           if sig == config.SIGNATURE then
