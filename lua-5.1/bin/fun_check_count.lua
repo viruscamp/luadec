@@ -12,7 +12,7 @@ for line in f:lines() do
 		if string_find(line, '^%s*-- function check fail [%d_]+ : cannot compile') then
 			uncompilable = uncompilable + 1
 		end
-	elseif string_find('^%s*-- function check Command line') then
+	elseif string_find(line, '^%s*-- function check Command line') then
 		files = files + 1
 	end
 end

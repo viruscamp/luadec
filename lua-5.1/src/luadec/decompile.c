@@ -456,12 +456,12 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 				prevParent = currExp->parent;
 				chain = MakeExpChain(dest);
 				Untie(currExp, thenaddr);
-				if (prevParent)
-					if (prevParent->is_chain)
-						prevParent = prevParent->subexp;
+				if (prevParent && prevParent->is_chain) {
+					prevParent = prevParent->subexp;
+				}
 				TieAsSubExp(chain, currExp);
 
-				currExp->parent = prevParent; // WHY comment line 483 to avoid a memory leak, but may cause logic expression output error
+				//currExp->parent = prevParent; // WHY use this line cause a memory leak, but output is better
 				if (prevParent == NULL) {
 					firstExp = chain;
 				} else {
@@ -547,20 +547,18 @@ WriteBoolean_CLEAR_HANDLER1:
 	return result;
 }
 
-char* OutputBoolean(Function* F, int* endif, int test) {
-	int thenaddr;
+char* OutputBoolean(Function* F, int* thenaddr, int* endif, int test) {
 	char* result = NULL;
 	LogicExp* exp = NULL;
+	error = NULL;
 
+	exp = MakeBoolean(F, thenaddr, endif);
 	if (error) goto OutputBoolean_CLEAR_HANDLER1;
-	exp = MakeBoolean(F, &thenaddr, endif);
-	if (error) goto OutputBoolean_CLEAR_HANDLER1;
-	result = WriteBoolean(exp, &thenaddr, endif, test);	
+	result = WriteBoolean(exp, thenaddr, endif, test);	
 	if (error) goto OutputBoolean_CLEAR_HANDLER1;
 
 OutputBoolean_CLEAR_HANDLER1:
 	if (exp) DeleteLogicExpTree(exp);
-	//if (error) { free(result); return NULL; }
 
 	return result;
 }
@@ -634,13 +632,9 @@ void FlushBoolean(Function* F) {
 		int endif = 0, thenaddr = 0;
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
-		LogicExp* exp = NULL;
 		LoopItem* walk = NULL;
 
-		exp = MakeBoolean(F, &thenaddr, &endif);
-		if (error) goto FlushBoolean_CLEAR_HANDLER1;
-
-		test = WriteBoolean(exp, &thenaddr, &endif, 0);
+		test = OutputBoolean(F, &thenaddr, &endif, 0);
 		if (error) goto FlushBoolean_CLEAR_HANDLER1;
 
 		//TODO find another method to determine while loop body to output while do
@@ -669,7 +663,6 @@ void FlushBoolean(Function* F) {
 		}
 
 FlushBoolean_CLEAR_HANDLER1:
-		if (exp) DeleteLogicExpTree(exp);
 		if (test) free(test);
 		StringBuffer_delete(str);
 		if (error) return;
@@ -736,8 +729,8 @@ void AssignReg(Function* F, int reg, const char* src, int prio, int mayTest) {
 
 	nsrc = luadec_strdup(src);
 	if (F->testpending == reg+1 && mayTest && F->testjump == F->pc+2) {
-		int endif;
-		char* test = OutputBoolean(F, &endif, 1);
+		int thenaddr, endif;
+		char* test = OutputBoolean(F, &thenaddr, &endif, 1);
 		if (error) {
 			free(nsrc);
 			if (test) free(test);
@@ -2007,11 +2000,11 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					/*
 					* assign boolean value
 					*/
+					int thenaddr = 0, endif = 0;
 					char *test = NULL;
-					TRY(test = OutputBoolean(F, NULL, 1));
-					StringBuffer_printf(str, "%s", test);
+					TRY(test = OutputBoolean(F, &thenaddr, NULL, 1));
+					TRY(AssignReg(F, a, test, 0, 0));
 					if (test) free(test);
-					TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 				}
 				if (c)
 					ignoreNext = 1;
@@ -2334,8 +2327,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 					/*
 					* JMP 2
-					* LOADBOOL skip next , must be this and cannot be excuted, will be treat as TESTSET
-					* LOADBOOL
+					* LOADBOOL Ra 0 1 must mark one as useful
+					* LOADBOOL Ra 1 0
 					* ::jmp_target
 					*/
 					fprintf(stderr, "processing OP_JMP to } else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) { \n");
@@ -2347,17 +2340,17 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					fflush(stderr);
 					{
 					int boola = GETARG_A(code[pc+1]);
+					int thenaddr = 0, endif = 0;
 					char* test = NULL;
 					/* skip */
 					const char* ra = REGISTER(boola);
 					AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(ra), OP_TESTSET, c, pc+3, dest));
 					F->testpending = a+1;
 					F->testjump = dest;
-					TRY(test = OutputBoolean(F, NULL, 1));
-					StringBuffer_printf(str, "%s", test);
-					if (test) free(test);
+					TRY(test = OutputBoolean(F, &thenaddr, NULL, 1));
 					TRY(UnsetPending(F, boola));
-					TRY(AssignReg(F, boola, StringBuffer_getRef(str), 0, 0));
+					TRY(AssignReg(F, boola, test, 0, 0));
+					if (test) free(test);
 					ignoreNext = 2;
 					}
 				} else if (GET_OPCODE(idest) == OP_LOADBOOL) { // WHY

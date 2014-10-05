@@ -3,8 +3,8 @@
 LIBDIR=..
 BINDIR=.
 
-LUA= ../../bin/lua
-LUAC= ../../bin/luac
+LUA= ../lua
+LUAC= ../luac
 BIN2C = $(LUA) bin2c.lua
 CC= gcc
 CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
@@ -44,7 +44,7 @@ T= luadec
 all: $T
 
 $T: $(OBJS) $(MYOBJS) $(LIBDIR)/liblua.a
-	$(CC) -o $@ $(LDFLAGS) $(OBJS) $(MYOBJS) $(LIBDIR)/liblua.a $(LIBS)
+	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 debug:
 	$(MAKE) all MYCFLAGS="-g -DDEBUG -D_DEBUG"
@@ -60,6 +60,7 @@ $(LIBDIR)/liblua.a:
 
 luareplace.o: luareplace.c
 luareplace: luareplace.o $(LIBDIR)/liblua.a
+	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 allopcodes_lua.h: allopcodes.lua
 	$(BIN2C) allopcodes.lua allopcodes_lua > allopcodes_lua.h
@@ -71,12 +72,7 @@ allopcodes_luac.h: allopcodes.luac
 luaopswap.o: luaopswap.c allopcodes_lua.h allopcodes_luac.h
 lundump.o: lundump.c
 luaopswap: luaopswap.o lundump.o $(LIBDIR)/liblua.a
+	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 clean:
 	rm -f $(OBJS) $T
-
-co:
-	co -q -f -M $(SRCS)
-
-klean: clean
-	rm -f $(SRCS)
