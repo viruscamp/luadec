@@ -1,20 +1,32 @@
--- oræ“ä½œç¬¦ï¼Œ ä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
+-- or²Ù×÷·û£¬ ²»ÄÜÓÃ if ±íÊ¾£¬ ĞèÒªÖĞ¼ä±äÁ¿
 function debug_or()
   local f,a,b
   fg = ((not a) or b)
   -- if (a) then x = b else x = true end; fg = x
 end
 
--- andæ“ä½œç¬¦ï¼Œä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
+-- or²Ù×÷·û, Á½¸öÅĞ¶Ï¶¼Ìøµ½ loadbool true£¨Á¬ĞøloadboolµÄºó¾ä£©
+function debug_or2()
+  local f,a,b,x,y
+  fg = ((not a) or x<y or b)
+end
+
+-- and²Ù×÷·û£¬²»ÄÜÓÃ if ±íÊ¾£¬ ĞèÒªÖĞ¼ä±äÁ¿
 function debug_and_call()
   local f,a,b,c
   fg = ((a<b) and c)
   -- if (a<b) then x = c else x = false end; fg = x
 end
 
--- andæ“ä½œç¬¦ï¼Œå¯ä»¥ç”¨ if è¡¨ç¤ºï¼Œå·²åç¼–è¯‘æˆ ifï¼Œæ­£å¸¸æ— è§†äº†ä¸€æ¡ LOADBOOL
+-- and²Ù×÷·û£¬¿ÉÒÔÓÃ if ±íÊ¾£¬ÒÑ·´±àÒë³É if£¬ÓëÔ­ÏÈ±ÈÉÙÒ»Ìõ loadbool
 function debug_and_set()
   local f,a,b,c
   f = ((a<b) and c)
   -- if (a<b) then f = c else f = false end;
+end
+
+-- »ìºÏ or and £¬Á¬Ğø loadbool µÄ false true ¶¼ÓĞÊ¹ÓÃ
+function debug_or_and()
+  local f,a,b,x,y
+  fg=(not a) or x<y and d==e and x
 end

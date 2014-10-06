@@ -3,7 +3,7 @@ function test0()
   return
 end
 
--- test1 test2 æ˜¯å‘ç°é—®é¢˜çš„åœ°æ–¹
+-- test1 test2 ÊÇ·¢ÏÖÎÊÌâµÄµØ·½
 function test1()
   local f
   f(not (nil and f(nil)))
@@ -14,7 +14,7 @@ function test2()
   f = (not (nil and f(nil)))
 end
 
--- test3 test4 å­—èŠ‚ç ç›¸åŒï¼Œå¯è§æœ‰é€»è¾‘è¡¨è¾¾å¼ä¼˜åŒ–ï¼Œ test4 ä¼˜åŒ–åˆ° test3
+-- test3 test4 ×Ö½ÚÂëÏàÍ¬£¬¿É¼ûÓĞÂß¼­±í´ïÊ½ÓÅ»¯£¬ test4 ÓÅ»¯µ½ test3
 function test3()
   local f,a,b
   f = (not (a and b))
@@ -25,19 +25,19 @@ function test4()
   f = ((not a) or (not b))
 end
 
--- test5 ä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ åœ¨ä¸å¼•å…¥ä¸­é—´å˜é‡çš„æƒ…å†µä¸‹ï¼Œä¸ test6 é€»è¾‘è¡¨è¾¾å¼ç›¸åŒ
+-- test5 ²»ÄÜÓÃ if ±íÊ¾£¬ ÔÚ²»ÒıÈëÖĞ¼ä±äÁ¿µÄÇé¿öÏÂ£¬Óë test6 Âß¼­±í´ïÊ½ÏàÍ¬
 function test5()
   local f,a,b
   f((not a) or b)
 end
 
--- test6 è¿™æ˜¯æœ€ç®€å½¢å¼ ï¼Œ å¤šä¸€æ¡æ— æ³•æ‰§è¡Œåˆ°çš„LOADBOOLï¼Œ oræ“ä½œç¬¦ æ‰§è¡Œåä¸€æ¡ LOADBOOL true 
+-- test6 ÕâÊÇ×î¼òĞÎÊ½ £¬ ¶àÒ»ÌõÎŞ·¨Ö´ĞĞµ½µÄLOADBOOL£¬ or²Ù×÷·û Ö´ĞĞºóÒ»Ìõ LOADBOOL true 
 function test6()
   local f,a,b
   f = (not a) or b
 end
 
--- test7 ç”¨ if è¡¨ç¤º test6
+-- test7 ÓÃ if ±íÊ¾ test6
 function test7()
   local f,a,b
   if (a) then
@@ -47,35 +47,35 @@ function test7()
   end
 end
 
--- test8 å¦ä¸€ç§æœ€ç®€å½¢å¼ï¼Œ å¤šä¸€æ¡æ— æ³•æ‰§è¡Œåˆ°çš„LOADBOOLï¼Œ oræ“ä½œç¬¦ æ‰§è¡Œåä¸€æ¡ LOADBOOL true 
+-- test8 ÁíÒ»ÖÖ×î¼òĞÎÊ½£¬ ¶àÒ»ÌõÎŞ·¨Ö´ĞĞµ½µÄLOADBOOL£¬ or²Ù×÷·û Ö´ĞĞºóÒ»Ìõ LOADBOOL true 
 function test8()
   local f,a,b,c
   f = a > b or c
 end
 
--- test9 ç”¨ if è¡¨ç¤º test8 
+-- test9 ÓÃ if ±íÊ¾ test8 
 function test9()
   local f,a,b,c
-  if ( a<=b ) then -- ç”¨ (not a>b) åˆ™ä¸ä¸€æ ·
+  if ( a<=b ) then -- ÓÃ (not a>b) Ôò²»Ò»Ñù
     f = c
   else
     f = true
   end
 end
 
--- testand0 æ— æ³•ç”¨ ifï¼Œé€»è¾‘è¡¨è¾¾å¼ä¸ testand3 ç›¸åŒ
+-- testand0 ÎŞ·¨ÓÃ if£¬Âß¼­±í´ïÊ½Óë testand3 ÏàÍ¬
 function testand0()
   local f,a,b,c
   f((a<b) and c)
 end
 
--- testand1 å¯¹åº”çš„ and è¡¨ç¤ºï¼Œ åŒæ ·æ˜¯å¤šä¸€æ¡æ— æ³•æ‰§è¡Œåˆ°çš„LOADBOOLï¼Œandæ“ä½œç¬¦ æ‰§è¡Œå‰ä¸€æ¡ LOADBOOL false skip
+-- testand1 ¶ÔÓ¦µÄ and ±íÊ¾£¬ Í¬ÑùÊÇ¶àÒ»ÌõÎŞ·¨Ö´ĞĞµ½µÄLOADBOOL£¬and²Ù×÷·û Ö´ĞĞÇ°Ò»Ìõ LOADBOOL false skip
 function testand1()
   local f,a,b,c
   f = (not a) and c
 end
 
--- testand2 ç”¨ if è¡¨ç¤º testand1
+-- testand2 ÓÃ if ±íÊ¾ testand1
 function testand2()
   local f,a,b,c
   if (not a) then
@@ -85,13 +85,13 @@ function testand2()
   end
 end
 
--- testand3 å¯¹åº”çš„ and è¡¨ç¤ºï¼Œ åŒæ ·æ˜¯å¤šä¸€æ¡æ— æ³•æ‰§è¡Œåˆ°çš„LOADBOOLï¼Œandæ“ä½œç¬¦ æ‰§è¡Œå‰ä¸€æ¡ LOADBOOL false skip
+-- testand3 ¶ÔÓ¦µÄ and ±íÊ¾£¬ Í¬ÑùÊÇ¶àÒ»ÌõÎŞ·¨Ö´ĞĞµ½µÄLOADBOOL£¬and²Ù×÷·û Ö´ĞĞÇ°Ò»Ìõ LOADBOOL false skip
 function testand3()
   local f,a,b,c
   f = (a<b) and c
 end
 
--- testand4 ç”¨ if è¡¨ç¤º testand3
+-- testand4 ÓÃ if ±íÊ¾ testand3
 function testand4()
   local f,a,b,c
   if (a<b) then
@@ -99,25 +99,4 @@ function testand4()
   else
     f = false
   end
-end
-
--- oræ“ä½œç¬¦ï¼Œ ä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
-function debug_or()
-  local f,a,b
-  fg = ((not a) or b)
-  -- if (a) then x = b else x = true end; fg = x
-end
-
--- andæ“ä½œç¬¦ï¼Œä¸èƒ½ç”¨ if è¡¨ç¤ºï¼Œ éœ€è¦ä¸­é—´å˜é‡
-function debug_and_call()
-  local f,a,b,c
-  fg = ((a<b) and c)
-  -- if (a<b) then x = c else x = false end; fg = x
-end
-
--- andæ“ä½œç¬¦ï¼Œå¯ä»¥ç”¨ if è¡¨ç¤ºï¼Œå·²åç¼–è¯‘æˆ ifï¼Œæ­£å¸¸æ— è§†äº†ä¸€æ¡ LOADBOOL
-function debug_and_set()
-  local f,a,b,c
-  f = ((a<b) and c)
-  -- if (a<b) then f = c else f = false end;
 end
