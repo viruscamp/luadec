@@ -1567,38 +1567,63 @@ int FunctionCheck(Proto* f, const char* funcnumstr, StringBuffer* str) {
 	return check_result;
 }
 
-int CompareProto(const Proto* forg, const Proto* fnew, StringBuffer* str) {
+int CompareProto(const Proto* fleft, const Proto* fright, StringBuffer* str) {
 	int sizesame, pc, minsizecode;
 	int diff = 0;
 	StringBuffer_set(str, "");
-	if (forg->numparams != fnew->numparams) {
+	if (fleft->numparams != fright->numparams) {
 		diff++;
 		StringBuffer_add(str, " different params size;");
 	}
-	if (forg->nups != fnew->nups) {
+	if (fleft->nups != fright->nups) {
 		diff++;
 		StringBuffer_add(str, " different upvalues size;");
 	}
-	if (forg->is_vararg != fnew->is_vararg) {
+	if (fleft->is_vararg != fright->is_vararg) {
 		diff++;
 		StringBuffer_add(str, " different is_vararg;");
 	}
-	if (forg->sizecode != fnew->sizecode) {
+	if (fleft->sizecode != fright->sizecode) {
 		diff++;
 		StringBuffer_add(str, " different code size;");
 	}
 	sizesame = 0;
-	minsizecode = MIN(forg->sizecode, fnew->sizecode);
+	minsizecode = MIN(fleft->sizecode, fright->sizecode);
 	for (pc = 0; pc < minsizecode; pc++){
-		Instruction iorg = forg->code[pc];
-		Instruction inew = fnew->code[pc];
-		if (iorg == inew) {
+		Instruction ileft = fleft->code[pc];
+		Instruction iright = fright->code[pc];
+		if (ileft == iright) {
 			sizesame++;
+		} else {
+			OpCode opleft = GET_OPCODE(ileft);
+			int aleft = GETARG_A(ileft);
+			int bleft = GETARG_B(ileft);
+			int cleft = GETARG_C(ileft);
+			int bcleft = GETARG_Bx(ileft);
+			int sbcleft = GETARG_sBx(ileft);
+			OpCode opright = GET_OPCODE(iright);
+			int aright = GETARG_A(iright);
+			int bright = GETARG_B(iright);
+			int cright = GETARG_C(iright);
+			int bcright = GETARG_Bx(iright);
+			int sbcright = GETARG_sBx(iright);
+
+			if (opleft == opright) {
+				if (opleft == OP_EQ && aleft == aright &&
+					bleft == cright && cleft == bright) {
+					sizesame++;
+				}
+			} else if ((opleft == OP_LT && opright == OP_LE) ||
+				(opleft == OP_LE && opright == OP_LT)) {
+				if (aleft == !aright &&	bleft == cright && cleft == bright) {
+					sizesame++;
+				}
+			}
 		}
 	}
-	if (sizesame != forg->sizecode) {
+	if (sizesame != fleft->sizecode) {
 		diff++;
-		StringBuffer_addPrintf(str, " sizecode org: %d, decompiled: %d, same: %d;", forg->sizecode, fnew->sizecode, sizesame);
+		StringBuffer_addPrintf(str, " sizecode org: %d, decompiled: %d, same: %d;", fleft->sizecode, fright->sizecode, sizesame);
 	}
 	return diff;
 }
@@ -2412,11 +2437,12 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		case OP_LT:
 		case OP_LE:
 			{
+				// WHY can't we remove it
 				if (IS_CONSTANT(b)) {
 					int swap = b;
 					b = c;
 					c = swap;
-					a = !a;
+					if (o != OP_EQ) a = !a;
 					if (o == OP_LT) o = OP_LE;
 					else if (o == OP_LE) o = OP_LT;
 				}
