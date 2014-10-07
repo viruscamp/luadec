@@ -1093,7 +1093,7 @@ const char* GetR(Function* F, int r) {
 }
 
 void DeclareVariable(Function* F, const char* name, int reg) {
-	F->Rvar[reg] = 1;
+	IS_VARIABLE(reg) = 1;
 	if (F->R[reg]) {
 		free(F->R[reg]);
 	}
@@ -1184,7 +1184,7 @@ void ReleaseLocals(Function* F) {
 				SET_ERROR(F, errortmp);
 				return;
 			}
-			F->Rvar[r] = 0;
+			IS_VARIABLE(r) = 0;
 			F->Rprio[r] = 0;
 			if (!F->ignore_for_variables && !F->released_local) {
 				F->released_local = F->f->locvars[i].startpc;
@@ -2451,39 +2451,34 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				break;
 			}
 		case OP_TESTSET: // Lua5.1 specific TODO: correct it
-		case OP_TEST:
 			{
-				int cmpa, cmpb, cmpc;
 				const char *ra, *rb;
 
-				if (o==OP_TESTSET) {
-					cmpa = a;
-					cmpb = b;
-					cmpc = c;
+				if (!IS_VARIABLE(a)) {
+					ra = REGISTER(a);
+					PENDING(a) = 0;
 				} else {
-					cmpa = a;
-					cmpb = a;
-					cmpc = c;
-					// StringBuffer_add(str, "  -- Lua5.1 code: CHECK");
-					// TRY(AddStatement(F, str));
+					TRY(ra = GetR(F, a));
 				}
+				TRY(rb = GetR(F, b));
+				AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(rb), o, c, pc + 1, -1));
+				F->testpending = a + 1;
+				goto LOGIC_NEXT_JMP;
+				break;
+			}
+		case OP_TEST:
+			{
+				const char *ra;
 
-				if (!IS_VARIABLE(cmpa)) {
-					ra = REGISTER(cmpa);
-					TRY(rb = GetR(F, cmpb));
-					PENDING(cmpa) = 0;
+				if (!IS_VARIABLE(a)) {
+					ra = REGISTER(a);
+					PENDING(a) = 0;
 				} else {
-					TRY(ra = GetR(F, cmpa));
-					if (cmpa != cmpb) {
-						TRY(rb = GetR(F, cmpb));
-					} else {
-						rb = ra;
-					}
+					TRY(ra = GetR(F, a));
 				}
-				AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(rb), o, cmpc, pc+1, -1));
-				// Within an IF, a and b are the same, avoiding side-effects
-				if (cmpa != cmpb || !IS_VARIABLE(cmpa)) {
-					F->testpending = cmpa+1;
+				AddToList(&(F->bools), (ListItem*)MakeBoolOp(luadec_strdup(ra), luadec_strdup(ra), o, c, pc + 1, -1));
+				if (!IS_VARIABLE(a)) {
+					F->testpending = a + 1;
 				}
 				goto LOGIC_NEXT_JMP;
 				break;
