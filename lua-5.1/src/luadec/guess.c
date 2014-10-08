@@ -48,11 +48,12 @@ void deletellist(llist* list) {
 }
 
 int luaU_guess_locals(Proto* f, int main) {
-	int blockend[255];
+	int blockend_size = MAXARG_A+1;
+	int* blockend = (int*)calloc(blockend_size, sizeof(int));
 	int block;
-	int regassign[MAXARG_A];
-	int regusage[MAXARG_A];
-	int regblock[MAXARG_A];
+	int regassign[MAXARG_A+1];
+	int regusage[MAXARG_A+1];
+	int regblock[MAXARG_A+1];
 	int lastfree;
 	int i,i2,x,pc;
 	llist list_begin;
@@ -338,6 +339,10 @@ int luaU_guess_locals(Proto* f, int main) {
 			regblock[a+2] = dest;
 			regblock[a+3] = dest-1;
 			block++;
+			if (block >= blockend_size) {
+				blockend_size = blockend_size * 2;
+				blockend = (int*)realloc(blockend, blockend_size);
+			}
 			blockend[block] = dest-1;
 			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
 				blockend[block]--;
@@ -366,6 +371,10 @@ int luaU_guess_locals(Proto* f, int main) {
 			}
 			if (dest>pc) {
 				block++;
+				if (block >= blockend_size) {
+					blockend_size = blockend_size * 2;
+					blockend = (int*)realloc(blockend, blockend_size);
+				}
 				blockend[block] = dest-1;
 			}
 			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
@@ -429,15 +438,19 @@ int luaU_guess_locals(Proto* f, int main) {
 			lastfree++;
 		}
 
-		while (blockend[block] <= pc+1) {
+		while (block >= 0 && blockend[block] <= pc+1) {
 			block--;
+		}
+		if (block < 0) {
+			fprintf(stderr, "cannot find blockend > %d(pc+1)\n", pc+1);
+			block = 0;
 		}
 		while ((lastfree!=0) && (regblock[lastfree-1] <= pc+1)) {
 			lastfree--;
 			regusage[lastfree]=0;
 		}
-
 	}
+	free(blockend);
 
 	// print out information
 	{
