@@ -144,12 +144,12 @@ int generateOp2op(const char* opcodes_def) {
 	char left[32], right[32];
 	int readcount = 0, linenum = 0;
 
+	FILE* F = (opcodes_def == NULL) ? stdout : fopen(opcodes_def, "rt");
+	if (F == NULL) cannot("open", opcodes_def);
+
 	for (i = 0; i < OP2OP_SIZE; i++){
 		op2op[i] = i;
 	}
-
-	FILE* F = (opcodes_def == NULL) ? stdout : fopen(opcodes_def, "rt");
-	if (F == NULL) cannot("open", opcodes_def);
 
 	while ((readcount = fscanf(F, "%30s %30s\n", left, right)) != EOF) {
 		linenum++;
