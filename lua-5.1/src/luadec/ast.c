@@ -6,7 +6,7 @@
 
 extern int debug;
 
-static const char* stmttype[22] = {
+static const char* const stmttype[] = {
 	"SIMPLE_STMT",
 	"FUNCTION_STMT",
 	"BLOCK_STMT",

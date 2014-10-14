@@ -34,7 +34,6 @@ extern int guess_locals;
 extern lua_State* glstate;
 extern Proto* glproto;
 
-const char* nilstr = "nil";
 char unknown_local[] = { "ERROR_unknown_local_Rxxxx" };
 char unknown_upvalue[] = { "ERROR_unknown_upvalue_Rxxxx" };
 StringBuffer* errorStr;
