@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\lua.c">
+    <ClCompile Include="..\lua-5.1\src\lua.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>

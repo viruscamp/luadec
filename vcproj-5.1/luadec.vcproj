@@ -25,7 +25,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -102,7 +102,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -120,7 +120,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -181,35 +181,35 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\src\luadec\ast.c"
+				RelativePath="..\luadec\ast.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\decompile.c"
+				RelativePath="..\luadec\decompile.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\disassemble.c"
+				RelativePath="..\luadec\disassemble.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\guess.c"
+				RelativePath="..\luadec\guess.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\luadec.c"
+				RelativePath="..\luadec\luadec.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\proto.c"
+				RelativePath="..\luadec\proto.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\StringBuffer.c"
+				RelativePath="..\luadec\StringBuffer.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\structs.c"
+				RelativePath="..\luadec\structs.c"
 				>
 			</File>
 		</Filter>
@@ -219,31 +219,31 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\src\luadec\ast.h"
+				RelativePath="..\luadec\ast.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\common.h"
+				RelativePath="..\luadec\common.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\decompile.h"
+				RelativePath="..\luadec\decompile.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\disassemble.h"
+				RelativePath="..\luadec\disassemble.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\proto.h"
+				RelativePath="..\luadec\proto.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\StringBuffer.h"
+				RelativePath="..\luadec\StringBuffer.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\structs.h"
+				RelativePath="..\luadec\structs.h"
 				>
 			</File>
 		</Filter>

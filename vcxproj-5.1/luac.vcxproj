@@ -79,8 +79,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luac.c" />
-    <ClCompile Include="..\src\print.c" />
+    <ClCompile Include="..\lua-5.1\src\luac.c" />
+    <ClCompile Include="..\lua-5.1\src\print.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

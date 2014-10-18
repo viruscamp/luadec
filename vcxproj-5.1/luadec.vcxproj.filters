@@ -15,54 +15,54 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\luadec\proto.h">
+    <ClInclude Include="..\luadec\proto.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\StringBuffer.h">
+    <ClInclude Include="..\luadec\StringBuffer.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\structs.h">
+    <ClInclude Include="..\luadec\structs.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\common.h">
+    <ClInclude Include="..\luadec\common.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\srcversion.h">
+    <ClInclude Include="..\luadec\srcversion.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\decompile.h">
+    <ClInclude Include="..\luadec\decompile.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\disassemble.h">
+    <ClInclude Include="..\luadec\disassemble.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\ast.h">
+    <ClInclude Include="..\luadec\ast.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luadec\ast.c">
+    <ClCompile Include="..\luadec\ast.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\guess.c">
+    <ClCompile Include="..\luadec\guess.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\luadec.c">
+    <ClCompile Include="..\luadec\luadec.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\proto.c">
+    <ClCompile Include="..\luadec\proto.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\StringBuffer.c">
+    <ClCompile Include="..\luadec\StringBuffer.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\structs.c">
+    <ClCompile Include="..\luadec\structs.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\decompile.c">
+    <ClCompile Include="..\luadec\decompile.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\disassemble.c">
+    <ClCompile Include="..\luadec\disassemble.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>

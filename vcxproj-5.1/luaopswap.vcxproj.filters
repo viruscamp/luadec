@@ -15,18 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\luadec\common.h">
+    <ClInclude Include="..\luadec\common.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\srcversion.h">
+    <ClInclude Include="..\luadec\srcversion.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luadec\luaopswap.c">
+    <ClCompile Include="..\luadec\luaopswap.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\luadec\lundump.c">
+    <ClCompile Include="..\luadec\lundump.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>

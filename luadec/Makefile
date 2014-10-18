@@ -1,11 +1,13 @@
 # makefile for Lua decompiler
 
-LIBDIR=..
-BINDIR=.
+LUASRC=../lua-5.1/src
+LIBDIR=$(LUASRC)
+BINDIR=../bin
 
-LUA= ../lua
-LUAC= ../luac
-BIN2C = $(LUA) bin2c.lua
+LUA= $(LUASRC)/lua
+LUAC= $(LUASRC)/luac
+BIN2C = $(LUA) $(BINDIR)/bin2c.lua
+
 CC= gcc
 CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
 LDFLAGS= $(MYLDFLAGS)
@@ -21,13 +23,13 @@ else
 endif
 
 SRCVERSION=UNKNOWN
-SVN_STATUS=$(shell svnversion -q -n . 1>&2 2>$(DEV_NULL); echo $$?)
+SVN_STATUS:=$(shell svn info 1>&2 2>$(DEV_NULL); echo $$?)
 ifeq ($(SVN_STATUS),0)
-	SRCVERSION=$(shell svnversion -q -n .)
+	SRCVERSION:=$(shell svnversion -q -n .)
 endif
-GIT_STATUS=$(shell git log -n 1 --format=format:%h 1>&2 2>$(DEV_NULL); echo $$?)
+GIT_STATUS:=$(shell git log -n 1 --format=format:%h 1>&2 2>$(DEV_NULL); echo $$?)
 ifeq ($(GIT_STATUS),0)
-	SRCVERSION=$(shell git log -n 1 --format=format:%h)
+	SRCVERSION:=$(shell git log -n 1 --format=format:%h)
 endif
 
 MYCFLAGS=
@@ -35,7 +37,7 @@ MYLDFLAGS=
 MYLIBS=
 MYOBJS=
 
-INCS= -I..
+INCS= -I$(LUASRC)
 OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o ast.o
 SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c ast.c
 
@@ -56,16 +58,16 @@ memwatch.o: ../memwatch/memwatch.c ../memwatch/memwatch.h
 	$(CC) -o $@ -c $(CFLAGS) $(INCS) ../memwatch/memwatch.c
 
 $(LIBDIR)/liblua.a:
-	cd ..; $(MAKE)
+	cd $(LUASRC); $(MAKE)
 
 luareplace.o: luareplace.c
 luareplace: luareplace.o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
-allopcodes_lua.h: allopcodes.lua
-	$(BIN2C) allopcodes.lua allopcodes_lua > allopcodes_lua.h
-allopcodes.luac: allopcodes.lua
-	$(LUAC) -o allopcodes.luac allopcodes.lua
+allopcodes_lua.h: $(BINDIR)/allopcodes.lua
+	$(BIN2C) $(BINDIR)/allopcodes.lua allopcodes_lua > allopcodes_lua.h
+allopcodes.luac: $(BINDIR)/allopcodes.lua
+	$(LUAC) -o allopcodes.luac $(BINDIR)/allopcodes.lua
 allopcodes_luac.h: allopcodes.luac
 	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
 

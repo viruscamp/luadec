@@ -11,12 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\luadec\common.h" />
-    <ClInclude Include="..\src\luadec\srcversion.h" />
+    <ClInclude Include="..\luadec\common.h" />
+    <ClInclude Include="..\luadec\srcversion.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luadec\luaopswap.c" />
-    <ClCompile Include="..\src\luadec\lundump.c" />
+    <ClCompile Include="..\luadec\luaopswap.c" />
+    <ClCompile Include="..\luadec\lundump.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{DEC76AB8-8850-49D4-88EA-A17A3D5B85A8}</ProjectGuid>
@@ -61,7 +61,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>WIN32;_CONSOLE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\src;$(ProjectDir)\..\src\luadec;$(ProjectDir)\..\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\..\lua-5.1\src;$(ProjectDir)\..\luadec;$(ProjectDir)\..\lua-5.1\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -69,7 +69,7 @@
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>cd ..\src\luadec
+      <Command>cd ..\luadec
 cmd /c gen-git-srcversion.cmd
 cmd /c gen-allopcodes-h.cmd
 </Command>
@@ -83,7 +83,7 @@ cmd /c gen-allopcodes-h.cmd
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>WIN32;_CONSOLE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\src;$(ProjectDir)\..\src\luadec;$(ProjectDir)\..\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\..\lua-5.1\src;$(ProjectDir)\..\luadec;$(ProjectDir)\..\lua-5.1\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -94,7 +94,7 @@ cmd /c gen-allopcodes-h.cmd
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>cd ..\src\luadec
+      <Command>cd ..\luadec
 cmd /c gen-git-srcversion.cmd
 cmd /c gen-allopcodes-h.cmd
 </Command>

@@ -25,7 +25,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -102,7 +102,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -120,7 +120,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -181,7 +181,7 @@
 			UniqueIdentifier="{A69A3EA4-9DFA-448B-9BF0-CF585E0D77E1}"
 			>
 			<File
-				RelativePath="..\src\luadec\luareplace.c"
+				RelativePath="..\luadec\luareplace.c"
 				>
 			</File>
 		</Filter>
@@ -191,7 +191,7 @@
 			UniqueIdentifier="{9FD27AFD-035B-40AA-8473-3C100B863A08}"
 			>
 			<File
-				RelativePath="..\src\luadec\common.h"
+				RelativePath="..\luadec\common.h"
 				>
 			</File>
 		</Filter>

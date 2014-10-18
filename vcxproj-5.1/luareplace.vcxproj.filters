@@ -15,15 +15,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\luadec\common.h">
+    <ClInclude Include="..\luadec\common.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\luadec\srcversion.h">
+    <ClInclude Include="..\luadec\srcversion.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luadec\luareplace.c">
+    <ClCompile Include="..\luadec\luareplace.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>

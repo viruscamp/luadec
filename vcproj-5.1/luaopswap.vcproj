@@ -25,7 +25,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -102,7 +102,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\src\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -120,7 +120,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories="..\src\"
+				AdditionalIncludeDirectories="..\lua-5.1\src\"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -181,11 +181,11 @@
 			UniqueIdentifier="{03C05628-E311-4517-8885-86E8466ABD6A}"
 			>
 			<File
-				RelativePath="..\src\luadec\luaopswap.c"
+				RelativePath="..\luadec\luaopswap.c"
 				>
 			</File>
 			<File
-				RelativePath="..\src\luadec\lundump.c"
+				RelativePath="..\luadec\lundump.c"
 				>
 			</File>
 		</Filter>
@@ -195,7 +195,7 @@
 			UniqueIdentifier="{2E7D8E22-0A4F-4F32-9E47-894AFB6ED11A}"
 			>
 			<File
-				RelativePath="..\src\luadec\common.h"
+				RelativePath="..\luadec\common.h"
 				>
 			</File>
 		</Filter>

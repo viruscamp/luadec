@@ -11,11 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\luadec\common.h" />
-    <ClInclude Include="..\src\luadec\srcversion.h" />
+    <ClInclude Include="..\luadec\common.h" />
+    <ClInclude Include="..\luadec\srcversion.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\luadec\luareplace.c" />
+    <ClCompile Include="..\luadec\luareplace.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{1A7F9563-5217-4B61-A23F-5DAD34C9E9FC}</ProjectGuid>
@@ -60,7 +60,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>WIN32;_CONSOLE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\src;$(ProjectDir)\..\src\luadec;$(ProjectDir)\..\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\..\lua-5.1\src;$(ProjectDir)\..\luadec;$(ProjectDir)\..\lua-5.1\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -68,7 +68,7 @@
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>cd ..\src\luadec
+      <Command>cd ..\luadec
 cmd /c gen-git-srcversion.cmd</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
@@ -80,7 +80,7 @@ cmd /c gen-git-srcversion.cmd</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <CompileAs>CompileAsC</CompileAs>
       <PreprocessorDefinitions>WIN32;_CONSOLE;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\src;$(ProjectDir)\..\src\luadec;$(ProjectDir)\..\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\..\lua-5.1\src;$(ProjectDir)\..\luadec;$(ProjectDir)\..\lua-5.1\src\memwatch;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -91,7 +91,7 @@ cmd /c gen-git-srcversion.cmd</Command>
     </Link>
     <PreBuildEvent />
     <PreBuildEvent>
-      <Command>cd ..\src\luadec
+      <Command>cd ..\luadec
 cmd /c gen-git-srcversion.cmd</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
