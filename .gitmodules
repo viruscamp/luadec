@@ -4,3 +4,10 @@
 [submodule "ilua"]
 	path = ilua
 	url = https://github.com/ilua/ilua
+[submodule "lua-5.1"]
+	path = lua-5.1
+	url = https://github.com/viruscamp/lua5
+	branch = 5.1
+[submodule "memwatch"]
+	path = memwatch
+	url = https://github.com/viruscamp/memwatch
