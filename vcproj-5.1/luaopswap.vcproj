@@ -185,7 +185,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\luadec\lundump.c"
+				RelativePath="..\luadec\lundump-5.1.c"
 				>
 			</File>
 		</Filter>
@@ -196,6 +196,10 @@
 			>
 			<File
 				RelativePath="..\luadec\common.h"
+				>
+			</File>
+			<File
+				RelativePath="..\luadec\lua-compat.h"
 				>
 			</File>
 		</Filter>

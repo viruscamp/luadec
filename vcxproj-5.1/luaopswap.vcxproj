@@ -12,11 +12,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\luadec\common.h" />
+	<ClInclude Include="..\luadec\lua-compat.h" />
     <ClInclude Include="..\luadec\srcversion.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\luadec\luaopswap.c" />
-    <ClCompile Include="..\luadec\lundump.c" />
+    <ClCompile Include="..\luadec\lundump-5.1.c" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{DEC76AB8-8850-49D4-88EA-A17A3D5B85A8}</ProjectGuid>

@@ -39,6 +39,9 @@
     <ClInclude Include="..\luadec\ast.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\luadec\lua-compat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\luadec\ast.c">

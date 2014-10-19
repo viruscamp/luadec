@@ -18,6 +18,9 @@
     <ClInclude Include="..\luadec\common.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\luadec\lua-compat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\luadec\srcversion.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -26,7 +29,7 @@
     <ClCompile Include="..\luadec\luaopswap.c">
       <Filter>Sources</Filter>
     </ClCompile>
-    <ClCompile Include="..\luadec\lundump.c">
+    <ClCompile Include="..\luadec\lundump-5.1.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>

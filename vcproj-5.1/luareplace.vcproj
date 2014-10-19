@@ -194,6 +194,10 @@
 				RelativePath="..\luadec\common.h"
 				>
 			</File>
+			<File
+				RelativePath="..\luadec\lua-compat.h"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"

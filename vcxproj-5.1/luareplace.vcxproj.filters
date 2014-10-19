@@ -18,6 +18,9 @@
     <ClInclude Include="..\luadec\common.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\luadec\lua-compat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="..\luadec\srcversion.h">
       <Filter>Headers</Filter>
     </ClInclude>

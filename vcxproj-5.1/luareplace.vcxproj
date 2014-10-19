@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\luadec\common.h" />
+	<ClInclude Include="..\luadec\lua-compat.h" />
     <ClInclude Include="..\luadec\srcversion.h" />
   </ItemGroup>
   <ItemGroup>

@@ -235,6 +235,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\luadec\lua-compat.h"
+				>
+			</File>
+			<File
 				RelativePath="..\luadec\proto.h"
 				>
 			</File>

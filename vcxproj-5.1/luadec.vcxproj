@@ -15,6 +15,7 @@
     <ClInclude Include="..\luadec\common.h" />
     <ClInclude Include="..\luadec\decompile.h" />
     <ClInclude Include="..\luadec\disassemble.h" />
+	<ClInclude Include="..\luadec\lua-compat.h" />
     <ClInclude Include="..\luadec\proto.h" />
     <ClInclude Include="..\luadec\srcversion.h" />
     <ClInclude Include="..\luadec\StringBuffer.h" />
