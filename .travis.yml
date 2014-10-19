@@ -4,10 +4,11 @@ compiler:
   - clang
   - gcc
 
+env:
+  - LUAVER=5.1
+  - LUAVER=5.2
+
 script:
-  - cd lua-5.1/src && make linux CC=$CC && cd ../../luadec && make CC=$CC
-  - make luareplace CC=$CC
-  - make luaopswap CC=$CC
-  - git clean -f && cd ../lua-5.2/src && make linux CC=$CC && cd ../../luadec && make CC=$CC LUAVER=5.2
-  - make luareplace CC=$CC LUAVER=5.2
-  - make luaopswap CC=$CC LUAVER=5.2
+  - cd lua-$LUAVER/src && make linux CC=$CC && cd ../../luadec && make CC=$CC LUAVER=$LUAVER
+  - make luareplace CC=$CC LUAVER=$LUAVER
+  - make luaopswap CC=$CC LUAVER=$LUAVER
