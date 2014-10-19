@@ -14,6 +14,7 @@
 #include "lundump.h"
 #include "lstring.h"
 
+#include "lua-compat.h"
 #include "StringBuffer.h"
 #include "proto.h"
 #include "disassemble.h"
@@ -49,7 +50,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 
 	printf("; Function:        %s\n", name);
 	printf("; Defined at line: %d\n", f->linedefined);
-	printf("; #Upvalues:       %d\n", f->nups);
+	printf("; #Upvalues:       %d\n", NUPS(f));
 	printf("; #Parameters:     %d\n", f->numparams);
 	printf("; Is_vararg:       %d\n", f->is_vararg);
 	printf("; Max Stack Size:  %d\n", f->maxstacksize);
@@ -76,6 +77,14 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			StringBuffer_printf(lend,"%c%d := %s",CC(a),CV(a),tmpconstant1);
 			free(tmpconstant1);
 			break;
+#if LUA_VERSION_NUM == 502
+		case OP_LOADKX:
+			// TODO 5.2 OP_LOADKX
+			break;
+		case OP_EXTRAARG:
+			// TODO 5.2 OP_EXTRAARG
+			break;
+#endif
 		case OP_LOADBOOL:
 			sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
 			if (b) {
@@ -120,10 +129,17 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			sprintf(line,"%c%d U%d",CC(a),CV(a),b);
 			StringBuffer_printf(lend,"%c%d := U%d",CC(a),CV(a),b);
 			break;
+#if LUA_VERSION_NUM == 501
 		case OP_GETGLOBAL:
 			sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 			StringBuffer_printf(lend,"%c%d := %s",CC(a),CV(a),GLOBAL(bc));
 			break;
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_GETTABUP:
+			// TODO 5.2 OP_GETTABUP
+			break;
+#endif
 		case OP_GETTABLE:
 			sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
 			if (IS_CONSTANT(c)) {
@@ -134,10 +150,17 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 				StringBuffer_printf(lend,"R%d := R%d[R%d]",a,b,c);
 			}
 			break;
+#if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
 			sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
 			StringBuffer_printf(lend,"%s := %c%d",GLOBAL(bc), CC(a),CV(a));
 			break;
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_SETTABUP:
+			// TODO 5.2 OP_SETTABUP
+			break;
+#endif
 		case OP_SETUPVAL:
 			sprintf(line,"%c%d U%d",CC(a),CV(a),b);
 			StringBuffer_printf(lend,"U%d := %c%d",b, CC(a),CV(a));
@@ -380,10 +403,12 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 				StringBuffer_add(lend, explain);
 			}
 			break;
+#if LUA_VERSION_NUM == 501
 		case OP_CLOSE:
 			sprintf(line,"R%d",a);
 			StringBuffer_printf(lend,"SAVE R%d to top",a);
 			break;
+#endif
 		case OP_CLOSURE:
 			sprintf(line,"R%d %d",a,bc);
 			if (name_len>0) {

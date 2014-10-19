@@ -14,6 +14,7 @@
 #include "lstring.h"
 #include "lundump.h"
 
+#include "lua-compat.h"
 #include "proto.h"
 #include "decompile.h"
 #include "disassemble.h"
@@ -357,12 +358,17 @@ Proto* combine(lua_State* L, int n) {
 
 static void strip(lua_State* L, Proto* f) {
 	int i,n=f->sizep;
-	luaM_freearray(L, f->lineinfo, f->sizelineinfo, int);
-	luaM_freearray(L, f->locvars, f->sizelocvars, struct LocVar);
-	luaM_freearray(L, f->upvalues, f->sizeupvalues, TString *);
+	luadec_freearray(L, f->lineinfo, f->sizelineinfo, int);
 	f->lineinfo=NULL; f->sizelineinfo=0;
+	luadec_freearray(L, f->locvars, f->sizelocvars, struct LocVar);
 	f->locvars=NULL;  f->sizelocvars=0;
+#if LUA_VERSION_NUM == 501
+	luadec_freearray(L, f->upvalues, f->sizeupvalues, UPVAL_TYPE);
 	f->upvalues=NULL; f->sizeupvalues=0;
+#endif
+#if LUA_VERSION_NUM == 502
+	// TODO 5.2 how to strip upvalues ?
+#endif
 	f->source=luaS_newliteral(L,"=(none)");
 	for (i=0; i<n; i++) {
 		strip(L,f->p[i]);

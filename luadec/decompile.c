@@ -15,6 +15,7 @@
 #include "lundump.h"
 #include "lstring.h"
 
+#include "lua-compat.h"
 #include "StringBuffer.h"
 #include "structs.h"
 #include "proto.h"
@@ -45,7 +46,7 @@ char errortmp[256];
 
 const char* getUpvalName(const Proto* f, int r) {
 	if (f->upvalues && r < f->sizeupvalues) {
-		return (char*)getstr(f->upvalues[r]);
+		return (char*)getstr(UPVAL_NAME(f, r));
 	} else {
 		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_R%d", r);
 		return unknown_upvalue;
@@ -1576,7 +1577,7 @@ int CompareProto(const Proto* fleft, const Proto* fright, StringBuffer* str) {
 		diff++;
 		StringBuffer_add(str, " different params size;");
 	}
-	if (fleft->nups != fright->nups) {
+	if (NUPS(fleft) != NUPS(fright)) {
 		diff++;
 		StringBuffer_add(str, " different upvalues size;");
 	}
@@ -1763,6 +1764,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			F->loop_ptr = F->loop_ptr->parent;
 		}
 
+		// TODO 5.2
 		if (o == OP_CLOSE) {
 			int a = GETARG_A(i);
 			AddToSet(F->do_opens, f->locvars[a].startpc);
@@ -2011,6 +2013,21 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			free(ctt);
 			break;
 		}
+#if LUA_VERSION_NUM == 502
+		case OP_LOADKX:
+		{
+			// TODO 5.2 OP_LOADKX
+			int ax = GETARG_Ax(code[pc+1]);
+			char *ctt = DecompileConstant(f, ax);
+			TRY(AssignReg(F, a, ctt, 0, 1));
+			free(ctt);
+			pc++;
+			break;
+		}
+		case OP_EXTRAARG:
+			// TODO 5.2 OP_EXTRAARG
+			break;
+#endif
 		case OP_LOADBOOL:
 		{
 			if ((F->bools.size == 0) || (c==0)) {
@@ -2068,6 +2085,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			TRY(AssignReg(F, a, UPVALUE(b), 0, 1));
 			break;
 		}
+#if LUA_VERSION_NUM == 501
 		case OP_GETGLOBAL:
 		{
 			/*
@@ -2076,6 +2094,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			TRY(AssignReg(F, a, GLOBAL(bc), 0, 1));
 			break;
 		}
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_GETTABUP:
+		{
+			//TODO 5.2 OP_GETTABUP
+			break;
+		}
+#endif
 		case OP_GETTABLE:
 		{
 			/*
@@ -2095,6 +2121,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			free(cstr);
 			break;
 		}
+#if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
 		{
 			/*
@@ -2106,6 +2133,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			TRY(AssignGlobalOrUpvalue(F, var, astr));
 			break;
 		}
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_SETTABUP:
+		{
+			//TODO 5.2 OP_SETTABUP
+			break;
+		}
+#endif
 		case OP_SETUPVAL:
 		{
 			/*
@@ -2741,6 +2776,7 @@ LOGIC_NEXT_JMP:
 			TRY(SetList(F, a, b, c));
 			break;
 		}
+#if LUA_VERSION_NUM == 501
 		case OP_CLOSE:
 		{
 			/*
@@ -2748,6 +2784,7 @@ LOGIC_NEXT_JMP:
 			*/
 			break;
 		}
+#endif
 		case OP_CLOSURE:
 		{
 			/*
@@ -2757,7 +2794,7 @@ LOGIC_NEXT_JMP:
 			int uvn;
 			int cfnum = functionnum;
 
-			uvn = f->p[c]->nups;
+			uvn = NUPS(f->p[c]);
 
 			/* determining upvalues */
 
@@ -2765,19 +2802,20 @@ LOGIC_NEXT_JMP:
 
 			if (!f->p[c]->upvalues) {
 				f->p[c]->sizeupvalues = uvn;
-				f->p[c]->upvalues = luaM_newvector(glstate,uvn,TString*);
+				f->p[c]->upvalues = luaM_newvector(glstate,uvn,UPVAL_TYPE);
 
+				// TODO 5.2 always have cf->upvalues
 				for (i=0; i<uvn; i++) {
 					if (GET_OPCODE(code[pc+i+1]) == OP_MOVE) {
 						char names[10];
 						sprintf(names,"l_%d_%d",functionnum,GETARG_B(code[pc+i+1]));
-						f->p[c]->upvalues[i] = luaS_new(glstate, names);
+						UPVAL_NAME(f->p[c], i) = luaS_new(glstate, names);
 					} else if (GET_OPCODE(code[pc+i+1]) == OP_GETUPVAL) {
-						f->p[c]->upvalues[i] = f->upvalues[GETARG_B(code[pc+i+1])];
+						UPVAL_NAME(f->p[c], i) = UPVAL_NAME(f, GETARG_B(code[pc+i+1]));
 					} else {
 						char names[20];
 						sprintf(names,"upval_%d_%d",functionnum,i);
-						f->p[c]->upvalues[i] = luaS_new(glstate, names);
+						UPVAL_NAME(f->p[c], i) = luaS_new(glstate, names);
 					}
 				}
 			}
@@ -2919,22 +2957,25 @@ Proto* findSubFunction(Proto* f, const char* funcnumstr, char* realfuncnumstr) {
 
 char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	int i;
-	int uvn = cf->nups;
+	int uvn = NUPS(cf);
 	char* code;
 	StringBuffer* buff = StringBuffer_newBySize(128);
 
 	/* determining upvalues */
 
 	// upvalue names = next n opcodes after CLOSURE
-
+	// 5.2 always have cf->upvalues
 	if (!cf->upvalues) {
 		cf->sizeupvalues = uvn;
-		cf->upvalues = luaM_newvector(glstate, uvn, TString*);
-
-		for (i = 0; i<uvn; i++) {
+		cf->upvalues = luaM_newvector(glstate, uvn, UPVAL_TYPE);
+	}
+	for (i = 0; i<uvn; i++) {
+		TString* upvalname = UPVAL_NAME(cf, i);
+		if (upvalname->tsv.len == 0) {
 			char names[10];
 			sprintf(names, "l_%d_%d", 0, i);
-			cf->upvalues[i] = luaS_new(glstate, names);
+			UPVAL_NAME(cf, i) = luaS_new(glstate, names);
+			// TODO 5.2 free upvalname
 		}
 	}
 

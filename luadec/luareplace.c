@@ -15,6 +15,8 @@
 #include "lstring.h"
 #include "lundump.h"
 
+#include "lua-compat.h"
+
 #ifndef SRCVERSION
 	#include "srcversion.h"
 #endif
@@ -179,7 +181,7 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 		diff++;
 		strcat(warnmessage, "numparams ");
 	}
-	if (fleft->nups != fright->nups){
+	if (NUPS(fleft) != NUPS(fright)){
 		diff++;
 		strcat(warnmessage, "nups ");
 	}

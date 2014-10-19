@@ -15,6 +15,8 @@
 #include "lstring.h"
 #include "lundump.h"
 
+#include "lua-compat.h"
+
 #ifndef SRCVERSION
 	#include "srcversion.h"
 #endif
@@ -240,7 +242,7 @@ int CompareAndGenOpcodes(const Proto* input_proto, const Proto* allopcodes_proto
 		diff++;
 		strcat(errorstr, " different params size;");
 	}
-	if (input_proto->nups != allopcodes_proto->nups) {
+	if (NUPS(input_proto) != NUPS(allopcodes_proto)) {
 		diff++;
 		strcat(errorstr, " different upvalues size;");
 	}

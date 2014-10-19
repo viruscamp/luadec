@@ -12,6 +12,7 @@
 #include "lundump.h"
 #include "lstring.h"
 
+#include "lua-compat.h"
 #include "StringBuffer.h"
 #include "structs.h"
 #include "proto.h"
@@ -100,6 +101,7 @@ int luaU_guess_locals(Proto* f, int main) {
 		Instruction i = f->code[0];
 		OpCode o = GET_OPCODE(i);
 		int a = GETARG_A(i);
+		// TODO 5.2 OP_SETTABUP
 		if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)) {
 			int ixx;
 			for (ixx = lastfree; ixx <= a; ixx++) {
@@ -171,8 +173,18 @@ int luaU_guess_locals(Proto* f, int main) {
 			setregto = b;
 			break;
 		case OP_LOADK:
+#if LUA_VERSION_NUM == 502
+		case OP_LOADKX:
+			// TODO 5.2 OP_LOADKX
+#endif
 		case OP_GETUPVAL:
+#if LUA_VERSION_NUM == 501
 		case OP_GETGLOBAL:
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_GETTABUP:
+			// TODO 5.2 OP_GETTABUP
+#endif
 		case OP_LOADBOOL:
 		case OP_NEWTABLE:
 		case OP_CLOSURE:
@@ -185,7 +197,13 @@ int luaU_guess_locals(Proto* f, int main) {
 				loadreg2 = c;
 			}
 			break;
+#if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_SETTABUP:
+			// TODO 5.2 OP_SETTABUP
+#endif
 		case OP_SETUPVAL:
 			loadreg = a;
 			break;
@@ -381,7 +399,13 @@ int luaU_guess_locals(Proto* f, int main) {
 				blockend[block]--;
 			}
 			break;
+#if LUA_VERSION_NUM == 501
 		case OP_CLOSE:
+#endif
+#if LUA_VERSION_NUM == 502
+		case OP_EXTRAARG:
+			// TODO 5.2 OP_EXTRAARG check
+#endif
 		default:
 			break;
 		}

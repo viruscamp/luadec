@@ -10,6 +10,7 @@
 #include "lopcodes.h"
 #include "lundump.h"
 
+#include "lua-compat.h"
 #include "proto.h"
 
 const char* operators[22] = {
@@ -100,8 +101,9 @@ int isUTF8(const unsigned char* buff, int size) {
 // PrintString from luac is not 8-bit clean
 char* DecompileString(const Proto* f, int n) {
 	int i, utf8length;
-	const unsigned char* s = (const unsigned char*)svalue(&f->k[n]);
-	int len = (&(&f->k[n])->value.gc->ts)->tsv.len;
+	TString* ts = rawtsvalue(&f->k[n]);
+	const unsigned char* s = (const unsigned char*)getstr(ts);
+	int len = ts->tsv.len;
 	char* ret = (char*)calloc(len * 4 + 3, sizeof(char));
 	int p = 0;
 	ret[p++] = '"';
@@ -209,7 +211,7 @@ char* DecompileConstant(const Proto* f, int i) {
 	switch (ttype(o)) {
 	case LUA_TBOOLEAN:
 		{
-			if (o->value.b) {
+			if (bvalue(o)) {
 				char* ret = strdup("true");
 				return ret;
 			} else {

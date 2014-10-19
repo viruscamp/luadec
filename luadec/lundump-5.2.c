@@ -228,7 +228,7 @@ Closure* luaU_undump (lua_State* L, ZIO* Z, Mbuffer* buff, const char* name)
   cl->l.p=p;
   setclLvalue(L,L->top-1,cl);
  }
- luai_verifycode(L,buff,cl->l.p);
+ //luai_verifycode(L,buff,cl->l.p);
  return cl;
 }
 
