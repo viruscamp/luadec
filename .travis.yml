@@ -8,3 +8,6 @@ script:
   - cd lua-5.1/src && make linux CC=$CC && cd ../../luadec && make CC=$CC
   - make luareplace CC=$CC
   - make luaopswap CC=$CC
+  - git clean -f && cd ../lua-5.2/src && make linux CC=$CC && cd ../../luadec && make CC=$CC LUAVER=5.2
+  - make luareplace CC=$CC LUAVER=5.2
+  - make luaopswap CC=$CC LUAVER=5.2
