@@ -1,0 +1,7 @@
+language: c
+
+compiler:
+  - clang
+  - gcc
+
+script: cd lua-5.1/src && make linux && cd ../../luadec && make
