@@ -4,4 +4,7 @@ compiler:
   - clang
   - gcc
 
-script: cd lua-5.1/src && make linux && cd ../../luadec && make
+script:
+  - cd lua-5.1/src && make linux CC=$CC && cd ../../luadec && make CC=$CC
+  - make luareplace CC=$CC
+  - make luaopswap CC=$CC
