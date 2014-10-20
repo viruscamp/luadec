@@ -20,11 +20,4 @@
 	#define UPVAL_NAME(f, r) (f->upvalues[r].name)
 #endif
 
-// should be removed
-#if LUA_VERSION_NUM == 502
-	#define OP_GETGLOBAL OP_GETTABUP
-	#define OP_SETGLOBAL OP_SETTABUP
-	#define OP_CLOSE -1
-#endif
-
 #endif // #ifndef LUADEC_LUA_COMPAT_H

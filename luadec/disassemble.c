@@ -35,6 +35,16 @@ void luadec_disassembleSubFunction(Proto* f, int dflag, const char* funcnumstr) 
 	free(realfuncnumstr);
 }
 
+char* RegOrConst(const Proto* f, int r) {
+	if (IS_CONSTANT(r)) {
+		return DecompileConstant(f, INDEXK(r));
+	} else {
+		char* tmp = (char*)calloc(10, sizeof(char*));
+		sprintf(tmp, "R%d", r);
+		return tmp;
+	}
+}
+
 void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	char line[128];
 	StringBuffer* lend = StringBuffer_newBySize(MAXCONSTSIZE + 128);
@@ -45,7 +55,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	char* tmpconstant2 = NULL;
 
 	Proto* f = fwork;
-	int pc,l;
+	int pc;
 	int name_len = name ? strlen(name) : 0;
 
 	printf("; Function:        %s\n", name);
@@ -64,57 +74,59 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		int c = GETARG_C(i);
 		int bc = GETARG_Bx(i);
 		int sbc = GETARG_sBx(i);
-		sprintf(line,"%s","");
-		StringBuffer_printf(lend,"%s","");
+		int ax, dest;
+		sprintf(line,"");
+		StringBuffer_set(lend,"");
 		switch (o) {
 		case OP_MOVE:
-			sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
-			StringBuffer_printf(lend,"%c%d := %c%d",CC(a),CV(a),CC(b),CV(b));
+			/*	A B	R(A) := R(B)					*/
+			sprintf(line,"R%d R%d",a,b);
+			StringBuffer_printf(lend,"R%d := R%d",a,b);
 			break;
 		case OP_LOADK:
+			/*	A Bx	R(A) := Kst(Bx)					*/
+			sprintf(line,"R%d K%d",a,bc);
 			tmpconstant1 = DecompileConstant(f,bc);
-			sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
-			StringBuffer_printf(lend,"%c%d := %s",CC(a),CV(a),tmpconstant1);
-			free(tmpconstant1);
+			StringBuffer_printf(lend,"R%d := %s",a,tmpconstant1);
 			break;
 #if LUA_VERSION_NUM == 502
 		case OP_LOADKX:
-			// TODO 5.2 OP_LOADKX
+			/*	A 	R(A) := Kst(extra arg)				*/
+			ax = GETARG_Ax(f->code[pc+1]);
+			sprintf(line,"R%d",a);
+			tmpconstant1 = DecompileConstant(f,ax);
+			StringBuffer_printf(lend,"R%d := %s",a,tmpconstant1);
 			break;
 		case OP_EXTRAARG:
-			// TODO 5.2 OP_EXTRAARG
+			/*	Ax	extra (larger) argument for previous opcode	*/
+			ax = GETARG_Ax(i);
+			sprintf(line,"K%d",ax);
 			break;
 #endif
 		case OP_LOADBOOL:
-			sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
-			if (b) {
-				if (c) {
-					StringBuffer_printf(lend,"%c%d := true; goto %d",CC(a),CV(a),pc+2);
-				} else {
-					StringBuffer_printf(lend,"%c%d := true",CC(a),CV(a));
-				}
+			/*	A B C	R(A) := (Bool)B; if (C) pc++			*/
+			sprintf(line,"R%d %d %d",a,b,c);
+			if (c) {
+				StringBuffer_printf(lend,"R%d := %s; goto %d",a,(b?"true":"false"),pc+2);
 			} else {
-				if (c) {
-					StringBuffer_printf(lend,"%c%d := false; goto %d",CC(a),CV(a),pc+2);
-				} else {
-					StringBuffer_printf(lend,"%c%d := false",CC(a),CV(a));
-				}
+				StringBuffer_printf(lend,"R%d := %s",a,(b?"true":"false"));
 			}
 			break;
 		case OP_LOADNIL:
-			sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
-			StringBuffer_printf(lend,"%s","");
-			for (l=a; l<=b; l++) {
-				sprintf(tmp,"R%d := ", l);
-				StringBuffer_add(lend,tmp);
+			/*	A B	R(A), R(A+1), ..., R(A+B) := nil		*/
+			sprintf(line, "R%d %d", a, b);
+			if (b > 0) {
+				StringBuffer_printf(lend, "R%d to R%d := nil", a, a+b);
+			} else if (b == 0) {
+				StringBuffer_printf(lend, "R%d := nil", a);
+			} else {
+				StringBuffer_printf(lend, "ERROR b<0");
 			}
-			StringBuffer_add(lend,"nil");
 			break;
 		case OP_VARARG:
-			//VARARG A B
-			//R(A), R(A+1), ..., R(A+B-2) = vararg
+			/*	A B	R(A), R(A+1), ..., R(A+B-2) = vararg		*/
 			//ANoFrillsIntroToLua51VMInstructions.pdf is wrong
-			sprintf(line,"%c%d %d",CC(a),CV(a),b);
+			sprintf(line, "R%d %d", a, b);
 			if (b > 2) {
 				StringBuffer_printf(lend, "R%d to R%d := ...", a, a+b-2);
 			} else if (b == 2){
@@ -122,294 +134,229 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			} else if (b == 0) {
 				StringBuffer_printf(lend, "R%d to top := ...", a);
 			} else {
-				StringBuffer_printf(lend, "");
+				StringBuffer_printf(lend, "ERROR b<0");
 			}
 			break;
 		case OP_GETUPVAL:
-			sprintf(line,"%c%d U%d",CC(a),CV(a),b);
-			StringBuffer_printf(lend,"%c%d := U%d",CC(a),CV(a),b);
+			/*	A B	R(A) := UpValue[B]				*/
+			sprintf(line,"R%d U%d",a,b);
+			StringBuffer_printf(lend,"R%d := U%d",a,b);
 			break;
 #if LUA_VERSION_NUM == 501
 		case OP_GETGLOBAL:
-			sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
-			StringBuffer_printf(lend,"%c%d := %s",CC(a),CV(a),GLOBAL(bc));
+			/*	A Bx	R(A) := Gbl[Kst(Bx)]				*/
+			sprintf(line,"R%d K%d",a,bc);
+			StringBuffer_printf(lend,"R%d := %s",a,GLOBAL(bc));
 			break;
 #endif
 #if LUA_VERSION_NUM == 502
 		case OP_GETTABUP:
-			// TODO 5.2 OP_GETTABUP
+			/*	A B C	R(A) := UpValue[B][RK(C)]			*/
+			sprintf(line,"R%d U%d %c%d",a,b,CC(c),CV(c));
+			tmpconstant1 = RK(c);
+			StringBuffer_printf(lend,"R%d := U%d[%s]",a,b,tmpconstant1);
 			break;
 #endif
 		case OP_GETTABLE:
-			sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
-			if (IS_CONSTANT(c)) {
-				tmpconstant1 = DecompileConstant(f,INDEXK(c));
-				StringBuffer_printf(lend,"R%d := R%d[%s]",a,b,tmpconstant1);
-				free(tmpconstant1);
-			} else {
-				StringBuffer_printf(lend,"R%d := R%d[R%d]",a,b,c);
-			}
+			/*	A B C	R(A) := R(B)[RK(C)]				*/
+			sprintf(line,"R%d R%d %c%d",a,b,CC(c),CV(c));
+			tmpconstant1 = RK(c);
+			StringBuffer_printf(lend,"R%d := R%d[%s]",a,b,tmpconstant1);
 			break;
 #if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
-			sprintf(line,"%c%d K%d",CC(a),CV(a),bc);
-			StringBuffer_printf(lend,"%s := %c%d",GLOBAL(bc), CC(a),CV(a));
+			/*	A Bx	Gbl[Kst(Bx)] := R(A)				*/
+			sprintf(line,"R%d K%d",a,bc);
+			StringBuffer_printf(lend,"%s := R%d",GLOBAL(bc),a);
 			break;
 #endif
 #if LUA_VERSION_NUM == 502
 		case OP_SETTABUP:
-			// TODO 5.2 OP_SETTABUP
+			/*	A B C	UpValue[A][RK(B)] := RK(C)			*/
+			sprintf(line,"U%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
+			tmpconstant1 = RK(b);
+			tmpconstant2 = RK(c);
+			StringBuffer_printf(lend,"U%d[%s] := %s",a,tmpconstant1,tmpconstant2);
 			break;
 #endif
 		case OP_SETUPVAL:
-			sprintf(line,"%c%d U%d",CC(a),CV(a),b);
-			StringBuffer_printf(lend,"U%d := %c%d",b, CC(a),CV(a));
+			/*	A B	UpValue[B] := R(A)				*/
+			sprintf(line,"R%d U%d",a,b);
+			StringBuffer_printf(lend,"U%d := R%d",b,a);
 			break;
 		case OP_SETTABLE:
-			sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
-			if (IS_CONSTANT(b)) {
-				if (IS_CONSTANT(c)) {
-					tmpconstant1 = DecompileConstant(f,INDEXK(b));
-					tmpconstant2 = DecompileConstant(f,INDEXK(c));
-					StringBuffer_printf(lend,"R%d[%s] := %s",a,tmpconstant1,tmpconstant2);
-					free(tmpconstant1);
-					free(tmpconstant2);
-				} else {
-					tmpconstant1 = DecompileConstant(f,INDEXK(b));
-					StringBuffer_printf(lend,"R%d[%s] := R%d",a,tmpconstant1,c);
-					free(tmpconstant1);
-				}
-			} else {
-				if (IS_CONSTANT(c)) {
-					tmpconstant2 = DecompileConstant(f,INDEXK(c));
-					StringBuffer_printf(lend,"R%d[R%d] := %s",a,b,tmpconstant2);
-					free(tmpconstant2);
-				} else {
-					StringBuffer_printf(lend,"R%d[R%d] := R%d",a,b,c);
-				}
-			}
+			/*	A B C	R(A)[RK(B)] := RK(C)				*/
+			sprintf(line,"R%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
+			tmpconstant1 = RK(b);
+			tmpconstant2 = RK(c);
+			StringBuffer_printf(lend,"R%d[%s] := %s",a,tmpconstant1,tmpconstant2);
 			break;
 		case OP_NEWTABLE:
-			sprintf(line,"%c%d %d %d",CC(a),CV(a),b,c);
-			StringBuffer_printf(lend,"%c%d := {}",CC(a),CV(a));
+			/*	A B C	R(A) := {} (size = B,C)				*/
+			sprintf(line,"R%d %d %d",a,b,c);
+			StringBuffer_printf(lend,"R%d := {} (size = %d,%d)",a,b,c);
 			break;
 		case OP_SELF:
+			/*	A B C	R(A+1) := R(B); R(A) := R(B)[RK(C)]		*/
 			sprintf(line,"R%d R%d %c%d",a,b,CC(c),CV(c));
-			if (IS_CONSTANT(c)) {
-				tmpconstant1 = DecompileConstant(f,INDEXK(c));
-				StringBuffer_printf(lend,"R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,tmpconstant1);
-				free(tmpconstant1);
-			} else {
-				StringBuffer_printf(lend,"R%d := R%d; R%d := R%d[R%d]",a+1,b,a,b,c);
-			}
+			tmpconstant1 = RK(c);
+			StringBuffer_printf(lend,"R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,tmpconstant1);
 			break;
 		case OP_ADD:
+			/*	A B C	R(A) := RK(B) + RK(C)				*/
 		case OP_SUB:
+			/*	A B C	R(A) := RK(B) - RK(C)				*/
 		case OP_MUL:
+			/*	A B C	R(A) := RK(B) * RK(C)				*/
 		case OP_DIV:
+			/*	A B C	R(A) := RK(B) / RK(C)				*/
 		case OP_POW:
+			/*	A B C	R(A) := RK(B) % RK(C)				*/
 		case OP_MOD:
-			sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
-			if (IS_CONSTANT(b) && IS_CONSTANT(c)) {
-				tmpconstant1 = DecompileConstant(f,INDEXK(b));
-				tmpconstant2 = DecompileConstant(f,INDEXK(c));
-				StringBuffer_printf(lend,"R%d := %s %s %s",a,tmpconstant1,operators[o],tmpconstant2);
-				free(tmpconstant1);
-				free(tmpconstant2);
-			} else if (IS_CONSTANT(b)) {
-				tmpconstant1 = DecompileConstant(f,INDEXK(b));
-				StringBuffer_printf(lend,"R%d := %s %s R%d",a,tmpconstant1,operators[o],c);
-				free(tmpconstant1);
-			} else if(IS_CONSTANT(c)) {
-				tmpconstant2 = DecompileConstant(f,INDEXK(c));
-				StringBuffer_printf(lend,"R%d := R%d %s %s",a,b,operators[o],tmpconstant2);
-				free(tmpconstant2);
-			} else {
-				StringBuffer_printf(lend,"R%d := R%d %s R%d",a,b,operators[o],c);
-			}
+			/*	A B C	R(A) := RK(B) ^ RK(C)				*/
+			sprintf(line,"R%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
+			tmpconstant1 = RK(b);
+			tmpconstant2 = RK(c);
+			StringBuffer_printf(lend,"R%d := %s %s %s",a,tmpconstant1,operators[o],tmpconstant2);
 			break;
 		case OP_UNM:
+			/*	A B	R(A) := -R(B)					*/
 		case OP_NOT:
+			/*	A B	R(A) := not R(B)				*/
 		case OP_LEN:
-			sprintf(line,"%c%d %c%d",CC(a),CV(a),CC(b),CV(b));
-			if (IS_CONSTANT(b)) {
-				tmpconstant1 = DecompileConstant(f,INDEXK(b));
-				StringBuffer_printf(lend,"R%d := %s %s",a,operators[o],tmpconstant1);
-				free(tmpconstant1);
-			} else {
-				StringBuffer_printf(lend,"R%d := %s R%d",a,operators[o],b);
-			}
+			/*	A B	R(A) := length of R(B)				*/
+			sprintf(line,"R%d R%d",a,b);
+			StringBuffer_printf(lend,"R%d := %s R%d",a,operators[o],b);
 			break;
 		case OP_CONCAT:
-			sprintf(line,"%c%d %c%d %c%d",CC(a),CV(a),CC(b),CV(b),CC(c),CV(c));
-			StringBuffer_printf(lend,"R%d := ",a);
-			for (l=b; l<c; l++) {
-				sprintf(tmp,"R%d .. ", l);
-				StringBuffer_add(lend,tmp);
-			}
-			sprintf(tmp,"R%d",c);
-			StringBuffer_add(lend,tmp);
+			/*	A B C	R(A) := R(B).. ... ..R(C)			*/
+			sprintf(line,"R%d R%d R%d",a,b,c);
+			StringBuffer_printf(lend,"R%d := concat(R%d to R%d)",a,b,c);
 			break;
 		case OP_JMP:
-			{
-				int dest = pc + sbc + 1;
-				sprintf(line, "%d", sbc);
-				StringBuffer_printf(lend, "PC += %d , goto %d", sbc, dest);
+			/*	sBx	pc+=sBx					*/
+			/* instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A) + 1	*/
+			// TODO 5.2 OP_JMP OP_CLOSE
+			dest = pc + sbc + 1;
+			sprintf(line, "%d", sbc);
+			StringBuffer_printf(lend, "PC += %d , goto %d", sbc, dest);
+#if LUA_VERSION_NUM == 502
+			if (a>0) {
+				StringBuffer_addPrintf(lend,"SAVE R%d to top",a+1);
 			}
+#endif
 			break;
 		case OP_EQ:
+			/*	A B C	if ((RK(B) == RK(C)) ~= A) then pc++		*/
 		case OP_LT:
+			/*	A B C	if ((RK(B) <  RK(C)) ~= A) then pc++  		*/
 		case OP_LE:
-			{
-				int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
-				sprintf(line,"%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
-				sprintf(tmp,"R%d",b);
-				sprintf(tmp2,"R%d",c);
-				if (IS_CONSTANT(b)) {
-					tmpconstant1 = DecompileConstant(f,INDEXK(b));
-					sprintf(tmp,"%s",tmpconstant1);
-					free(tmpconstant1);
-				}
-				if (IS_CONSTANT(c)) {
-					tmpconstant2 = DecompileConstant(f,INDEXK(c));
-					sprintf(tmp2,"%s",tmpconstant2);
-					free(tmpconstant2);
-				}
-				if (a) {
-					StringBuffer_printf(lend,"if %s %s %s then goto %d else goto %d",tmp,invopstr(o),tmp2,pc+2,dest);
-				} else {
-					StringBuffer_printf(lend,"if %s %s %s then goto %d else goto %d",tmp,opstr(o),tmp2,pc+2,dest);
-				}
-			}
+			/*	A B C	if ((RK(B) <= RK(C)) ~= A) then pc++  		*/
+			dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
+			sprintf(line,"%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
+			tmpconstant1 = RK(b);
+			tmpconstant2 = RK(c);
+			StringBuffer_printf(lend,"if %s %s %s then goto %d else goto %d",tmp,(a?invopstr(o):opstr(o)),tmp2,pc+2,dest);
 			break;
 		case OP_TEST:
-			{
-				int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
-				sprintf(line,"%c%d %d",CC(a),CV(a),c);
-				sprintf(tmp,"R%d",a);
-				if (IS_CONSTANT(a)) {
-					tmpconstant1 = DecompileConstant(f,INDEXK(a));
-					sprintf(tmp,"%s",tmpconstant1);
-					free(tmpconstant1);
-				}
-				if (c) {
-					StringBuffer_printf(lend,"if not %s then goto %d else goto %d",tmp,pc+2,dest);
-				} else {
-					StringBuffer_printf(lend,"if %s then goto %d else goto %d",tmp,pc+2,dest);
-				}
-			}
+			/*	A C	if not (R(A) <=> C) then pc++			*/
+			dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
+			sprintf(line,"R%d %d",a,c);
+			StringBuffer_printf(lend,"if %sR%d then goto %d else goto %d",(c?"not ":""),a,pc+2,dest);
 			break;
 		case OP_TESTSET:
-			{
-				int dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
-				sprintf(line,"%c%d %c%d %d",CC(a),CV(a),CC(b),CV(b),c);
-				sprintf(tmp,"R%d",a);
-				sprintf(tmp2,"R%d",b);
-				if (IS_CONSTANT(a)) {
-					tmpconstant1 = DecompileConstant(f,INDEXK(a));
-					sprintf(tmp,"%s",tmpconstant1);
-					free(tmpconstant1);
-				}
-				if (IS_CONSTANT(b)) {
-					tmpconstant2 = DecompileConstant(f,INDEXK(b));
-					sprintf(tmp2,"%s",tmpconstant2);
-					free(tmpconstant2);
-				}
-				if (c) {
-					StringBuffer_printf(lend,"if %s then %s := %s ; goto %d else goto %d",tmp2,tmp,tmp2,pc+2,dest);
-				} else {
-					StringBuffer_printf(lend,"if not %s then %s := %s ; goto %d else goto %d",tmp2,tmp,tmp2,pc+2,dest);
-				}
-			}
+			/*	A B C	if (R(B) <=> C) then R(A) := R(B) else pc++	*/ 
+			dest = GETARG_sBx(f->code[pc+1]) + pc + 2;
+			sprintf(line,"R%d R%d %d",a,b,c);
+			StringBuffer_printf(lend,"if %sR%d then R%d := R%d ; goto %d else goto %d",(c?"":"not "),b,a,b,dest,pc+2);
 			break;
 		case OP_CALL:
+			/*	A B C	R(A), ... ,R(A+C-2) := R(A)(R(A+1), ... ,R(A+B-1)) */
 		case OP_TAILCALL:
-			{
-				sprintf(line,"R%d %d %d",a,b,c);
-				if (b>=2) {
-					sprintf(tmp,"R%d to R%d", a+1, a+b-1);
-				} else if (b==0) {
-					sprintf(tmp,"R%d to top",a+1);
-				} else {
-					sprintf(tmp,"%s","");
-				}
-
-				if (c>=2) {
-					sprintf(tmp2, "R%d to R%d := ", a, a+c-2);
-				} else if (c==0) {
-					sprintf(tmp2,"R%d to top := ",a);
-				} else {
-					sprintf(tmp2,"%s","");
-				}
-				StringBuffer_printf(lend,"%sR%d(%s)",tmp2,a,tmp);
+			/*	A B C	return R(A)(R(A+1), ... ,R(A+B-1))		*/
+			sprintf(line,"R%d %d %d",a,b,c);
+			if (b>=2) {
+				sprintf(tmp,"R%d to R%d", a+1, a+b-1);
+			} else if (b==0) {
+				sprintf(tmp,"R%d to top",a+1);
+			} else {
+				sprintf(tmp,"%s","");
 			}
+
+			if (c>=2) {
+				sprintf(tmp2, "R%d to R%d", a, a+c-2);
+			} else if (c==0) {
+				sprintf(tmp2,"R%d to top",a);
+			} else {
+				sprintf(tmp2,"%s","");
+			}
+			StringBuffer_printf(lend,"%s := R%d(%s)",tmp2,a,tmp);
 			break;
 		case OP_RETURN:
-			{
-				sprintf(line,"R%d %d",a,b);
-				if (b==0){
-					sprintf(tmp, "R%d to top", a);
-				} else if (b==2){
-					sprintf(tmp, "R%d", a);
-				} else if (b>=2) {
-					sprintf(tmp, "R%d to R%d", a, a+b-2);
-				} else {
-					sprintf(tmp,"%s","");
-				}
-				StringBuffer_printf(lend,"return %s",tmp);
+			/*	A B	return R(A), ... ,R(A+B-2)	(see note)	*/
+			sprintf(line,"R%d %d",a,b);
+			if (b==0){
+				sprintf(tmp, "R%d to top", a);
+			} else if (b==2){
+				sprintf(tmp, "R%d", a);
+			} else if (b>=2) {
+				sprintf(tmp, "R%d to R%d", a, a+b-2);
+			} else {
+				sprintf(tmp,"%s","");
 			}
+			StringBuffer_printf(lend,"return %s",tmp);
 			break;
 		case OP_FORLOOP:
-			{
-				int dest = pc + sbc + 1;
-				sprintf(line, "R%d %d", a, sbc);
-				StringBuffer_printf(lend, "R%d += R%d; if R%d <= R%d then R%d := R%d; PC += %d , goto %d end", a, a+2, a, a+1, a+3, a, sbc, dest);
-			}
+			/*	A sBx	R(A)+=R(A+2);
+				if R(A) <?= R(A+1) then { pc+=sBx; R(A+3)=R(A) }*/
+			dest = pc + sbc + 1;
+			sprintf(line, "R%d %d", a, sbc);
+			StringBuffer_printf(lend, "R%d += R%d; if R%d <= R%d then R%d := R%d; PC += %d , goto %d end", a, a+2, a, a+1, a+3, a, sbc, dest);
 			break;
 		case OP_TFORLOOP:
-			{
-				sprintf(line,"R%d %d",a,c);
-
-				if (c==1){
-					sprintf(tmp2, "R%d", a+3);
-				}else if (c>1) {
-					sprintf(tmp2, "R%d to R%d", a+3, a+c+2);
-				} else {
-					sprintf(tmp2,"");
-				}
-				StringBuffer_printf(lend,"%s := R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else goto %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
+			/*	A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2)); 
+				if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++	*/ 
+			sprintf(line,"R%d %d",a,c);
+			if (c==1){
+				sprintf(tmp2, "R%d", a+3);
+			}else if (c>1) {
+				sprintf(tmp2, "R%d to R%d", a+3, a+c+2);
+			} else {
+				sprintf(tmp2,"");
 			}
+			StringBuffer_printf(lend,"%s := R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else goto %d",tmp2, a,a+1,a+2, a+3, a+2, a+3, pc+2);
 			break;
 		case OP_FORPREP:
-			{
-				sprintf(line,"R%d %d",a,sbc);
-				StringBuffer_printf(lend,"R%d -= R%d; goto %d",a,a+2,pc+sbc+1);
-			}
+			/*	A sBx	R(A)-=R(A+2); pc+=sBx				*/
+			sprintf(line,"R%d %d",a,sbc);
+			StringBuffer_printf(lend,"R%d -= R%d; goto %d",a,a+2,pc+sbc+1);
 			break;
 		case OP_SETLIST:
+			/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/
 			{
 				int startindex = (c-1)*LFIELDS_PER_FLUSH;
-				char explain[80];
 				sprintf(line,"R%d %d %d",a,b,c);
 				if ( b == 0 ){
-					StringBuffer_printf(lend, "R%d[%d] to R%d[top] := R%d to top", a, startindex, a, a+1);
+					StringBuffer_printf(lend, "R%d[%d] to R%d[top] := R%d to top",
+						a, startindex, a, a+1);
 				} else if ( b == 1){
 					StringBuffer_printf(lend, "R%d[%d] := R%d",a,startindex,a+1);
 				} else if ( b > 1){
 					StringBuffer_printf(lend, "R%d[%d] to R%d[%d] := R%d to R%d",
 						a, startindex, a, startindex+b-1, a+1, a+b);
 				}
-				sprintf(explain, " ; R(a)[(c-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, FPF=%d", a, b, c, LFIELDS_PER_FLUSH);
-				StringBuffer_add(lend, explain);
+				StringBuffer_addPrintf(lend, " ; R(a)[(c-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, FPF=%d", a, b, c, LFIELDS_PER_FLUSH);
 			}
 			break;
 #if LUA_VERSION_NUM == 501
 		case OP_CLOSE:
+			/*	A 	close all variables in the stack up to (>=) R(A)*/
 			sprintf(line,"R%d",a);
 			StringBuffer_printf(lend,"SAVE R%d to top",a);
 			break;
 #endif
 		case OP_CLOSURE:
+			/*	A Bx	R(A) := closure(KPROTO[Bx], R(A), ... ,R(A+n))	*/
 			sprintf(line,"R%d %d",a,bc);
 			if (name_len>0) {
 				StringBuffer_printf(lend, "R%d := closure(Function #%s_%d)", a, name, bc);
@@ -421,6 +368,14 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			break;
 		}
 		printf("%5d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,StringBuffer_getRef(lend));
+		if(tmpconstant1){
+			free(tmpconstant1);
+			tmpconstant1 = NULL;
+		}
+		if(tmpconstant2){
+			free(tmpconstant2);
+			tmpconstant2 = NULL;
+		}
 	}
 	StringBuffer_delete(lend);
 	lend = NULL;

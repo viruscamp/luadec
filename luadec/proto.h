@@ -21,10 +21,6 @@
 #define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
 #define IsMain(f) ((f)==glproto)
 
-#define CC(r) (IS_CONSTANT((r)) ? 'K' : 'R')
-#define CV(r) (IS_CONSTANT((r)) ? INDEXK(r) : r)
-#define MAXCONSTSIZE 1024
-
 extern const char* operators[];
 
 extern const int priorities[];

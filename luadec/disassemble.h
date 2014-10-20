@@ -4,8 +4,17 @@
 #include "lua.h"
 #include "lobject.h"
 
+#define CC(r) (IS_CONSTANT((r)) ? 'K' : 'R')
+#define CV(r) (IS_CONSTANT((r)) ? INDEXK(r) : r)
+
+#define RK(r) (RegOrConst(f, r))
+
+#define MAXCONSTSIZE 1024
+
 void luadec_disassemble(Proto* fwork, int dflag, const char* name);
 
 void luadec_disassembleSubFunction(Proto* f, int dflag, const char* funcnumstr);
+
+char* RegOrConst(const Proto* f, int r);
 
 #endif // #ifndef LUADEC_DISASSEMBLE_H

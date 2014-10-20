@@ -20,6 +20,9 @@
 
 #define DEBUG_PRINT
 
+#define MAX(a,b) (((a)>(b))?(a):(b))
+#define MIN(a,b) (((a)<(b))?(a):(b))
+
 extern lua_State* glstate;
 
 typedef struct llist_ llist;
@@ -101,29 +104,42 @@ int luaU_guess_locals(Proto* f, int main) {
 		Instruction i = f->code[0];
 		OpCode o = GET_OPCODE(i);
 		int a = GETARG_A(i);
-		// TODO 5.2 OP_SETTABUP
-		if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)) {
-			int ixx;
-			for (ixx = lastfree; ixx <= a; ixx++) {
-				if (ixx!=a) {
-					list_next = add(list_next,0,blockend[block]);
-					lastfree++;
+		int b = GETARG_B(i);
+		int c = GETARG_C(i);
+		int ixx,num_nil = -1;
+		switch (o) {
+#if LUA_VERSION_NUM == 502
+			case OP_SETTABUP:
+				if (!IS_CONSTANT(b)) {
+					num_nil = b;
 				}
-				regassign[lastfree] = 0;
-				regusage[lastfree] = 1;
-				regblock[lastfree] = blockend[block];
-				lastfree++;
-			}
-		} else if (o != OP_JMP) {
-			int ixx;
-			for (ixx = lastfree; ixx <= a-1; ixx++) {
+			case OP_GETTABUP:
+				if (!IS_CONSTANT(c)) {
+					num_nil = MAX(num_nil,c);
+				}
+				break;
+#endif
+#if LUA_VERSION_NUM == 501
+			case OP_SETGLOBAL:
+#endif
+			case OP_SETUPVAL:
+				num_nil = a;
+				break;
+			case OP_JMP:
+				break;
+			default:
+				num_nil = a-1;
+				break;
+		}
+		for (ixx = lastfree; ixx <= num_nil; ixx++) {
+			if (ixx!=num_nil) {
 				list_next = add(list_next,0,blockend[block]);
 				lastfree++;
-				regassign[lastfree] = 0;
-				regusage[lastfree] = 1;
-				regblock[lastfree] = blockend[block];
-				lastfree++;
 			}
+			regassign[lastfree] = 0;
+			regusage[lastfree] = 1;
+			regblock[lastfree] = blockend[block];
+			lastfree++;
 		}
 	}
 
@@ -175,7 +191,6 @@ int luaU_guess_locals(Proto* f, int main) {
 		case OP_LOADK:
 #if LUA_VERSION_NUM == 502
 		case OP_LOADKX:
-			// TODO 5.2 OP_LOADKX
 #endif
 		case OP_GETUPVAL:
 #if LUA_VERSION_NUM == 501
@@ -183,7 +198,6 @@ int luaU_guess_locals(Proto* f, int main) {
 #endif
 #if LUA_VERSION_NUM == 502
 		case OP_GETTABUP:
-			// TODO 5.2 OP_GETTABUP
 #endif
 		case OP_LOADBOOL:
 		case OP_NEWTABLE:
@@ -200,13 +214,23 @@ int luaU_guess_locals(Proto* f, int main) {
 #if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
 #endif
-#if LUA_VERSION_NUM == 502
-		case OP_SETTABUP:
-			// TODO 5.2 OP_SETTABUP
-#endif
 		case OP_SETUPVAL:
 			loadreg = a;
 			break;
+#if LUA_VERSION_NUM == 502
+		case OP_SETTABUP:
+			if (!IS_CONSTANT(b)) {
+				loadreg2 = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				if (loadreg2==-1) {
+					loadreg2 = c;
+				} else {
+					loadreg3 = c;
+				}
+			}
+			break;
+#endif
 		case OP_SETTABLE:
 			loadreg = a;
 			if (!IS_CONSTANT(b)) {
@@ -404,7 +428,6 @@ int luaU_guess_locals(Proto* f, int main) {
 #endif
 #if LUA_VERSION_NUM == 502
 		case OP_EXTRAARG:
-			// TODO 5.2 OP_EXTRAARG check
 #endif
 		default:
 			break;

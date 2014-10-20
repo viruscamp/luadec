@@ -179,9 +179,10 @@ typedef enum IndexType_ IndexType;
 enum IndexType_ {
 	DOT=0,
 	SELF=1,
-	TABLE=2
+	TABLE=2,
+	SQUARE_BRACKET=3
 };
-void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type);
+IndexType MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type);
 
 void luaU_decompile(Proto* f, int lflag);
 void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr);

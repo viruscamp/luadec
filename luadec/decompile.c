@@ -1392,48 +1392,57 @@ int isIdentifier(const char* src) {
 }
 
 /*
-** type: DOT=0,SELF=1,TABLE=2
+** type: DOT, SELF, TABLE, SQUARE_BRACKET
 ** input and output
 ** rstr   "a"  " a"    "or"    a       a+2
 ** SELF   :a   ERROR   ERROR   ERROR   ERROR
 ** DOT    .a   [" a"]  ["or"]  [a]     [a+2]
 ** TABLE   a   [" a"]  ["or"]  [a]     [a+2]
+** SB    ["a"] [" a"]  ["or"]  [a]     [a+2]
 */
-void MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
+IndexType MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) {
+	int ret;
 	int len = strlen(rstr);
+	if (type==SQUARE_BRACKET) {
+		StringBuffer_addPrintf(str, "[%s]", rstr);
+		return SQUARE_BRACKET;
+	}
 	/*
 	* see if index can be expressed without quotes
 	*/
 	if (rstr[0] == '\"' && rstr[len-1] == '\"') {
 		rstr[len - 1] = '\0';
 		if (isIdentifier((rstr + 1))) {
-			// type value DOT=0;SELF=1;TABLE=2;
 			switch (type) {
 			case SELF:
 				StringBuffer_addPrintf(str, ":%s", (rstr + 1));
+				ret = SELF;
 				break;
 			case DOT:
 				StringBuffer_addPrintf(str, ".%s", (rstr + 1));
+				ret = DOT;
 				break;
 			case TABLE:
 				StringBuffer_addPrintf(str, "%s", (rstr + 1));
+				ret = TABLE;
 				break;
 			}
 			rstr[len - 1] = '\"';
-			return;
+			return ret;
 		}
 		rstr[len - 1] = '\"';
 	}
 
 	if (type != SELF) {
 		StringBuffer_addPrintf(str, "[%s]", rstr);
-		return;
+		return SQUARE_BRACKET;
 	} else {
 		char* errorbuff = (char*)calloc((len + 50), sizeof(char));
 		StringBuffer_addPrintf(str, ":[%s]", rstr);
 		sprintf(errorbuff, "[%s] should be a SELF Operator", rstr);
 		SET_ERROR(F, errorbuff);
 		free(errorbuff);
+		return SQUARE_BRACKET;
 	}
 }
 
@@ -1764,12 +1773,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			F->loop_ptr = F->loop_ptr->parent;
 		}
 
-		// TODO 5.2
+#if LUA_VERSION_NUM == 501
 		if (o == OP_CLOSE) {
 			int a = GETARG_A(i);
 			AddToSet(F->do_opens, f->locvars[a].startpc);
 			AddToSet(F->do_closes, f->locvars[a].endpc);
-		} else if (o == OP_FORLOOP) {
+		}
+#endif
+		if (o == OP_FORLOOP) {
 			LoopItem* item = NewLoopItem(FORLOOP, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
 		} else if (o == OP_JMP) {
@@ -1864,18 +1875,34 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 		// nil optimization of Lua 5.1
 		if (pc == 0) {
-			if ((o == OP_SETGLOBAL) || (o == OP_SETUPVAL)) {
-				int ixx;
-				for (ixx = F->freeLocal; ixx <= a; ixx++) {
-					TRY(AssignReg(F, ixx, "nil", 0, 1));
-					PENDING(ixx)=1;
-				}
-			} else if (o != OP_JMP) {
-				int ixx;
-				for (ixx = F->freeLocal; ixx <= a-1; ixx++) {
-					TRY(AssignReg(F, ixx, "nil", 0, 1));
-					PENDING(ixx)=1;
-				}
+			int ixx, num_nil = -1;
+			switch (o) {
+#if LUA_VERSION_NUM == 502
+				case OP_SETTABUP:
+					if (!IS_CONSTANT(b)) {
+						num_nil = b;
+					}
+				case OP_GETTABUP:
+					if (!IS_CONSTANT(c)) {
+						num_nil = MAX(num_nil,c);
+					}
+					break;
+#endif
+#if LUA_VERSION_NUM == 501
+				case OP_SETGLOBAL:
+#endif
+				case OP_SETUPVAL:
+					num_nil = a;
+					break;
+				case OP_JMP:
+					break;
+				default:
+					num_nil = a-1;
+					break;
+			}
+			for (ixx = F->freeLocal; ixx <= num_nil; ixx++) {
+				TRY(AssignReg(F, ixx, "nil", 0, 1));
+				PENDING(ixx)=1;
 			}
 		}
 		if (ignoreNext) {
@@ -2016,7 +2043,6 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #if LUA_VERSION_NUM == 502
 		case OP_LOADKX:
 		{
-			// TODO 5.2 OP_LOADKX
 			int ax = GETARG_Ax(code[pc+1]);
 			char *ctt = DecompileConstant(f, ax);
 			TRY(AssignReg(F, a, ctt, 0, 1));
@@ -2025,7 +2051,6 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			break;
 		}
 		case OP_EXTRAARG:
-			// TODO 5.2 OP_EXTRAARG
 			break;
 #endif
 		case OP_LOADBOOL:
@@ -2082,15 +2107,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		}
 		case OP_GETUPVAL:
 		{
+			/*	A B	R(A) := UpValue[B]				*/
 			TRY(AssignReg(F, a, UPVALUE(b), 0, 1));
 			break;
 		}
 #if LUA_VERSION_NUM == 501
 		case OP_GETGLOBAL:
 		{
-			/*
-			* Read global into register.
-			*/
+			/*	A Bx	R(A) := Gbl[Kst(Bx)]				*/
 			TRY(AssignReg(F, a, GLOBAL(bc), 0, 1));
 			break;
 		}
@@ -2098,15 +2122,26 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #if LUA_VERSION_NUM == 502
 		case OP_GETTABUP:
 		{
-			//TODO 5.2 OP_GETTABUP
+			/*	A B C	R(A) := UpValue[B][RK(C)]			*/
+			const char *upvstr = UPVALUE(b);
+			char *keystr = RegisterOrConstant(F, c);
+			StringBuffer_set(str, "");
+			if (strcmp(upvstr, "_ENV")==0 && IS_CONSTANT(c)) {
+				if (MakeIndex(F, str, keystr, TABLE)!=TABLE) {
+					StringBuffer_prepend(str, upvstr);
+				}
+			} else {
+				StringBuffer_set(str, upvstr);
+				MakeIndex(F, str, keystr, DOT);
+			}
+			TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 1));
+			free(keystr);
 			break;
 		}
 #endif
 		case OP_GETTABLE:
 		{
-			/*
-			* Read table entry into register.
-			*/
+			/*	A B C	R(A) := R(B)[RK(C)]				*/
 			const char *bstr;
 			char* cstr;
 			TRY(cstr = RegisterOrConstant(F, c));
@@ -2124,9 +2159,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #if LUA_VERSION_NUM == 501
 		case OP_SETGLOBAL:
 		{
-			/*
-			* Global Assignment statement.
-			*/
+			/*	A Bx	Gbl[Kst(Bx)] := R(A)				*/
 			const char *var = GLOBAL(bc);
 			const char *astr;
 			TRY(astr = GetR(F, a));
@@ -2137,16 +2170,29 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #if LUA_VERSION_NUM == 502
 		case OP_SETTABUP:
 		{
-			//TODO 5.2 OP_SETTABUP
+			/*	A B C	UpValue[A][RK(B)] := RK(C)			*/
+			const char *upvstr = UPVALUE(a);
+			char *keystr = RegisterOrConstant(F, b);
+			char *cstr = RegisterOrConstant(F, c);
+			StringBuffer_set(str, "");
+			if (strcmp(upvstr, "_ENV")==0 && IS_CONSTANT(b)) {
+				if (MakeIndex(F, str, keystr, TABLE)!=TABLE) {
+					StringBuffer_prepend(str, upvstr);
+				}
+			} else {
+				StringBuffer_set(str, upvstr);
+				MakeIndex(F, str, keystr, DOT);
+			}
+			TRY(AssignGlobalOrUpvalue(F, StringBuffer_getRef(str), cstr));
+			free(keystr);
+			free(cstr);
 			break;
 		}
 #endif
 		case OP_SETUPVAL:
 		{
-			/*
-			* Global Assignment statement.
-			*/
-			const char *var = UPVALUE(b);// UP(b) is correct
+			/*	A B	UpValue[B] := R(A)				*/
+			const char *var = UPVALUE(b);
 			const char *astr;
 			TRY(astr = GetR(F, a));
 			TRY(AssignGlobalOrUpvalue(F, var, astr));
@@ -2154,6 +2200,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		}
 		case OP_SETTABLE:
 		{
+			/*	A B C	R(A)[RK(B)] := RK(C)				*/
 			const char *astr;
 			char *bstr, *cstr;
 			int settable;
