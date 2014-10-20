@@ -1263,7 +1263,7 @@ void DeclareLocals(Function* F) {
 				Instruction n2 = F->f->code[F->pc+1+GETARG_sBx(instr)];
 				//fprintf(stderr,"3 %d\n",F->pc+1+GETARG_sBx(instr));
 				//fprintf(stderr,"4 %s %d\n",luaP_opnames[GET_OPCODE(n2)], F->pc+GETARG_sBx(instr));
-				if (GET_OPCODE(n2) == OP_TFORLOOP) {
+				if (GET_OPCODE(n2) == LUADEC_TFORLOOP) {
 					F->f->locvars[i].startpc = F->pc+1;
 					continue;
 				}
@@ -1765,9 +1765,13 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	for (pc = n - 1; pc >= 0; pc--) {
 		Instruction i = code[pc];
 		OpCode o = GET_OPCODE(i);
+		int a = GETARG_A(i);
 		int sbc = GETARG_sBx(i);
 		int dest = sbc + pc + 1;
 		int real_end = GetJmpAddr(F,pc + 1);
+
+		Instruction i_1 = code[pc-1];
+		OpCode o_1 = GET_OPCODE(i_1);
 
 		while (pc < F->loop_ptr->start) {
 			F->loop_ptr = F->loop_ptr->parent;
@@ -1775,17 +1779,34 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 #if LUA_VERSION_NUM == 501
 		if (o == OP_CLOSE) {
-			int a = GETARG_A(i);
-			AddToSet(F->do_opens, f->locvars[a].startpc);
-			AddToSet(F->do_closes, f->locvars[a].endpc);
-		}
+			int startreg = a;
 #endif
+#if LUA_VERSION_NUM == 502
+		if (o == OP_JMP && a > 0) {
+			// instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A-1)
+			int startreg = a - 1;
+#endif
+			AddToSet(F->do_opens, f->locvars[startreg].startpc);
+			AddToSet(F->do_closes, f->locvars[startreg].endpc);
+		}
+
+#if LUA_VERSION_NUM == 501
+		if (o == OP_JMP && o_1 == OP_TFORLOOP) {
+			// OP_TFORLOOP /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++	*/
+			// OP_JMP /* sBx	pc += sBx */
+#endif
+#if LUA_VERSION_NUM == 502
+		if (o == OP_TFORLOOP) {
+			// OP_TFORCALL /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2)); */
+			// OP_TFORLOOP /* A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx } */
+#endif
+			LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
+			AddToLoopTree(F, item);
+		}
 		if (o == OP_FORLOOP) {
 			LoopItem* item = NewLoopItem(FORLOOP, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
 		} else if (o == OP_JMP) {
-			OpCode pc_1 = GET_OPCODE(code[pc-1]);
-
 			AstStatement* jmp = NULL;
 			AstStatement* jmpdest = cast(AstStatement*, F->jmpdests.tail);
 			while (jmpdest && jmpdest->line > dest) {
@@ -1803,17 +1824,13 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			AddToListHead(jmpdest->sub, (ListItem*)jmp);
 
 			if (dest == F->loop_ptr->out) {
-				if (!isTestOpCode(pc_1)) {
+				if (!isTestOpCode(o_1)) {
 					//breaks
 					IntListItem* intItem = NewIntListItem(pc);
 					AddToList(&(F->breaks), cast(ListItem*, intItem));
 				}
 			} else if (F->loop_ptr->start <= dest && dest < pc) {
-				if (pc_1 == OP_TFORLOOP) {
-					// TFORLOOP jump back
-					LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
-					AddToLoopTree(F, item);
-				} else if (isTestOpCode(pc_1)) { //REPEAT jump back
+				if (isTestOpCode(o_1)) { //REPEAT jump back
 					/* 
 					** if the out loop(loop_ptr) is while and body=loop_ptr.start,
 					** jump back may be 'until' or 'if', they are the same,
@@ -2080,13 +2097,19 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		}
 		case OP_LOADNIL:
 		{
-			int i;
-			/*
-			* Read nil into register.
-			*/
-			for (i = a; i <= b; i++) {
-				TRY(AssignReg(F, i, "nil", 0, 1));
-			}
+			int ra, rb;
+			ra = a;
+#if LUA_VERSION_NUM == 501
+			// 5.1	A B	R(A) to R(B) := nil
+			rb = b;
+#endif
+#if LUA_VERSION_NUM == 502
+			// 5.2	A B	R(A) to R(A+B) := nil
+			rb = a + b;
+#endif
+			do {
+				TRY(AssignReg(F, rb--, "nil", 0, 1));
+			} while (rb >= ra);
 			break;
 		}
 		case OP_VARARG: // Lua5.1 specific.
@@ -2321,6 +2344,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		}
 		case OP_JMP:
 		{
+			// instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A-1)
 			int dest = sbc + pc + 2;
 			Instruction idest = code[dest - 1];
 			IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
@@ -2361,7 +2385,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				AstStatement* ifstmt = F->currStmt->parent;
 				F->currStmt = ElseStmt(ifstmt);
 				ElseStart(ifstmt) = GetJmpAddr(F, dest);
-			} else if (GET_OPCODE(idest) == OP_TFORLOOP) { // jmp of generic for
+			} else if (GET_OPCODE(idest) == LUADEC_TFORLOOP) { // jmp of generic for
+				// TODO 5.2 OP_TFORCALL
 				/*
 				* generic 'for'
 				*/
@@ -2389,10 +2414,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 							if (f->locvars[i2].startpc == pc + 1) {
 								loopvars++;
 								//search for the loop variable. Set it's endpc one step further so it will be the same for all loop variables
-								if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-2]) == OP_TFORLOOP) {
+								if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-2]) == LUADEC_TFORLOOP) {
 									f->locvars[i2].endpc -= 2;
 								}
-								if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-1]) == OP_TFORLOOP) {
+								if (GET_OPCODE(F->f->code[f->locvars[i2].endpc-1]) == LUADEC_TFORLOOP) {
 									f->locvars[i2].endpc -= 1;
 								}
 								if (loopvars==3+i) {
@@ -2720,8 +2745,11 @@ LOGIC_NEXT_JMP:
 			}
 			break;
 		}
-		case OP_TFORLOOP: //Lua5.1 specific. TODO: CHECK
+		case LUADEC_TFORLOOP: // TODO: CHECK
 		{
+			// 5.1 OP_TFORLOOP
+			// 5.2 OP_TFORCALL
+			// TODO 5.2 OP_TFORCALL
 			int i;
 			AstStatement* currStmt = F->currStmt;
 			for (i=F->intbegin[F->intspos]; i<=F->intend[F->intspos]; i++)
@@ -2740,6 +2768,10 @@ LOGIC_NEXT_JMP:
 			ignoreNext = 1;
 			break;
 		}
+#if LUA_VERSION_NUM == 502
+		case OP_TFORLOOP:
+			break;
+#endif
 		case OP_FORPREP: //Lua5.1 specific. TODO: CHECK
 			{
 				/*
@@ -2826,6 +2858,7 @@ LOGIC_NEXT_JMP:
 #if LUA_VERSION_NUM == 501
 		case OP_CLOSE:
 		{
+			// close all upvalues >= R(A)
 			/*
 			* Handled in do_opens/do_closes variables.
 			*/
