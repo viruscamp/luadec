@@ -66,7 +66,7 @@ static void usage(const char* message, const char* arg) {
 		fprintf(stderr, "\n");
 	}
 	fprintf(stderr,
-		"LuaReplace " VERSION_STRING "\n"
+		"LuaReplace " VERSION_STRING " for " LUA_VERSION "\n"
 		" Inspired by Co0kieMonster's LuaTool\n"
 		" by VirusCamp (https://github.com/viruscamp/luadec)\n"
 		"usage: %s [options] <dest.lua> <dest num> <src.lua> <src num> \n"

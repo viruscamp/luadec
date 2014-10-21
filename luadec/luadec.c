@@ -71,7 +71,7 @@ static void usage(const char* message, const char* arg) {
 		fprintf(stderr,"%s: ",progname); fprintf(stderr,message,arg); fprintf(stderr,"\n");
 	}
 	fprintf(stderr,
-		"LuaDec " VERSION_STRING "\n"
+		"LuaDec " VERSION_STRING " for " LUA_VERSION "\n"
 		" Original by Hisham Muhammad (http://luadec.luaforge.net)\n"
 		" Ongoing port to Lua 5.1 by Zsolt Sz. Sztupak (http://winmo.sztupy.hu)\n"
 		" by VirusCamp (https://github.com/viruscamp/luadec)\n"
@@ -439,10 +439,10 @@ int main(int argc, char* argv[]) {
 		luaU_guess_locals(f,0);
 	}
 	if (disassemble) {
-		printf("; Disassembled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
+		printf("; Disassembled using luadec " VERSION_STRING " for " LUA_VERSION " from https://github.com/viruscamp/luadec\n");
 		printf("; Command line: ");
 	} else {
-		printf("-- Decompiled using luadec " VERSION_STRING " from http://luadec.googlecode.com\n");
+		printf("-- Decompiled using luadec " VERSION_STRING " for " LUA_VERSION " from https://github.com/viruscamp/luadec\n");
 		if (func_check) {
 			printf("-- function check Command line: ");
 		} else {

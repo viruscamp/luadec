@@ -70,7 +70,7 @@ static void usage(const char* message, const char* arg) {
 		fprintf(stderr, "\n");
 	}
 	fprintf(stderr,
-		"LuaOpSwap " VERSION_STRING "\n"
+		"LuaOpSwap " VERSION_STRING " for " LUA_VERSION "\n"
 		" by VirusCamp (https://github.com/viruscamp/luadec)\n"
 		"usage: %s [options] <input.luac> [opcodes.txt]\n"
 		" Swap the opcodes in <input.luac> using method in [opcodes.txt]\n"
