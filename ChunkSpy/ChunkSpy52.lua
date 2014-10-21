@@ -148,12 +148,13 @@ SetProfile("x86 standard") -- default profile
 --   added for constant table; TEST_NUMBER removed; FORMAT added
 -----------------------------------------------------------------------
 config.SIGNATURE    = "\27Lua"
+config.LUAC_TAIL    = "\25\147\r\n\26\n" -- new in 5.2 tail of header
 -- TEST_NUMBER no longer needed, using size_lua_Number + integral
 config.LUA_TNIL     = 0
 config.LUA_TBOOLEAN = 1
 config.LUA_TNUMBER  = 3
 config.LUA_TSTRING  = 4
-config.VERSION      = 82 -- 0x51
+config.VERSION      = 82 -- 0x52
 config.FORMAT       = 0  -- LUAC_FORMAT (new in 5.1)
 config.FPF          = 50 -- LFIELDS_PER_FLUSH
 config.SIZE_OP      = 6  -- instruction field bits
@@ -496,6 +497,8 @@ end
     +-----+-----+-----+----------+
     |   [s]Bx   |  A  |  Opcode  |  iABx | iAsBx format
     +-----+-----+-----+----------+
+    |        Ax       |  Opcode  |  iAx format new in 5.2
+    +-----+-----+-----+----------+
 
   The signed argument sBx is represented in excess K, with the range
   of -max to +max represented by 0 to 2*max.
@@ -505,6 +508,7 @@ end
 
 --]]-------------------------------------------------------------------
 
+local iABC, iABx, iAsBx, iAx = 0, 1, 2, 3
 -----------------------------------------------------------------------
 -- instruction decoder initialization
 -----------------------------------------------------------------------
@@ -513,11 +517,13 @@ function DecodeInit()
   -- calculate masks
   ---------------------------------------------------------------
   config.SIZE_Bx = config.SIZE_B + config.SIZE_C
+  config.SIZE_Ax = config.SIZE_A + config.SIZE_B + config.SIZE_C
   local MASK_OP = math.ldexp(1, config.SIZE_OP)
   local MASK_A  = math.ldexp(1, config.SIZE_A)
   local MASK_B  = math.ldexp(1, config.SIZE_B)
   local MASK_C  = math.ldexp(1, config.SIZE_C)
   local MASK_Bx = math.ldexp(1, config.SIZE_Bx)
+  local MASK_Ax = math.ldexp(1, config.SIZE_Ax)
   config.MAXARG_sBx = math.floor((MASK_Bx - 1) / 2)
   config.BITRK = math.ldexp(1, config.SIZE_B - 1)
 
@@ -536,15 +542,28 @@ function DecodeInit()
   ---------------------------------------------------------------
   -- opcode name table
   ---------------------------------------------------------------
-  local op =
-    "MOVE LOADK LOADBOOL LOADNIL GETUPVAL \
-    GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE \
-    NEWTABLE SELF ADD SUB MUL \
-    DIV MOD POW UNM NOT \
-    LEN CONCAT JMP EQ LT \
-    LE TEST TESTSET CALL TAILCALL RETURN \
-    FORLOOP FORPREP TFORLOOP SETLIST \
-    CLOSE CLOSURE VARARG"
+  local op = [[
+    MOVE LOADK LOADKX LOADBOOL LOADNIL
+    GETUPVAL GETTABUP GETTABLE SETTABUP SETUPVAL
+    SETTABLE NEWTABLE SELF ADD SUB
+    MUL DIV MOD POW UNM
+    NOT LEN CONCAT JMP EQ
+    LT LE TEST TESTSET CALL
+    TAILCALL RETURN FORLOOP FORPREP TFORCALL
+    TFORLOOP SETLIST CLOSURE VARARG EXTRAARG
+  ]]
+
+  iABC=0; iABx=1; iAsBx=2; iAx=3
+  config.opmode = {
+    iABC,iABx,iABx,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iABC,iAsBx,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iAsBx,iAsBx,iABC,
+    iAsBx,iABC,iABx,iABC,iAx
+  }
 
   ---------------------------------------------------------------
   -- build opcode name table
@@ -564,8 +583,6 @@ function DecodeInit()
     end
     config.NUM_OPCODES = config.NUM_OPCODES + 1
   end
-  -- opmode: 0=ABC, 1=ABx, 2=AsBx
-  config.opmode = "01000101000000000000002000000002200010"
 
   config.operators={
     [config.opcodes["add"]]="+",
@@ -588,6 +605,7 @@ function DecodeInit()
   config.WIDTH_B = WidthOf(MASK_B)
   config.WIDTH_C = WidthOf(MASK_C)
   config.WIDTH_Bx = WidthOf(MASK_Bx) + 1 -- with minus sign
+  config.WIDTH_Ax = WidthOf(MASK_Ax)
   config.FORMAT_A = string.format("%%-%dd", config.WIDTH_A)
   config.FORMAT_B = string.format("%%-%dd", config.WIDTH_B)
   config.FORMAT_C = string.format("%%-%dd", config.WIDTH_C)
@@ -598,11 +616,20 @@ function DecodeInit()
   else
     config.PAD_Bx = ""
   end
+  config.PAD_Ax = config.WIDTH_A + config.WIDTH_B + config.WIDTH_C + 2
+                  - config.WIDTH_Ax
+  if config.PAD_Ax > 0 then
+    config.PAD_Ax = string.rep(" ", config.PAD_Ax)
+  else
+    config.PAD_Ax = ""
+  end
   config.FORMAT_Bx  = string.format("%%-%dd", config.WIDTH_Bx)
   config.FORMAT_AB  = string.format("%s %s %s", config.FORMAT_A, config.FORMAT_B, string.rep(" ", config.WIDTH_C))
   config.FORMAT_ABC = string.format("%s %s %s", config.FORMAT_A, config.FORMAT_B, config.FORMAT_C)
   config.FORMAT_AC  = string.format("%s %s %s", config.FORMAT_A, string.rep(" ", config.WIDTH_B), config.FORMAT_C)
   config.FORMAT_ABx = string.format("%s %s", config.FORMAT_A, config.FORMAT_Bx)
+  config.FORMAT_A1  = string.format("%s %s %s", config.FORMAT_A, string.rep(" ", config.WIDTH_B), string.rep(" ", config.WIDTH_C))
+  config.FORMAT_Ax = string.format("%%-%dd", config.WIDTH_Ax)
 end
 
 -----------------------------------------------------------------------
@@ -628,11 +655,13 @@ function DecodeInst(code, iValues)
     cBits = cBits - iSeq[i]
   end
   iValues.opname = config.opnames[iValues.OP]   -- get mnemonic
-  iValues.opmode = string.sub(config.opmode, iValues.OP + 1, iValues.OP + 1)
-  if iValues.opmode == "1" then                 -- set Bx or sBx
+  iValues.opmode = config.opmode[iValues.OP]
+  if iValues.opmode == iABx then                 -- set Bx or sBx
     iValues.Bx = iValues.B * iMask[3] + iValues.C
-  elseif iValues.opmode == "2" then
+  elseif iValues.opmode == iAsBx then
     iValues.sBx = iValues.B * iMask[3] + iValues.C - config.MAXARG_sBx
+  elseif iValues.opmode == iAx then
+    iValues.Ax = iValues.B * iMask[3] * iMask[2] + iValues.C * iMask[2] + iValues.A
   end
   return iValues
 end
@@ -679,13 +708,15 @@ function DescribeInst(inst, pos, func)
   local function OperandAC(i)   return string.format(config.FORMAT_AC, i.A, i.C) end
   local function OperandABx(i)  return string.format(config.FORMAT_ABx, i.A, i.Bx) end
   local function OperandAsBx(i) return string.format(config.FORMAT_ABx, i.A, i.sBx) end
+  local function OperandA1(i)   return string.format(config.FORMAT_A1, i.A) end
+  local function OperandAx(i)   return string.format(config.FORMAT_Ax, i.Ax) end
 
   ---------------------------------------------------------------
   -- comment formatting helpers
   -- calculate jump location, conditional flag
   ---------------------------------------------------------------
-  local function CommentLoc(sBx, cond)
-    local loc = string.format("to [%d]", pos + 1 + sBx)
+  local function CommentLoc(sbx, cond)
+    local loc = string.format("pc+=%d (goto [%d])", sbx, pos + 1 + sbx)
     if cond then loc = loc..cond end
     return loc
   end
@@ -754,7 +785,7 @@ function DescribeInst(inst, pos, func)
   end
   local function RK(r)
     local str=''
-    if r >= config.BITRK then
+    if IS_CONSTANT(r) then
       str = 'K'..(r-config.BITRK).."("..Kst(r-config.BITRK)..")"
     else
       str = 'R'..r
@@ -778,8 +809,9 @@ function DescribeInst(inst, pos, func)
   local a=inst.A
   local b=inst.B
   local c=inst.C
-  local bc=inst.Bx
-  local sbc=inst.sBx
+  local bx=inst.Bx
+  local sbx=inst.sBx
+  local ax=inst.Ax
   local o=inst.OP
   local pc=pos
   
@@ -797,65 +829,69 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("MOVE") then -- MOVE A B
     Operand = OperandAB(inst)
-    Comment = string.format("%s%d := %s%d",CC(a),CV(a),CC(b),CV(b))
+    Comment = string.format("R%d := R%d",a,b)
   ---------------------------------------------------------------
   elseif isop("LOADK") then -- LOADK A Bx
     Operand = OperandABx(inst)
-    Comment = string.format("%s%d := %s",CC(a),CV(a),CommentK(inst.Bx, true))
+    Comment = string.format("R%d := %s",a,CommentK(bx, true))
+  ---------------------------------------------------------------
+  elseif isop("LOADKX") then -- LOADK A
+    Operand = OperandA1(inst)
+    Comment = string.format("R%d :=",a)
+  ---------------------------------------------------------------
+  elseif isop("EXTRAARG") then -- LOADK Ax
+    Operand = OperandAx(inst)
+    Comment = CommentK(inst.Ax, true)
   ---------------------------------------------------------------
   elseif isop("LOADBOOL") then -- LOADBOOL A B C
     Operand = OperandABC(inst)
     local v
     if inst.B == 0 then v = "false" else v = "true" end
     if inst.C > 0 then
-      Comment = string.format("%s%d := %s; PC := %s",CC(a),CV(a),v,CommentLoc(1));
+      Comment = string.format("R%d := %s; PC := %s",a,v,CommentLoc(1));
     else
-      Comment = string.format("%s%d := %s",CC(a),CV(a),v)
+      Comment = string.format("R%d := %s",a,v)
     end
     v=nil
   ---------------------------------------------------------------
   elseif isop("LOADNIL") then -- LOADNIL A B
     Operand = OperandAB(inst)
-    Comment = ''
-    for l = a ,b do
-      Comment = Comment..string.format("R%d, ",l)
-    end
-    Comment = Comment.." := nil"
+    Comment = RList(a,b+1).." := nil"
   ---------------------------------------------------------------
   elseif isop("GETUPVAL") then -- GETUPVAL A B
     Operand = OperandAB(inst)
-    Comment = string.format("%s%d := U%d , %s", CC(a), CV(a), b, func.upvalues[inst.B + 1] or "unknown upval");
+    Comment = string.format("R%d := U%d , %s", a, b, func.upvalues[inst.B + 1] or "unknown upval");
   ---------------------------------------------------------------
   elseif isop("SETUPVAL") then -- SETUPVAL A B
     Operand = OperandAB(inst)
-    Comment = string.format("U%d := %s%d , %s", b, CC(a), CV(a), func.upvalues[inst.B + 1] or "unknown upval")
+    Comment = string.format("U%d := R%d , %s", b, a, func.upvalues[inst.B + 1] or "unknown upval")
   ---------------------------------------------------------------
-  elseif isop("GETGLOBAL") then -- GETGLOBAL A Bx
-    Operand = OperandABx(inst)
-    Comment = string.format("%s%d := %s",CC(a),CV(a),CommentK(inst.Bx))
+  elseif isop("GETTABUP") then -- GETTABUP A B C
+    Operand = OperandABC(inst)
+    Comment = string.format("R%d := U%d[%s]",a,b,RK(C))
   ---------------------------------------------------------------  
-  elseif isop("SETGLOBAL") then -- SETGLOBAL A Bx
-    Operand = OperandABx(inst)
-    Comment = string.format("%s := %s%d",CommentK(inst.Bx),CC(a),CV(a))
+  elseif isop("SETTABUP") then -- SETTABUP A B C
+    Operand = OperandABC(inst)
+    Comment = string.format("U%d[%s] := %s",a,RK(b),RK(c))
   ---------------------------------------------------------------
   elseif isop("GETTABLE") then -- GETTABLE A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d[%s]",a,b,CommentRK(inst.C, true))
+    Comment = string.format("R%d := R%d[%s]",a,b,RK(c))
   ---------------------------------------------------------------
   elseif isop("SETTABLE") then -- SETTABLE A B C
     Operand = OperandABC(inst)
     Comment = CommentBC(inst)
-    Comment = string.format("R%d[%s] := %s",a,CommentRK(inst.B, true),CommentRK(inst.C, true))
+    Comment = string.format("R%d[%s] := %s",a,RK(b),RK(c))
   ---------------------------------------------------------------
   elseif isop("NEWTABLE") then -- NEWTABLE A B C
     Operand = OperandABC(inst)
     local ar = fb2int(inst.B)  -- array size
     local hs = fb2int(inst.C)  -- hash size
-    Comment = string.format("%s%d := {} , ",CC(a),CV(a)).."array="..ar..", hash="..hs
+    Comment = string.format("R%d := {} , array_size=%d, hash_size=%d",a,ar,hs)
   ---------------------------------------------------------------
   elseif isop("SELF") then -- SELF A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,CommentRK(inst.C, true))
+    Comment = string.format("R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,RK(c))
   ---------------------------------------------------------------
   elseif isop("ADD") or   -- ADD A B C
          isop("SUB") or   -- SUB A B C
@@ -864,31 +900,32 @@ function DescribeInst(inst, pos, func)
          isop("MOD") or   -- MOD A B C
          isop("POW") then -- POW A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := %s %s %s",a,CommentRK(inst.B, true),config.operators[inst.OP],CommentRK(inst.C, true))
+    Comment = string.format("R%d := %s %s %s",a,RK(b),config.operators[inst.OP],RK(c))
   ---------------------------------------------------------------
   elseif isop("UNM") or   -- UNM A B
          isop("NOT") or   -- NOT A B
          isop("LEN") then -- LEN A B
     Operand = OperandAB(inst)
-    Comment = string.format("R%d := %s%s",a,config.operators[inst.OP],CommentRK(inst.B,true))
+    Comment = string.format("R%d := %s %s",a,config.operators[inst.OP],RK(b))
   ---------------------------------------------------------------
   elseif isop("CONCAT") then -- CONCAT A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := ",a)
-    for l = b,c-1 do
-      Comment = string.format("%sR%d..",Comment,l)
-    end
-    Comment = string.format("%sR%d",Comment,c)
+    Comment = string.format("R%d := %s",a,RList(b,c-b+1))
   ---------------------------------------------------------------
-  elseif isop("JMP") then -- JMP sBx
-    Operand = string.format(config.FORMAT_Bx, inst.sBx)..config.PAD_Bx
-    Comment = CommentLoc(inst.sBx)
+  elseif isop("JMP") then -- JMP A sBx
+    Operand = OperandABx(inst)
+    if a>0 then
+      Comment="close all upvalues >= R"..(a-1).."; "
+    else
+      Comment=""
+    end
+    Comment = Comment..CommentLoc(sbx)
   ---------------------------------------------------------------
   elseif isop("EQ") or   -- EQ A B C
          isop("LT") or   -- LT A B C
          isop("LE") then -- LE A B C
     Operand = OperandABC(inst)
-    Comment = string.format("%s %s %s, ",CommentRK(b),config.operators[inst.OP],CommentRK(c, true))
+    Comment = string.format("%s %s %s, ",RK(b),config.operators[inst.OP],RK(c))
     local sense = " if false"
     if inst.A == 0 then sense = " if true" end
     Comment = Comment..CommentLoc(1, sense)
@@ -919,20 +956,24 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("FORLOOP") then -- FORLOOP A sBx
     Operand = OperandAsBx(inst)
-    Comment = string.format("R%d += R%d; if R%d <= R%d then begin PC := %d; R%d := R%d end",a,a+2,a,a+1,pc+sbc+1,a+3,a);
+    Comment = string.format("R%d += R%d; if R%d <= R%d then { R%d := R%d; %s }",a,a+2,a,a+1,a+3,a,CommentLoc(sbx));
   ---------------------------------------------------------------
   elseif isop("FORPREP") then -- FORPREP A sBx
     Operand = OperandAsBx(inst)
-    Comment = string.format("R%d -= R%d; PC := %d",a,a+2,pc+sbc+1);
+    Comment = string.format("R%d -= R%d; %s",a,a+2,CommentLoc(sbx));
   ---------------------------------------------------------------
-  elseif isop("TFORLOOP") then -- TFORLOOP A C
+  elseif isop("TFORCALL") then -- TFORCALL A C
     Operand = OperandAC(inst)
     if (c>0) then
       CommentRtn = RList(a+3,c)
     else
       CommentRtn = "Error Regs"
     end
-    Comment = string.format("%s := R%d(R%d,R%d); if R%d ~= nil then R%d := R%d else PC := %d", CommentRtn, a, a+1,a+2, a+3, a+2, a+3, pc+2);
+    Comment = string.format("%s := R%d(R%d,R%d)", CommentRtn, a, a+1,a+2);
+  ---------------------------------------------------------------
+  elseif isop("TFORLOOP") then -- TFORLOOP A sBx
+    Operand = OperandAsBx(inst)
+    Comment = string.format("if R%d ~= nil then { R%d := R%d; %s", a+1,a, a+1, CommentLoc(sbx));
   ---------------------------------------------------------------
   elseif isop("SETLIST") then -- SETLIST A B C
     Operand = OperandABC(inst)
@@ -955,15 +996,11 @@ function DescribeInst(inst, pos, func)
     end
     Comment = string.format("R%d[%s] := R%d to %s",a,CommentArg,a+1,EndReg)
   ---------------------------------------------------------------
-  elseif isop("CLOSE") then -- CLOSE A
-    Operand = string.format(config.FORMAT_A, inst.A)
-    Comment = string.format("SAVE all upvalues from R%d to top",a)
-  ---------------------------------------------------------------
   elseif isop("CLOSURE") then -- CLOSURE A Bx
     Operand = OperandABx(inst)
     -- lets user know how many following instructions are significant
-    Comment = func.p[inst.Bx + 1].nups.." upvalues"
-    Comment = string.format("R%d := closure(function[%d]) %s",a,bc,Comment)
+    Comment = func.p[bx + 1].sizeupvalues.." upvalues"
+    Comment = string.format("R%d := closure(function[%d]) %s",a,bx,Comment)
   ---------------------------------------------------------------
   elseif isop("VARARG") then -- VARARG A B
     Operand = OperandAB(inst)
@@ -1115,12 +1152,12 @@ function ChunkSpy(chunk_name, chunk)
   -- loads a block of endian-sensitive bytes
   -- * rest of code assumes little-endian by default
   ---------------------------------------------------------------
-  local function LoadBlock(size)
+  local function LoadBlock(size, notreverse)
     if not pcall(TestChunk, size, idx, "LoadBlock") then return end
     previdx = idx
     idx = idx + size
     local b = string.sub(chunk, idx - size, idx - 1)
-    if config.endianness == 1 then
+    if config.endianness == 1 or notreverse then
       return b
     else-- reverse bytes if big endian
       return string.reverse(b)
@@ -1205,7 +1242,7 @@ function ChunkSpy(chunk_name, chunk)
   FormatLine(1, "version (major:minor hex digits)", previdx)
 
   ---------------------------------------------------------------
-  -- test format (5.1)
+  -- test format (from 5.1)
   -- * ChunkSpy does not accept anything other than 0. For custom
   -- * binary chunks, modify ChunkSpy to read it properly.
   ---------------------------------------------------------------
@@ -1256,7 +1293,7 @@ function ChunkSpy(chunk_name, chunk)
   DecodeInit()
 
   ---------------------------------------------------------------
-  -- test integral flag (5.1)
+  -- test integral flag (from 5.1)
   ---------------------------------------------------------------
   TestChunk(1, idx, "integral byte")
   config.integral = LoadByte()
@@ -1306,6 +1343,17 @@ function ChunkSpy(chunk_name, chunk)
   end
   DescLine("* "..config.description)
   if config.DISPLAY_BRIEF then WriteLine(config.DISPLAY_COMMENT..config.description) end
+  
+  -- LUAC_TAIL new in 5.2
+  len = string.len(config.LUAC_TAIL)
+  TestChunk(len, idx, "LUAC_TAIL")
+  local luac_tail = LoadBlock(len, true)
+  if luac_tail ~= config.LUAC_TAIL then
+  print(EscapeString(luac_tail, 1))
+    error("header LUAC_TAIL not found, this is not a Lua chunk")
+  end
+  FormatLine(len, "LUAC_TAIL: "..EscapeString(config.LUAC_TAIL, 1), idx)
+
   -- end of global header
   stat.header = idx - 1
   DisplayStat("* global header = "..stat.header.." bytes")
@@ -1429,20 +1477,16 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     local function LoadUpvalues()
       local n = LoadInt()
-      if n ~= 0 and n~= func.nups then
-        error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
-        return
-      end
       func.pos_upvalues = previdx
       func.upvalues = {}
       func.sizeupvalues = n
-      func.posupvalues = {}
       for i = 1, n do
-        func.upvalues[i] = LoadString()
-        func.posupvalues[i] = previdx
-        if not func.upvalues[i] then
-          error("empty string at index "..(i - 1).."in upvalue table")
-        end
+        local upvalue = {}
+        upvalue.instack = LoadByte()
+        upvalue.pos_instack = previdx
+        upvalue.idx = LoadByte()
+        upvalue.pos_idx = previdx
+        func.upvalues[i] = upvalue
       end
     end
 
@@ -1502,6 +1546,24 @@ function ChunkSpy(chunk_name, chunk)
     end
 
     -------------------------------------------------------------
+    -- load upvalue names
+    -------------------------------------------------------------
+    local function LoadUpvalueNames()
+      local n = LoadInt()
+      if n ~= 0 and n~= func.sizeupvalues then
+        error(string.format("bad nupvalues: read %d, expected %d", n, func.sizeupvalues))
+        return
+      end
+      func.size_upvalue_names = n
+      func.pos_upvalue_names = previdx
+      for i = 1, n do
+        local upvalue = func.upvalues[i]
+        upvalue.name = LoadString()
+        upvalue.pos_name = previdx
+      end
+    end
+
+    -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
     -- statistics handler
@@ -1511,20 +1573,17 @@ function ChunkSpy(chunk_name, chunk)
       func.stat[item] = idx - start
       start = idx
     end
-    -- source file name
-    func.source = LoadString()
-    func.pos_source = previdx
-    if func.source == "" and level == 1 then func.source = funcname end
+
     -- line where the function was defined
     func.linedefined = LoadInt()
     func.pos_linedefined = previdx
     func.lastlinedefined = LoadInt()
+    func.pos_lastlinedefined = previdx
 
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
     if TestChunk(4, idx, "function header") then return end
-    func.nups = LoadByte()
     func.numparams = LoadByte()
     func.is_vararg = LoadByte()
     func.maxstacksize = LoadByte()
@@ -1537,16 +1596,24 @@ function ChunkSpy(chunk_name, chunk)
     LoadCode()       SetStat("code")
     LoadConstantKs() SetStat("consts")
     LoadConstantPs() SetStat("funcs")
-    LoadLines()      SetStat("lines")
-    LoadLocals()     SetStat("locals")
     LoadUpvalues()   SetStat("upvalues")
+
+    -- source file name
+    func.source = LoadString()
+    func.pos_source = previdx
+    if func.source == "" and level == 1 then func.source = funcname end
+
+    LoadLines()          SetStat("lines")
+    LoadLocals()         SetStat("locals")
+    LoadUpvalueNames()   SetStat("upvalue_names")
+
     return func
     -- end of LoadFunction
   end
 
   ---------------------------------------------------------------
   -- displays function information
-  -- * decoupled from LoadFunction due to 5.1 chunk rearrangement
+  -- * decoupled from LoadFunction due to 5.2 chunk rearrangement
   ---------------------------------------------------------------
   function DescFunction(func, num, level)
     -------------------------------------------------------------
@@ -1628,6 +1695,25 @@ function ChunkSpy(chunk_name, chunk)
     end
 
     -------------------------------------------------------------
+    -- describe locals information
+    -------------------------------------------------------------
+    local function DescUpvaluesAll()
+      local n = func.sizeupvalues
+      DescLine("* upvalues:")
+      FormatLine(config.size_int, "sizeupvalues ("..n..")", func.pos_upvalues)
+      FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
+      for i = 1, n do
+        local upvalue = func.upvalues[i]
+        DescString(upvalue, upvalue.name)
+        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
+        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
+                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
+        FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
+        FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
+      end
+    end
+
+    -------------------------------------------------------------
     -- describe upvalues information
     -------------------------------------------------------------
     local function DescUpvalues()
@@ -1636,9 +1722,24 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "sizeupvalues ("..n..")", func.pos_upvalues)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescString(upvalue, func.posupvalues[i])
-        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue))
-        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue, 1)
+        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
+        FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
+        FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
+      end
+    end
+
+    -------------------------------------------------------------
+    -- describe upvalues information
+    -------------------------------------------------------------
+    local function DescUpvalueNames()
+      local n = func.size_upvalue_names
+      DescLine("* upvalue names:")
+      FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
+      for i = 1, n do
+        local upvalue = func.upvalues[i]
+        DescString(upvalue, upvalue.name)
+        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
+        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
                   ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
       end
     end
@@ -1720,6 +1821,19 @@ function ChunkSpy(chunk_name, chunk)
     end
 
     -------------------------------------------------------------
+    -- describe function source
+    -------------------------------------------------------------
+    local function DescSource()
+      -- source file name
+      DescString(func.source, func.pos_source)
+      if func.source == nil then
+        DescLine("source name: (none)")
+      else
+        DescLine("source name: "..EscapeString(func.source))
+      end
+    end
+
+    -------------------------------------------------------------
     -- body of DescFunction() starts here
     -------------------------------------------------------------
     DescLine("")
@@ -1729,13 +1843,7 @@ function ChunkSpy(chunk_name, chunk)
     BriefLine("; function ["..num.."] definition (level "..level..")")
     DescLine("** start of function **")
 
-    -- source file name
-    DescString(func.source, func.pos_source)
-    if func.source == nil then
-      DescLine("source name: (none)")
-    else
-      DescLine("source name: "..EscapeString(func.source))
-    end
+
 
     -- optionally initialize source listing merging
     SourceInit(func.source)
@@ -1748,44 +1856,49 @@ function ChunkSpy(chunk_name, chunk)
     pos = pos + config.size_int
 
     -- display byte counts
-    FormatLine(1, "nups ("..func.nups..")", pos)
-    FormatLine(1, "numparams ("..func.numparams..")", pos + 1)
-    FormatLine(1, "is_vararg ("..func.is_vararg..")", pos + 2)
-    FormatLine(1, "maxstacksize ("..func.maxstacksize..")", pos + 3)
+    FormatLine(1, "numparams ("..func.numparams..")", pos)
+    FormatLine(1, "is_vararg ("..func.is_vararg..")", pos + 1)
+    FormatLine(1, "maxstacksize ("..func.maxstacksize..")", pos + 2)
     BriefLine(string.format("; %d upvalues, %d params, %d stacks",
-      func.nups, func.numparams, func.maxstacksize))
+      func.sizeupvalues, func.numparams, func.maxstacksize))
     BriefLine(string.format(".function%s%d %d %d %d", config.DISPLAY_SEP,
-      func.nups, func.numparams, func.is_vararg, func.maxstacksize))
+      func.sizeupvalues, func.numparams, func.is_vararg, func.maxstacksize))
 
     -- display parts of a chunk
     if config.DISPLAY_FLAG and config.DISPLAY_BRIEF then
-      DescLines()       -- brief displays 'declarations' first
+      -- brief displays 'declarations' first
+      DescSource()
+      DescLines()
       DescLocals()
-      DescUpvalues()
+      DescUpvaluesAll()
       DescConstantKs()
       DescConstantPs()
       DescCode()
     else
-      DescCode()        -- normal displays positional order
+      -- normal displays positional order
+      DescCode()
       DescConstantKs()
       DescConstantPs()
+      DescUpvalues()  
+      DescSource()
       DescLines()
       DescLocals()
-      DescUpvalues()
+      DescUpvalueNames()
     end
 
     -- show function statistics block
-    DisplayStat("* func header   = "..func.stat.header.." bytes")
-    DisplayStat("* lines size    = "..func.stat.lines.." bytes")
-    DisplayStat("* locals size   = "..func.stat.locals.." bytes")
-    DisplayStat("* upvalues size = "..func.stat.upvalues.." bytes")
-    DisplayStat("* consts size   = "..func.stat.consts.." bytes")
-    DisplayStat("* funcs size    = "..func.stat.funcs.." bytes")
-    DisplayStat("* code size     = "..func.stat.code.." bytes")
+    DisplayStat("* func header        = "..func.stat.header.." bytes")
+    DisplayStat("* lines size         = "..func.stat.lines.." bytes")
+    DisplayStat("* locals size        = "..func.stat.locals.." bytes")
+    DisplayStat("* upvalues size      = "..func.stat.upvalues.." bytes")
+    DisplayStat("* upvalue names size = "..func.stat.upvalue_names.." bytes")
+    DisplayStat("* consts size        = "..func.stat.consts.." bytes")
+    DisplayStat("* funcs size         = "..func.stat.funcs.." bytes")
+    DisplayStat("* code size          = "..func.stat.code.." bytes")
     func.stat.total = func.stat.header + func.stat.lines +
                       func.stat.locals + func.stat.upvalues +
                       func.stat.consts + func.stat.funcs +
-                      func.stat.code
+                      func.stat.code + func.stat.upvalue_names
     DisplayStat("* TOTAL size    = "..func.stat.total.." bytes")
     DescLine("** end of function **\n")
     BriefLine("; end of function\n")
@@ -1853,6 +1966,7 @@ function WriteBinaryChunk(parsed, tofile)
   DumpByte(config.size_size_t)
   DumpByte(config.size_Instruction)
   DumpByte(config.size_lua_Number)
+  Dump(config.LUAC_TAIL)
   DecodeInit()
   DumpByte(config.integral)
   -- no more test number in 5.1
@@ -1923,9 +2037,23 @@ function WriteBinaryChunk(parsed, tofile)
     -- write upvalues information
     -------------------------------------------------------------
     local function WriteUpvalues()
-      -- func.sizeupvalues == func.nups
       WriteUnsigned(func.sizeupvalues)
-      for i = 1, func.sizeupvalues do WriteString(func.upvalues[i]) end
+      for i = 1, func.sizeupvalues do
+        local upvalue = func.upvalues[i]
+        DumpByte(upvalue.instack)
+        DumpByte(upvalue.idx)
+      end
+    end
+
+    -------------------------------------------------------------
+    -- write upvalues information
+    -------------------------------------------------------------
+    local function WriteUpvalueNames()
+      WriteUnsigned(func.size_upvalue_names)
+      for i = 1, func.size_upvalue_names do
+        local upvalue = func.upvalues[i]
+        WriteString(upvalue.name)
+      end
     end
 
     -------------------------------------------------------------
@@ -1969,19 +2097,19 @@ function WriteBinaryChunk(parsed, tofile)
     -------------------------------------------------------------
     -- body of WriteFunction() starts here
     -------------------------------------------------------------
-    WriteString(func.source)
     WriteUnsigned(func.linedefined)
     WriteUnsigned(func.lastlinedefined)
-    DumpByte(func.nups)                 -- some byte counts
     DumpByte(func.numparams)
     DumpByte(func.is_vararg)
     DumpByte(func.maxstacksize)
     WriteCode()
     WriteConstantKs()
     WriteConstantPs()   -- may be recursive
+    WriteUpvalues()
+    WriteString(func.source)
     WriteLines()        -- these are lists
     WriteLocals()
-    WriteUpvalues()
+    WriteUpvalueNames()
     -- end of WriteFunction
   end
 
@@ -2047,14 +2175,14 @@ function ChunkSpy_Test()
   ---------------------------------------------------------------
   expected("\27Lua\64", FAIL,
     "cannot read version", "incorrect version byte")
-  expected("\27Lua\81\1", FAIL,
+  expected("\27Lua\82\1", FAIL,
     "cannot read format", "incorrect format byte")
 
   ---------------------------------------------------------------
   -- Operator: Main screen turn on.
   -- Captain: It's you !!
   ---------------------------------------------------------------
-  expected("\27Lua\81\0\0", FAIL,
+  expected("\27Lua\82\0\0", FAIL,
     "unsupported endianness", "incorrect endianness byte")
 
   ---------------------------------------------------------------
@@ -2062,13 +2190,13 @@ function ChunkSpy_Test()
   -- Cats: All your base are belong to us.
   -- Cats: You are on the way to destruction.
   ---------------------------------------------------------------
-  expected("\27Lua\81\0\1\0\0\0\0", FAIL,
+  expected("\27Lua\82\0\1\0\0\0\0", FAIL,
     "int size", "incorrect int size byte")
-  expected("\27Lua\81\0\1\4\0\0\0", FAIL,
+  expected("\27Lua\82\0\1\4\0\0\0", FAIL,
     "size_t size", "incorrect size_t size byte")
-  expected("\27Lua\81\0\1\4\4\0\0", FAIL,
+  expected("\27Lua\82\0\1\4\4\0\0", FAIL,
     "Instruction size", "incorrect Instruction size byte")
-  expected("\27Lua\81\0\1\4\4\4\0", FAIL,
+  expected("\27Lua\82\0\1\4\4\4\0", FAIL,
     "number size", "incorrect lua_Number size byte")
 
   ---------------------------------------------------------------
@@ -2076,7 +2204,7 @@ function ChunkSpy_Test()
   -- Cats: You have no chance to survive make your time.
   -- Cats: Ha Ha Ha Ha ....
   ---------------------------------------------------------------
-  expected("\27Lua\81\0\1\4\4\4\8\1", FAIL,
+  expected("\27Lua\82\0\1\4\4\4\8\1", FAIL,
     "incorrect lua_Number", "incorrect integral byte")
 
   ---------------------------------------------------------------
@@ -2085,7 +2213,7 @@ function ChunkSpy_Test()
   -- Captain: You know what you doing.
   -- Captain: Move 'Zig'.
   ---------------------------------------------------------------
-  local LUA_HEADER = "\27Lua\81\0\1\4\4\4\8\1"
+  local LUA_HEADER = "\27Lua\82\0\1\4\4\4\8\1"
   -- add more tests here
 
   ---------------------------------------------------------------
@@ -2173,7 +2301,7 @@ function ChunkSpy_DoFiles(files)
     if binchunk then
       if not CheckAndAdd(binchunk, filename) then
         --try to compile file
-        local func, msg = loadstring(binchunk, filename)
+        local func, msg = load(binchunk, filename)
         if not func then
           print(string.format("failed to compile %s", msg))
         end
@@ -2327,8 +2455,8 @@ function main()
   ---------------------------------------------------------------
   -- check Lua version
   ---------------------------------------------------------------
-  if _VERSION ~= "Lua 5.1" then
-    error("this version of ChunkSpy requires Lua 5.1")
+  if _VERSION ~= "Lua 5.2" then
+    error("this version of ChunkSpy requires Lua 5.2")
   end
   ---------------------------------------------------------------
   -- handle arguments
