@@ -22,8 +22,7 @@ LIBS= -lm $(MYLIBS)
 
 ifeq ($(wildcard /dev/null),)
 	DEV_NULL= NUL
-	CP= copy /y
-	RM= del /f /s /q
+	RM= cmd //c del //f //s //q
 endif
 
 SRCVERSION=UNKNOWN
@@ -68,12 +67,10 @@ luareplace.o: luareplace.c
 luareplace: luareplace.o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
-allopcodes.lua: $(BINDIR)/allopcodes.lua
-	$(CP) $(BINDIR)/allopcodes.lua allopcodes.lua
-allopcodes_lua.h: allopcodes.lua
-	$(BIN2C) allopcodes.lua allopcodes_lua > allopcodes_lua.h
-allopcodes.luac: allopcodes.lua
-	$(LUAC) -o allopcodes.luac allopcodes.lua
+allopcodes_lua.h: $(BINDIR)/allopcodes.lua
+	$(BIN2C) $(BINDIR)/allopcodes.lua allopcodes_lua > allopcodes_lua.h
+allopcodes.luac: $(BINDIR)/allopcodes.lua
+	$(LUAC) -o allopcodes.luac $(BINDIR)/allopcodes.lua
 allopcodes_luac.h: allopcodes.luac
 	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
 
@@ -83,6 +80,5 @@ luaopswap: luaopswap.o lundump-$(LUAVER).o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 clean:
-	$(RM) $(OBJS) $T
 	$(RM) *.o *.exe
 	$(RM) allopcodes*
