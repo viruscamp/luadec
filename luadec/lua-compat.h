@@ -11,7 +11,7 @@
 	#define NUPS(f) (f->nups)
 	#define UPVAL_NAME(f, r) (f->upvalues[r])
 
-#define LUADEC_TFORLOOP OP_TFORLOOP
+	#define LUADEC_TFORLOOP OP_TFORLOOP
 #endif
 #if LUA_VERSION_NUM == 502
 	#define lua_open()	luaL_newstate()
@@ -20,7 +20,8 @@
 	#define UPVAL_TYPE Upvaldesc
 	#define NUPS(f) (f->sizeupvalues)
 	#define UPVAL_NAME(f, r) (f->upvalues[r].name)
-#define LUADEC_TFORLOOP OP_TFORCALL
+
+	#define LUADEC_TFORLOOP OP_TFORCALL
 #endif
 
 #endif // #ifndef LUADEC_LUA_COMPAT_H
