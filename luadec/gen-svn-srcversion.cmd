@@ -1,5 +1,6 @@
 @echo off
-echo generating srcversion.h using svnversion -n .
+echo generating srcversion.h using "svnversion -n ."
+svnversion -n .
 (echo #ifndef LUADEC_SRCVERSION_H) > srcversion.h
 (echo #define LUADEC_SRCVERSION_H) >> srcversion.h
 (echo.) >> srcversion.h

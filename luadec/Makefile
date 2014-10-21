@@ -9,26 +9,29 @@ LUA= $(LUASRC)/lua
 LUAC= $(LUASRC)/luac
 BIN2C = $(LUA) $(BINDIR)/bin2c.lua
 
+DEV_NULL= /dev/null
+CP= cp -f
+RM= rm -f
+
 CC= gcc
 CFLAGS= -O2 -Wall -DSRCVERSION=\"$(SRCVERSION)\" $(INCS) $(MYCFLAGS)
 LDFLAGS= $(MYLDFLAGS)
 AR= ar rcu
 RANLIB= ranlib
-RM= rm -f
 LIBS= -lm $(MYLIBS)
 
 ifeq ($(wildcard /dev/null),)
 	DEV_NULL= NUL
-else
-	DEV_NULL= /dev/null
+	CP= copy /y
+	RM= del /f /s /q
 endif
 
 SRCVERSION=UNKNOWN
-SVN_STATUS:=$(shell svn info 1>&2 2>$(DEV_NULL); echo $$?)
+SVN_STATUS:=$(shell svn info 1>$(DEV_NULL) 2>$(DEV_NULL); echo $$?)
 ifeq ($(SVN_STATUS),0)
 	SRCVERSION:=$(shell svnversion -q -n .)
 endif
-GIT_STATUS:=$(shell git log -n 1 --format=format:%h 1>&2 2>$(DEV_NULL); echo $$?)
+GIT_STATUS:=$(shell git log -n 1 --format=format:%h 1>$(DEV_NULL) 2>$(DEV_NULL); echo $$?)
 ifeq ($(GIT_STATUS),0)
 	SRCVERSION:=$(shell git log -n 1 --format=format:%h)
 endif
@@ -44,7 +47,7 @@ SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.
 
 T= luadec
 
-all: $T
+all: $T luareplace luaopswap
 
 $T: $(OBJS) $(MYOBJS) $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
@@ -65,10 +68,12 @@ luareplace.o: luareplace.c
 luareplace: luareplace.o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
-allopcodes_lua.h: $(BINDIR)/allopcodes.lua
-	$(BIN2C) $(BINDIR)/allopcodes.lua allopcodes_lua > allopcodes_lua.h
-allopcodes.luac: $(BINDIR)/allopcodes.lua
-	$(LUAC) -o allopcodes.luac $(BINDIR)/allopcodes.lua
+allopcodes.lua: $(BINDIR)/allopcodes.lua
+	$(CP) $(BINDIR)/allopcodes.lua allopcodes.lua
+allopcodes_lua.h: allopcodes.lua
+	$(BIN2C) allopcodes.lua allopcodes_lua > allopcodes_lua.h
+allopcodes.luac: allopcodes.lua
+	$(LUAC) -o allopcodes.luac allopcodes.lua
 allopcodes_luac.h: allopcodes.luac
 	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
 
@@ -78,4 +83,6 @@ luaopswap: luaopswap.o lundump-$(LUAVER).o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 clean:
-	rm -f $(OBJS) $T
+	$(RM) $(OBJS) $T
+	$(RM) *.o *.exe
+	$(RM) allopcodes*
