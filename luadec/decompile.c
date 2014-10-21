@@ -1788,6 +1788,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #endif
 			AddToSet(F->do_opens, f->locvars[startreg].startpc);
 			AddToSet(F->do_closes, f->locvars[startreg].endpc);
+			// continue; // comment out because of 5.2 OP_JMP
 		}
 
 #if LUA_VERSION_NUM == 501
@@ -1802,11 +1803,16 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 #endif
 			LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
+			continue;
 		}
+
 		if (o == OP_FORLOOP) {
 			LoopItem* item = NewLoopItem(FORLOOP, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
-		} else if (o == OP_JMP) {
+			continue;
+		}
+
+		if (o == OP_JMP) {
 			AstStatement* jmp = NULL;
 			AstStatement* jmpdest = cast(AstStatement*, F->jmpdests.tail);
 			while (jmpdest && jmpdest->line > dest) {
