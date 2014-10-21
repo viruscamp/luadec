@@ -2753,9 +2753,13 @@ LOGIC_NEXT_JMP:
 		}
 		case LUADEC_TFORLOOP: // TODO: CHECK
 		{
-			// 5.1 OP_TFORLOOP
-			// 5.2 OP_TFORCALL
-			// TODO 5.2 OP_TFORCALL
+			// 5.1 OP_TFORLOOP	A C		R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));
+			//	if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++
+			// 5.1 OP_JMP sBx	pc += sBx
+
+			// 5.2 OP_TFORCALL	A C		R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));
+			// 5.2 OP_TFORLOOP	A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx }
+
 			int i;
 			AstStatement* currStmt = F->currStmt;
 			for (i=F->intbegin[F->intspos]; i<=F->intend[F->intspos]; i++)
@@ -2879,29 +2883,36 @@ LOGIC_NEXT_JMP:
 			int i;
 			int uvn;
 			int cfnum = functionnum;
+			Proto* cf = f->p[c];
 
-			uvn = NUPS(f->p[c]);
+			uvn = NUPS(cf);
 
 			/* determining upvalues */
-
-			// upvalue names = next n opcodes after CLOSURE
-
-			if (!f->p[c]->upvalues) {
-				f->p[c]->sizeupvalues = uvn;
-				f->p[c]->upvalues = luaM_newvector(glstate,uvn,UPVAL_TYPE);
-
-				// TODO 5.2 always have cf->upvalues
+#if LUA_VERSION_NUM == 501
+			if (!cf->upvalues) {
+				cf->sizeupvalues = uvn;
+				cf->upvalues = luaM_newvector(glstate,uvn,TString*);
 				for (i=0; i<uvn; i++) {
+					cf->upvalues[i] = NULL;
+				}
+			}
+#endif
+			// upvalue names = next n opcodes after CLOSURE
+			for (i=0; i<uvn; i++) {
+				if (UPVAL_NAME(cf,i) == NULL) {
 					if (GET_OPCODE(code[pc+i+1]) == OP_MOVE) {
-						char names[10];
+						// TODO check : should we use getLocalName?
+						char names[32];
 						sprintf(names,"l_%d_%d",functionnum,GETARG_B(code[pc+i+1]));
-						UPVAL_NAME(f->p[c], i) = luaS_new(glstate, names);
+						UPVAL_NAME(cf, i) = luaS_new(glstate, names);
 					} else if (GET_OPCODE(code[pc+i+1]) == OP_GETUPVAL) {
-						UPVAL_NAME(f->p[c], i) = UPVAL_NAME(f, GETARG_B(code[pc+i+1]));
+						// TODO make sure is not null , when using -s -pn
+						// should we use getUpvalName?
+						UPVAL_NAME(cf, i) = UPVAL_NAME(f, GETARG_B(code[pc+i+1]));
 					} else {
-						char names[20];
+						char names[32];
 						sprintf(names,"upval_%d_%d",functionnum,i);
-						UPVAL_NAME(f->p[c], i) = luaS_new(glstate, names);
+						UPVAL_NAME(cf, i) = luaS_new(glstate, names);
 					}
 				}
 			}
@@ -2912,7 +2923,7 @@ LOGIC_NEXT_JMP:
 				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
 				functionnum = c;
 				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
-				code = PrintFunctionOnlyParamsAndUpvalues(f->p[c], F->indent, newfuncnumstr);
+				code = PrintFunctionOnlyParamsAndUpvalues(cf, F->indent, newfuncnumstr);
 				StringBuffer_setBuffer(str, code);
 			} else if (!process_sub) {
 				StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, c);
@@ -2921,13 +2932,13 @@ LOGIC_NEXT_JMP:
 				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
 				functionnum = c;
 				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
-				code = ProcessCode(f->p[c], F->indent, 0, newfuncnumstr);
+				code = ProcessCode(cf, F->indent, 0, newfuncnumstr);
 				StringBuffer_setBuffer(str, code);
 			}
 			TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 			/* need to add upvalue handling */
 
-			ignoreNext = f->p[c]->sizeupvalues;
+			ignoreNext = cf->sizeupvalues;
 
 			break;
 		}
@@ -3048,20 +3059,22 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	StringBuffer* buff = StringBuffer_newBySize(128);
 
 	/* determining upvalues */
-
-	// upvalue names = next n opcodes after CLOSURE
-	// 5.2 always have cf->upvalues
+#if LUA_VERSION_NUM == 501
 	if (!cf->upvalues) {
 		cf->sizeupvalues = uvn;
-		cf->upvalues = luaM_newvector(glstate, uvn, UPVAL_TYPE);
+		cf->upvalues = luaM_newvector(glstate,uvn,TString*);
+		for (i=0; i<uvn; i++) {
+			cf->upvalues[i] = NULL;
+		}
 	}
+#endif
+	// upvalue names = next n opcodes after CLOSURE
 	for (i = 0; i<uvn; i++) {
 		TString* upvalname = UPVAL_NAME(cf, i);
-		if (upvalname->tsv.len == 0) {
+		if (upvalname == NULL || upvalname->tsv.len == 0) {
 			char names[10];
 			sprintf(names, "l_%d_%d", 0, i);
 			UPVAL_NAME(cf, i) = luaS_new(glstate, names);
-			// TODO 5.2 free upvalname
 		}
 	}
 

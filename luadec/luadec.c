@@ -360,16 +360,18 @@ static void strip(lua_State* L, Proto* f) {
 	int i,n=f->sizep;
 	luadec_freearray(L, f->lineinfo, f->sizelineinfo, int);
 	f->lineinfo=NULL; f->sizelineinfo=0;
-	luadec_freearray(L, f->locvars, f->sizelocvars, struct LocVar);
+	luadec_freearray(L, f->locvars, f->sizelocvars, LocVar);
 	f->locvars=NULL;  f->sizelocvars=0;
 #if LUA_VERSION_NUM == 501
-	luadec_freearray(L, f->upvalues, f->sizeupvalues, UPVAL_TYPE);
+	luadec_freearray(L, f->upvalues, f->sizeupvalues, TString*);
 	f->upvalues=NULL; f->sizeupvalues=0;
 #endif
 #if LUA_VERSION_NUM == 502
-	// TODO 5.2 how to strip upvalues ?
+	for (i=0; i<n; i++) {
+		f->upvalues[i].name=NULL;
+	}
 #endif
-	f->source=luaS_newliteral(L,"=(none)");
+	f->source=NULL;
 	for (i=0; i<n; i++) {
 		strip(L,f->p[i]);
 	}
