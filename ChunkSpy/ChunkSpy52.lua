@@ -2369,14 +2369,16 @@ function ChunkSpy_DoFiles(files)
         error("could not load profile for writing binary chunk")
       end
       local binchunk = WriteBinaryChunk(result)
-      local func, msg = loadstring(binchunk, i) -- load
-      if not func then error(msg) end
+
       local sandbox = {}
       arg_other[0] = i                      -- propagate rest of args
-      arg = arg_other
-      setmetatable(sandbox, {__index = _G}) -- sandbox (see PIL book)
-      setfenv(func, sandbox)
-      func()                                -- execute
+      _ENV.arg = arg_other
+      setmetatable(sandbox, {__index = _ENV}) -- sandbox (see PIL book)
+
+      local func, msg = load(binchunk, i, nil, sandbox) -- load
+      if not func then error(msg) end
+
+      func(table.unpack(arg_other))                                -- execute
       return
     end
   end

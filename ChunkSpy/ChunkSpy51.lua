@@ -2194,7 +2194,8 @@ function ChunkSpy_DoFiles(files)
     end
     if binchunk then
       if not CheckAndAdd(binchunk, filename) then
-        CheckLuaVersion("compiling needs %s")        --try to compile file
+        CheckLuaVersion("compiling needs %s")
+        --try to compile file
         local func, msg = loadstring(binchunk, "@"..filename)
         if not func then
           print(string.format("failed to compile %s", msg))
@@ -2243,14 +2244,17 @@ function ChunkSpy_DoFiles(files)
         error("could not load profile for writing binary chunk")
       end
       local binchunk = WriteBinaryChunk(result)
-      local func, msg = loadstring(binchunk, i) -- load
-      if not func then error(msg) end
+  
       local sandbox = {}
       arg_other[0] = i                      -- propagate rest of args
-      arg = arg_other
+      _G.arg = arg_other
       setmetatable(sandbox, {__index = _G}) -- sandbox (see PIL book)
+
+      local func, msg = loadstring(binchunk, i) -- load
+      if not func then error(msg) end
       setfenv(func, sandbox)
-      func()                                -- execute
+
+      func(unpack(arg_other))                                -- execute
       return
     end
   end
