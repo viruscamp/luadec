@@ -1725,9 +1725,14 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescString(upvalue.name, upvalue.pos_name)
-        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
-        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
+        local name = upvalue.name
+        if name then
+          DescString(name, upvalue.pos_name)
+        else
+          name = ''
+        end
+        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(name))
+        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(name, 1)
                   ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
         FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
         FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
@@ -1743,7 +1748,13 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "sizeupvalues ("..n..")", func.pos_upvalues)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
+        local name = upvalue.name
+        if name then
+          DescString(name, upvalue.pos_name)
+        else
+          name = ''
+        end
+        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(name))
         FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
         FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
       end
