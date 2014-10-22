@@ -287,7 +287,7 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("-s"))			/* strip debug information */
 			stripping=1;
 		else if (IS("-v")) {		/* show version */
-			printf("LuaDec " VERSION_STRING "\n");
+			printf("LuaDec " VERSION_STRING " for " LUA_VERSION "\n");
 			if (argc==2) exit(EXIT_SUCCESS);
 		}
 		else if (IS("-fc")) {

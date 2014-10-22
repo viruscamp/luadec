@@ -2889,33 +2889,67 @@ LOGIC_NEXT_JMP:
 
 			/* determining upvalues */
 #if LUA_VERSION_NUM == 501
+			// upvalue names = next n opcodes after CLOSURE
 			if (!cf->upvalues) {
 				cf->sizeupvalues = uvn;
 				cf->upvalues = luaM_newvector(glstate,uvn,TString*);
+
 				for (i=0; i<uvn; i++) {
-					cf->upvalues[i] = NULL;
-				}
-			}
-#endif
-			// upvalue names = next n opcodes after CLOSURE
-			for (i=0; i<uvn; i++) {
-				if (UPVAL_NAME(cf,i) == NULL) {
-					if (GET_OPCODE(code[pc+i+1]) == OP_MOVE) {
-						// TODO check : should we use getLocalName?
-						char names[32];
-						sprintf(names,"l_%d_%d",functionnum,GETARG_B(code[pc+i+1]));
-						UPVAL_NAME(cf, i) = luaS_new(glstate, names);
-					} else if (GET_OPCODE(code[pc+i+1]) == OP_GETUPVAL) {
-						// TODO make sure is not null , when using -s -pn
-						// should we use getUpvalName?
-						UPVAL_NAME(cf, i) = UPVAL_NAME(f, GETARG_B(code[pc+i+1]));
+					Instruction ins = code[pc+i+1];
+					OpCode op = GET_OPCODE(ins);
+					int b = GETARG_B(op);
+					TString* upvalname = NULL;
+					if (op == OP_MOVE) {
+						upvalname = f->locvars[b].varname;
+						if (upvalname == NULL) {
+							char names[32];
+							sprintf(names, "l_%d_%d", functionnum, b);
+							upvalname = luaS_new(glstate, names);
+						}
+					} else if (op == OP_GETUPVAL) {
+						upvalname = f->upvalues[b];
+						if (upvalname == NULL) {
+							char names[32];
+							sprintf(names, "u_%d_%d", functionnum, b);
+							upvalname = luaS_new(glstate, names);
+						}
 					} else {
 						char names[32];
-						sprintf(names,"upval_%d_%d",functionnum,i);
-						UPVAL_NAME(cf, i) = luaS_new(glstate, names);
+						sprintf(names, "upval_%d_%d", functionnum, i);
+						upvalname = luaS_new(glstate, names);
 					}
+					cf->upvalues[i] = upvalname;
 				}
 			}
+			ignoreNext = cf->sizeupvalues;
+#endif
+#if LUA_VERSION_NUM == 502
+			// upvalue names determined by cf->upvalues->instack and cf->upvalues->idx
+			for (i=0; i<uvn; i++) {
+				Upvaldesc upval = cf->upvalues[0];
+				TString* upvalname = NULL;
+				if (upval.instack == 1) { // TODO 5.2 Check Maybe ?
+					// Get name from local name
+					// TODO 5.2 Check
+					upvalname = f->locvars[upval.idx].varname;
+					if (upvalname == NULL) {
+						char names[32];
+						sprintf(names, "l_%d_%d", functionnum, upval.idx);
+						upvalname = luaS_new(glstate, names);
+					}
+				} else {
+					// Get name from upvalue name
+					// TODO 5.2 Check
+					upvalname = f->upvalues[upval.idx].name;
+					if (upvalname == NULL) {
+						char names[32];
+						sprintf(names, "u_%d_%d", functionnum, upval.idx);
+						upvalname = luaS_new(glstate, names);
+					}
+				}
+				cf->upvalues[i].name = upvalname;
+			}
+#endif
 			/* upvalue determinition end */
 
 			if ( func_checking == 1) {
@@ -2936,9 +2970,6 @@ LOGIC_NEXT_JMP:
 				StringBuffer_setBuffer(str, code);
 			}
 			TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
-			/* need to add upvalue handling */
-
-			ignoreNext = cf->sizeupvalues;
 
 			break;
 		}

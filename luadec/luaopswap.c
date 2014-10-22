@@ -113,7 +113,7 @@ static int doargs(int argc, char* argv[]) {
 			cmp_gen_lua = 1;
 		}
 		else if (IS("-v")) {		/* show version */
-			printf("LuaOpSwap " VERSION_STRING "\n");
+			printf("LuaOpSwap " VERSION_STRING " for " LUA_VERSION "\n");
 			exit(EXIT_SUCCESS);
 		}
 		else {						/* unknown option */
