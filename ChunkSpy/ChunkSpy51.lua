@@ -26,8 +26,8 @@
 
 title = [[
 ChunkSpy: A Lua 5.1 binary chunk disassembler
-Version 0.9.9 (20130624)
-Copyright (c) 2004-2006 Kein-Hong Man , 2013 VirusCamp
+Version 0.9.9 (20141022)
+Copyright (c) 2004-2006 Kein-Hong Man , 2014 VirusCamp
 The COPYRIGHT file describes the conditions under which this
 software may be distributed (basically a Lua 5-style license.)
 ]]
@@ -119,6 +119,17 @@ CONFIGURATION = {
 -- * both in & out paths use config.* parms, a bit clunky for now
 -----------------------------------------------------------------------
 config = {}
+
+function CheckLuaVersion(fmt)
+  if _VERSION ~= "Lua 5.1" then
+    if type(fmt) == "string" then
+      msg = string.format(fmt, "Lua 5.1")
+    else
+      msg = "needs Lua 5.1"
+    end
+    error(msg)
+  end
+end
 
 function SetProfile(profile)
   if profile == "local" then
@@ -424,14 +435,14 @@ function EscapeString(s, quoted)
   for i = 1, string.len(s) do
     local c = string.byte(s, i)
     -- other escapees with values > 31 are "(34), \(92)
-    if c < 32 or c == 34 or c == 92 then
+    if c < 32 or c == 34 or c == 92 or c > 126 then
       if c >= 7 and c <= 13 then
         c = string.sub("abtnvfr", c - 6, c - 6)
       elseif c == 34 or c == 92 then
         c = string.char(c)
       end
       v = v.."\\"..c
-    else-- 32 <= v <= 255
+    else -- 32 <= v <= 126
       v = v..string.char(c)
     end
   end
@@ -505,6 +516,7 @@ end
 
 --]]-------------------------------------------------------------------
 
+local iABC, iABx, iAsBx = 0, 1, 2
 -----------------------------------------------------------------------
 -- instruction decoder initialization
 -----------------------------------------------------------------------
@@ -536,15 +548,28 @@ function DecodeInit()
   ---------------------------------------------------------------
   -- opcode name table
   ---------------------------------------------------------------
-  local op =
-    "MOVE LOADK LOADBOOL LOADNIL GETUPVAL \
-    GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE \
-    NEWTABLE SELF ADD SUB MUL \
-    DIV MOD POW UNM NOT \
-    LEN CONCAT JMP EQ LT \
-    LE TEST TESTSET CALL TAILCALL RETURN \
-    FORLOOP FORPREP TFORLOOP SETLIST \
-    CLOSE CLOSURE VARARG"
+  local op = [[
+    MOVE LOADK LOADBOOL LOADNIL GETUPVAL
+    GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE
+    NEWTABLE SELF ADD SUB MUL
+    DIV MOD POW UNM NOT
+    LEN CONCAT JMP EQ LT
+    LE TEST TESTSET CALL TAILCALL RETURN
+    FORLOOP FORPREP TFORLOOP SETLIST 
+    CLOSE CLOSURE VARARG
+  ]]
+
+  iABC=0; iABx=1; iAsBx=2
+  config.opmode = {
+    [0]=iABC,iABx,iABC,iABC,iABC,
+    iABx,iABC,iABx,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iABC,iAsBx,iABC,iABC,
+    iABC,iABC,iABC,iABC,iABC,
+    iABC,iAsBx,iAsBx,iABC,iABC,
+    iABC,iABx,iABC
+  }
 
   ---------------------------------------------------------------
   -- build opcode name table
@@ -564,8 +589,6 @@ function DecodeInit()
     end
     config.NUM_OPCODES = config.NUM_OPCODES + 1
   end
-  -- opmode: 0=ABC, 1=ABx, 2=AsBx
-  config.opmode = "01000101000000000000002000000002200010"
 
   config.operators={
     [config.opcodes["add"]]="+",
@@ -628,10 +651,10 @@ function DecodeInst(code, iValues)
     cBits = cBits - iSeq[i]
   end
   iValues.opname = config.opnames[iValues.OP]   -- get mnemonic
-  iValues.opmode = string.sub(config.opmode, iValues.OP + 1, iValues.OP + 1)
-  if iValues.opmode == "1" then                 -- set Bx or sBx
+  iValues.opmode = config.opmode[iValues.OP]
+  if iValues.opmode == iABx then                 -- set Bx or sBx
     iValues.Bx = iValues.B * iMask[3] + iValues.C
-  elseif iValues.opmode == "2" then
+  elseif iValues.opmode == iAsBx then
     iValues.sBx = iValues.B * iMask[3] + iValues.C - config.MAXARG_sBx
   end
   return iValues
@@ -684,8 +707,8 @@ function DescribeInst(inst, pos, func)
   -- comment formatting helpers
   -- calculate jump location, conditional flag
   ---------------------------------------------------------------
-  local function CommentLoc(sBx, cond)
-    local loc = string.format("to [%d]", pos + 1 + sBx)
+  local function CommentLoc(sbx, cond)
+    local loc = string.format("pc+=%d (goto [%d])", sbx, pos + 1 + sbx)
     if cond then loc = loc..cond end
     return loc
   end
@@ -1853,8 +1876,8 @@ function WriteBinaryChunk(parsed, tofile)
   DumpByte(config.size_size_t)
   DumpByte(config.size_Instruction)
   DumpByte(config.size_lua_Number)
-  DecodeInit()
   DumpByte(config.integral)
+  DecodeInit()
   -- no more test number in 5.1
 
   ---------------------------------------------------------------
@@ -1923,7 +1946,6 @@ function WriteBinaryChunk(parsed, tofile)
     -- write upvalues information
     -------------------------------------------------------------
     local function WriteUpvalues()
-      -- func.sizeupvalues == func.nups
       WriteUnsigned(func.sizeupvalues)
       for i = 1, func.sizeupvalues do WriteString(func.upvalues[i]) end
     end
@@ -2172,8 +2194,8 @@ function ChunkSpy_DoFiles(files)
     end
     if binchunk then
       if not CheckAndAdd(binchunk, filename) then
-        --try to compile file
-        local func, msg = loadstring(binchunk, filename)
+        CheckLuaVersion("compiling needs %s")        --try to compile file
+        local func, msg = loadstring(binchunk, "@"..filename)
         if not func then
           print(string.format("failed to compile %s", msg))
         end
@@ -2286,12 +2308,13 @@ end
 --]]-------------------------------------------------------------------
 
 function CompileSourceFile(filename)
+  CheckLuaVersion("compiling needs %s")
   local INF = io.open(filename, "rb")
   if not INF then
     error("cannot open \""..filename.."\" for reading")
   end
   local src = INF:read("*a")
-  local func, msg = loadstring(src, filename)
+  local func, msg = loadstring(src, "@"..filename)
   if not func then
     print(msg)
     error("failed to compile source file \""..filename.."\"")
@@ -2328,7 +2351,12 @@ function main()
   -- check Lua version
   ---------------------------------------------------------------
   if _VERSION ~= "Lua 5.1" then
-    error("this version of ChunkSpy requires Lua 5.1")
+    if _VERSION == "Lua 5.2" then
+      loadstring = load
+      print("using Lua 5.2, process binary chunk only")
+    else
+      error("this version of ChunkSpy requires Lua 5.1 or 5.2")
+    end
   end
   ---------------------------------------------------------------
   -- handle arguments
@@ -2355,7 +2383,7 @@ function main()
         elseif a == "--brief" then
           config.DISPLAY_BRIEF = true
         elseif a == "--interact" then
-          perform = ChunkSpy_Interact
+          CheckLuaVersion("--interact needs %s")          perform = ChunkSpy_Interact
         ---------------------------------------------------------
         elseif a == "-o" or a == "--source" then
           if not b then error("-o option needs a file name") end
@@ -2378,7 +2406,9 @@ function main()
         ---------------------------------------------------------
         elseif a == "--rewrite" then
           if not b then error("--rewrite option needs a profile name") end
-          config.DISPLAY_FLAG = false
+          if b == "local" then
+            CheckLuaVersion("--rewrite local needs %s")
+          end          config.DISPLAY_FLAG = false
           config.REWRITE_FLAG = true
           if b == "local" or CONFIGURATION[b] then
             config.REWRITE_PROFILE = b
@@ -2388,7 +2418,7 @@ function main()
           i = i + 1
         ---------------------------------------------------------
         elseif a == "--run" then
-          config.DISPLAY_FLAG = false
+          CheckLuaVersion("--run needs %s")          config.DISPLAY_FLAG = false
           config.AUTO_DETECT = true
           config.RUN_FLAG = true
         ---------------------------------------------------------

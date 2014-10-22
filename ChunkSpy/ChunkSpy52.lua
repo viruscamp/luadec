@@ -120,6 +120,17 @@ CONFIGURATION = {
 -----------------------------------------------------------------------
 config = {}
 
+function CheckLuaVersion(fmt)
+  if _VERSION ~= "Lua 5.2" then
+    if type(fmt) == "string" then
+      msg = string.format(fmt, "Lua 5.2")
+    else
+      msg = "needs Lua 5.2"
+    end
+    error(msg)
+  end
+end
+
 function SetProfile(profile)
   if profile == "local" then
     -- arrives here only for --rewrite and --run option
@@ -128,6 +139,7 @@ function SetProfile(profile)
     local LUA_SAMPLE = string.dump(function() end)
     -- config.* profile parms set in ChunkSpy() call...
     config.SIGNATURE = "\27Lua"
+    config.LUAC_TAIL = "\25\147\r\n\26\n"
     local ok, _ = pcall(ChunkSpy, "", LUA_SAMPLE)
     if not ok then error("error compiling sample to test local profile") end
     config.DISPLAY_FLAG, config.AUTO_DETECT = flag1, flag2
@@ -136,6 +148,7 @@ function SetProfile(profile)
     local c = CONFIGURATION[profile]
     if not c then return false end
     if not c.SIGNATURE then c.SIGNATURE = "\27Lua" end
+    if not c.LUAC_TAIL then c.LUAC_TAIL = "\25\147\r\n\26\n" end
     for i, v in pairs(c) do config[i] = v end
   end
   return true
@@ -425,14 +438,14 @@ function EscapeString(s, quoted)
   for i = 1, string.len(s) do
     local c = string.byte(s, i)
     -- other escapees with values > 31 are "(34), \(92)
-    if c < 32 or c == 34 or c == 92 then
+    if c < 32 or c == 34 or c == 92 or c > 126 then
       if c >= 7 and c <= 13 then
         c = string.sub("abtnvfr", c - 6, c - 6)
       elseif c == 34 or c == 92 then
         c = string.char(c)
       end
       v = v.."\\"..c
-    else-- 32 <= v <= 255
+    else -- 32 <= v <= 126
       v = v..string.char(c)
     end
   end
@@ -555,7 +568,7 @@ function DecodeInit()
 
   iABC=0; iABx=1; iAsBx=2; iAx=3
   config.opmode = {
-    iABC,iABx,iABx,iABC,iABC,
+    [0]=iABC,iABx,iABx,iABC,iABC,
     iABC,iABC,iABC,iABC,iABC,
     iABC,iABC,iABC,iABC,iABC,
     iABC,iABC,iABC,iABC,iABC,
@@ -724,7 +737,10 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   -- Kst(x) - constant (in constant table)
   ---------------------------------------------------------------
-  local function CommentK(index, quoted)
+  local function IS_CONSTANT(r)
+    return (r >= config.BITRK)
+  end
+  local function Kst(index, quoted)
     local c = func.k[index + 1]
     if type(c) == "string" then
       return EscapeString(c, quoted)
@@ -734,64 +750,61 @@ function DescribeInst(inst, pos, func)
       return "nil"
     end
   end
+  local function K(index)
+    return "K"..tostring(index).."(="..Kst(index, true)..")"
+  end
 
   ---------------------------------------------------------------
-  -- RK(x) == if BITRK then Kst(x&~BITRK) else R(x)
+  -- R(x)
   ---------------------------------------------------------------
-  local function CommentRK(index, quoted)
-    if index >= config.BITRK then
-      return CommentK(index - config.BITRK, quoted)
+  local function RName(index)
+    -- can we get local vaname using index and pos ?
+    -- func.locals[?].varname .startpc .endpc
+    return nil
+  end
+  local function R(index)
+    local name = RName(index)
+    if name and name ~= "" then
+      return "R"..tostring(index).."(="..name..")"
     else
       return "R"..tostring(index)
     end
   end
 
   ---------------------------------------------------------------
-  -- comments for RK(B), RK(C)
+  -- RK(x) == if BITRK then Kst(x&~BITRK) else R(x)
   ---------------------------------------------------------------
-  local function CommentBC(inst)
-    local B, C = CommentRK(inst.B, true), CommentRK(inst.C, true)
-    if B == "" then
-      if C == "" then return "" else return C end
-    elseif C == "" then
-      return B
+  local function RK(index)
+    if IS_CONSTANT(index) then
+      return K(index - config.BITRK)
     else
-      return B.." "..C
+      return R(index)
     end
   end
 
   ---------------------------------------------------------------
-  -- floating point byte conversion
-  -- bit positions: mmmmmxxx, actual: (1xxx) * 2^(m-1)
+  -- comments for Upvalue
   ---------------------------------------------------------------
-  local function fb2int(x)
-    local e = math.floor(x / 8) % 32
-    if e == 0 then return x end
-    return math.ldexp((x % 8) + 8, e - 1)
+  local function UName(x)
+    local upvalue = func.upvalues[x + 1]
+    if upvalue and upvalue.name then
+      return EscapeString(upvalue.name)
+    else
+      return nil
+    end
   end
- 
-  local function IS_CONSTANT(r)
-    return (r >= config.BITRK)
-  end
-  local function CC(r)
-    return (IS_CONSTANT(r) and 'K' or 'R')
-  end
-  local function CV(r)
-    return (IS_CONSTANT(r) and (r-config.BITRK) or r)
+  local function U(x)
+    local name = UName(x)
+    if name and name ~= "" then
+      return 'U'..tostring(x).."(="..name..")"
+    else
+      return 'U'..tostring(x)
+    end
   end
 
-  local function Kst(x)
-    return CommentK(x,true)
-  end
-  local function RK(r)
-    local str=''
-    if IS_CONSTANT(r) then
-      str = 'K'..(r-config.BITRK).."("..Kst(r-config.BITRK)..")"
-    else
-      str = 'R'..r
-    end
-    return str
-  end
+  ---------------------------------------------------------------
+  -- comments for Reg list
+  ---------------------------------------------------------------
   local function RList(start,num)
     if (num>2) then
       return "R"..start.." to R"..(start+num-1)
@@ -804,6 +817,16 @@ function DescribeInst(inst, pos, func)
     else
       return "R"..start.." to top"
     end
+  end
+
+  ---------------------------------------------------------------
+  -- floating point byte conversion
+  -- bit positions: mmmmmxxx, actual: (1xxx) * 2^(m-1)
+  ---------------------------------------------------------------
+  local function fb2int(x)
+    local e = math.floor(x / 8) % 32
+    if e == 0 then return x end
+    return math.ldexp((x % 8) + 8, e - 1)
   end
 
   local a=inst.A
@@ -829,28 +852,28 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("MOVE") then -- MOVE A B
     Operand = OperandAB(inst)
-    Comment = string.format("R%d := R%d",a,b)
+    Comment = string.format("%s := %s",R(a),R(b))
   ---------------------------------------------------------------
   elseif isop("LOADK") then -- LOADK A Bx
     Operand = OperandABx(inst)
-    Comment = string.format("R%d := %s",a,CommentK(bx, true))
+    Comment = string.format("%s := %s",R(a),K(bx))
   ---------------------------------------------------------------
   elseif isop("LOADKX") then -- LOADK A
     Operand = OperandA1(inst)
-    Comment = string.format("R%d :=",a)
+    Comment = string.format("%s :=",R(a))
   ---------------------------------------------------------------
   elseif isop("EXTRAARG") then -- LOADK Ax
     Operand = OperandAx(inst)
-    Comment = CommentK(inst.Ax, true)
+    Comment = Kst(ax)
   ---------------------------------------------------------------
   elseif isop("LOADBOOL") then -- LOADBOOL A B C
     Operand = OperandABC(inst)
     local v
-    if inst.B == 0 then v = "false" else v = "true" end
-    if inst.C > 0 then
-      Comment = string.format("R%d := %s; PC := %s",a,v,CommentLoc(1));
+    if b == 0 then v = "false" else v = "true" end
+    if c > 0 then
+      Comment = string.format("%s := %s; %s",R(a),v,CommentLoc(1));
     else
-      Comment = string.format("R%d := %s",a,v)
+      Comment = string.format("%s := %s",R(a),v)
     end
     v=nil
   ---------------------------------------------------------------
@@ -860,38 +883,37 @@ function DescribeInst(inst, pos, func)
   ---------------------------------------------------------------
   elseif isop("GETUPVAL") then -- GETUPVAL A B
     Operand = OperandAB(inst)
-    Comment = string.format("R%d := U%d , %s", a, b, func.upvalues[inst.B + 1] or "unknown upval");
+    Comment = string.format("%s := %s", R(a), U(b));
   ---------------------------------------------------------------
   elseif isop("SETUPVAL") then -- SETUPVAL A B
     Operand = OperandAB(inst)
-    Comment = string.format("U%d := R%d , %s", b, a, func.upvalues[inst.B + 1] or "unknown upval")
+    Comment = string.format("%s := %s", U(b), R(a))
   ---------------------------------------------------------------
   elseif isop("GETTABUP") then -- GETTABUP A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := U%d[%s]",a,b,RK(C))
+    Comment = string.format("%s := %s[%s]", R(a), U(b), RK(c))
   ---------------------------------------------------------------  
   elseif isop("SETTABUP") then -- SETTABUP A B C
     Operand = OperandABC(inst)
-    Comment = string.format("U%d[%s] := %s",a,RK(b),RK(c))
+    Comment = string.format("%s[%s] := %s", U(a), RK(b), RK(c))
   ---------------------------------------------------------------
   elseif isop("GETTABLE") then -- GETTABLE A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d[%s]",a,b,RK(c))
+    Comment = string.format("%s := %s[%s]",R(a),R(b),RK(c))
   ---------------------------------------------------------------
   elseif isop("SETTABLE") then -- SETTABLE A B C
     Operand = OperandABC(inst)
-    Comment = CommentBC(inst)
-    Comment = string.format("R%d[%s] := %s",a,RK(b),RK(c))
+    Comment = string.format("%s[%s] := %s",R(a),RK(b),RK(c))
   ---------------------------------------------------------------
   elseif isop("NEWTABLE") then -- NEWTABLE A B C
     Operand = OperandABC(inst)
-    local ar = fb2int(inst.B)  -- array size
-    local hs = fb2int(inst.C)  -- hash size
-    Comment = string.format("R%d := {} , array_size=%d, hash_size=%d",a,ar,hs)
+    local ar = fb2int(b)  -- array size
+    local hs = fb2int(c)  -- hash size
+    Comment = string.format("%s := {} , array_size=%d, hash_size=%d",R(a),ar,hs)
   ---------------------------------------------------------------
   elseif isop("SELF") then -- SELF A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := R%d; R%d := R%d[%s]",a+1,b,a,b,RK(c))
+    Comment = string.format("R%d := %s; %s := %s[%s]",a+1,R(b),R(a),R(b),RK(c))
   ---------------------------------------------------------------
   elseif isop("ADD") or   -- ADD A B C
          isop("SUB") or   -- SUB A B C
@@ -900,20 +922,20 @@ function DescribeInst(inst, pos, func)
          isop("MOD") or   -- MOD A B C
          isop("POW") then -- POW A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := %s %s %s",a,RK(b),config.operators[inst.OP],RK(c))
+    Comment = string.format("%s := %s %s %s",R(a),RK(b),config.operators[inst.OP],RK(c))
   ---------------------------------------------------------------
   elseif isop("UNM") or   -- UNM A B
          isop("NOT") or   -- NOT A B
          isop("LEN") then -- LEN A B
     Operand = OperandAB(inst)
-    Comment = string.format("R%d := %s %s",a,config.operators[inst.OP],RK(b))
+    Comment = string.format("%s := %s %s",R(a),config.operators[inst.OP],RK(b))
   ---------------------------------------------------------------
   elseif isop("CONCAT") then -- CONCAT A B C
     Operand = OperandABC(inst)
-    Comment = string.format("R%d := %s",a,RList(b,c-b+1))
+    Comment = string.format("%s := %s",R(a),RList(b,c-b+1))
   ---------------------------------------------------------------
   elseif isop("JMP") then -- JMP A sBx
-    Operand = OperandABx(inst)
+    Operand = OperandAsBx(inst)
     if a>0 then
       Comment="close all upvalues >= R"..(a-1).."; "
     else
@@ -933,13 +955,13 @@ function DescribeInst(inst, pos, func)
     Operand = OperandABC(inst)
     local sense = " "
     if c == 0 then sense = " not " end
-    Comment = string.format("if%sR%d then R%d = R%d else ",sense,b,a,b)
+    Comment = string.format("if%s%s then %s = %s else ",sense,R(b),R(a),R(b))
     Comment = Comment..CommentLoc(1)
   elseif isop("TEST") then -- TEST A C
     Operand = OperandAC(inst)
     local sense = " not "
     if c == 0 then sense = " " end
-    Comment = string.format("if%sR%d then ",sense,a)
+    Comment = string.format("if%s%s then ",sense,R(a))
     Comment = Comment..CommentLoc(1)
   ---------------------------------------------------------------
   elseif isop("CALL") or   -- CALL A B C
@@ -947,7 +969,7 @@ function DescribeInst(inst, pos, func)
     Operand = OperandABC(inst)
     CommentArg = RList(a+1,b-1)
     CommentRtn = RList(a,c-1)
-    Comment = string.format("%s := R%d(%s)",CommentRtn,a,CommentArg);
+    Comment = string.format("%s := %s(%s)",CommentRtn,R(a),CommentArg);
   ---------------------------------------------------------------
   elseif isop("RETURN") then -- RETURN A B
     Operand = OperandAB(inst)
@@ -994,13 +1016,13 @@ function DescribeInst(inst, pos, func)
       CommentArg = CommentArg.."top"
       EndReg = "top"
     end
-    Comment = string.format("R%d[%s] := R%d to %s",a,CommentArg,a+1,EndReg)
+    Comment = string.format("%s[%s] := R%d to %s",R(a),CommentArg,a+1,EndReg)
   ---------------------------------------------------------------
   elseif isop("CLOSURE") then -- CLOSURE A Bx
     Operand = OperandABx(inst)
     -- lets user know how many following instructions are significant
     Comment = func.p[bx + 1].sizeupvalues.." upvalues"
-    Comment = string.format("R%d := closure(function[%d]) %s",a,bx,Comment)
+    Comment = string.format("%s := closure(function[%d]) %s",R(a),bx,Comment)
   ---------------------------------------------------------------
   elseif isop("VARARG") then -- VARARG A B
     Operand = OperandAB(inst)
@@ -1349,10 +1371,9 @@ function ChunkSpy(chunk_name, chunk)
   TestChunk(len, idx, "LUAC_TAIL")
   local luac_tail = LoadBlock(len, true)
   if luac_tail ~= config.LUAC_TAIL then
-  print(EscapeString(luac_tail, 1))
     error("header LUAC_TAIL not found, this is not a Lua chunk")
   end
-  FormatLine(len, "LUAC_TAIL: "..EscapeString(config.LUAC_TAIL, 1), idx)
+  FormatLine(len, "LUAC_TAIL: "..EscapeString(luac_tail, 1), previdx)
 
   -- end of global header
   stat.header = idx - 1
@@ -1695,7 +1716,7 @@ function ChunkSpy(chunk_name, chunk)
     end
 
     -------------------------------------------------------------
-    -- describe locals information
+    -- describe upvalues information
     -------------------------------------------------------------
     local function DescUpvaluesAll()
       local n = func.sizeupvalues
@@ -1704,7 +1725,7 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescString(upvalue, upvalue.name)
+        DescString(upvalue.name, upvalue.pos_name)
         DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
         BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
                   ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
@@ -1737,7 +1758,7 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescString(upvalue, upvalue.name)
+        DescString(upvalue.name, upvalue.pos_name)
         DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
         BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
                   ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
@@ -1839,11 +1860,9 @@ function ChunkSpy(chunk_name, chunk)
     DescLine("")
     BriefLine("")
     FormatLine(0, "** function ["..num.."] definition (level "..level..")",
-               func.pos_source)
+               func.pos_linedefined)
     BriefLine("; function ["..num.."] definition (level "..level..")")
     DescLine("** start of function **")
-
-
 
     -- optionally initialize source listing merging
     SourceInit(func.source)
@@ -1966,9 +1985,9 @@ function WriteBinaryChunk(parsed, tofile)
   DumpByte(config.size_size_t)
   DumpByte(config.size_Instruction)
   DumpByte(config.size_lua_Number)
+  DumpByte(config.integral)
   Dump(config.LUAC_TAIL)
   DecodeInit()
-  DumpByte(config.integral)
   -- no more test number in 5.1
 
   ---------------------------------------------------------------
@@ -2300,8 +2319,9 @@ function ChunkSpy_DoFiles(files)
     end
     if binchunk then
       if not CheckAndAdd(binchunk, filename) then
+        CheckLuaVersion("compiling needs %s")
         --try to compile file
-        local func, msg = load(binchunk, filename)
+        local func, msg = loadstring(binchunk, "@"..filename)
         if not func then
           print(string.format("failed to compile %s", msg))
         end
@@ -2414,12 +2434,13 @@ end
 --]]-------------------------------------------------------------------
 
 function CompileSourceFile(filename)
+  CheckLuaVersion("compiling needs %s")
   local INF = io.open(filename, "rb")
   if not INF then
     error("cannot open \""..filename.."\" for reading")
   end
   local src = INF:read("*a")
-  local func, msg = loadstring(src, filename)
+  local func, msg = loadstring(src, "@"..filename)
   if not func then
     print(msg)
     error("failed to compile source file \""..filename.."\"")
@@ -2456,7 +2477,13 @@ function main()
   -- check Lua version
   ---------------------------------------------------------------
   if _VERSION ~= "Lua 5.2" then
-    error("this version of ChunkSpy requires Lua 5.2")
+    if _VERSION == "Lua 5.1" then
+      print("using Lua 5.1, process binary chunk only")
+    else
+      error("this version of ChunkSpy requires Lua 5.1 or 5.2")
+    end
+  else
+    loadstring = load
   end
   ---------------------------------------------------------------
   -- handle arguments
@@ -2483,6 +2510,7 @@ function main()
         elseif a == "--brief" then
           config.DISPLAY_BRIEF = true
         elseif a == "--interact" then
+          CheckLuaVersion("--interact needs %s")
           perform = ChunkSpy_Interact
         ---------------------------------------------------------
         elseif a == "-o" or a == "--source" then
@@ -2506,6 +2534,9 @@ function main()
         ---------------------------------------------------------
         elseif a == "--rewrite" then
           if not b then error("--rewrite option needs a profile name") end
+          if b == "local" then
+            CheckLuaVersion("--rewrite local needs %s")
+          end
           config.DISPLAY_FLAG = false
           config.REWRITE_FLAG = true
           if b == "local" or CONFIGURATION[b] then
@@ -2516,6 +2547,7 @@ function main()
           i = i + 1
         ---------------------------------------------------------
         elseif a == "--run" then
+          CheckLuaVersion("--run needs %s")
           config.DISPLAY_FLAG = false
           config.AUTO_DETECT = true
           config.RUN_FLAG = true
