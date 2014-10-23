@@ -2901,14 +2901,14 @@ LOGIC_NEXT_JMP:
 					TString* upvalname = NULL;
 					if (op == OP_MOVE) {
 						upvalname = f->locvars[b].varname;
-						if (upvalname == NULL) {
+						if (upvalname == NULL || upvalname->tsv.len == 0) {
 							char names[32];
 							sprintf(names, "l_%d_%d", functionnum, b);
 							upvalname = luaS_new(glstate, names);
 						}
 					} else if (op == OP_GETUPVAL) {
 						upvalname = f->upvalues[b];
-						if (upvalname == NULL) {
+						if (upvalname == NULL || upvalname->tsv.len == 0) {
 							char names[32];
 							sprintf(names, "u_%d_%d", functionnum, b);
 							upvalname = luaS_new(glstate, names);
@@ -2932,7 +2932,7 @@ LOGIC_NEXT_JMP:
 					// Get name from local name
 					// TODO 5.2 Check
 					upvalname = f->locvars[upval.idx].varname;
-					if (upvalname == NULL) {
+					if (upvalname == NULL || upvalname->tsv.len == 0) {
 						char names[32];
 						sprintf(names, "l_%d_%d", functionnum, upval.idx);
 						upvalname = luaS_new(glstate, names);
@@ -2941,7 +2941,7 @@ LOGIC_NEXT_JMP:
 					// Get name from upvalue name
 					// TODO 5.2 Check
 					upvalname = f->upvalues[upval.idx].name;
-					if (upvalname == NULL) {
+					if (upvalname == NULL || upvalname->tsv.len == 0) {
 						char names[32];
 						sprintf(names, "u_%d_%d", functionnum, upval.idx);
 						upvalname = luaS_new(glstate, names);
@@ -3094,20 +3094,23 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	if (!cf->upvalues) {
 		cf->sizeupvalues = uvn;
 		cf->upvalues = luaM_newvector(glstate,uvn,TString*);
-		for (i=0; i<uvn; i++) {
-			cf->upvalues[i] = NULL;
-		}
-	}
-#endif
-	// upvalue names = next n opcodes after CLOSURE
-	for (i = 0; i<uvn; i++) {
-		TString* upvalname = UPVAL_NAME(cf, i);
-		if (upvalname == NULL || upvalname->tsv.len == 0) {
-			char names[10];
-			sprintf(names, "l_%d_%d", 0, i);
+		for (i = 0; i<uvn; i++) {
+			char names[32];
+			sprintf(names, "upval_%d_%d", 0, i);
 			UPVAL_NAME(cf, i) = luaS_new(glstate, names);
 		}
 	}
+#endif
+#if LUA_VERSION_NUM == 502
+	for (i = 0; i<uvn; i++) {
+		TString* upvalname = cf->upvalues[i].name;
+		if (upvalname == NULL || upvalname->tsv.len == 0) {
+			char names[32];
+			sprintf(names, "upval_%d_%d", 0, i);
+			cf->upvalues[i].name = luaS_new(glstate, names);
+		}
+	}
+#endif
 
 	if (!IsMain(cf)) {
 		StringBuffer_set(buff, "local ");
