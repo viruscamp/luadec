@@ -2897,17 +2897,17 @@ LOGIC_NEXT_JMP:
 				for (i=0; i<uvn; i++) {
 					Instruction ins = code[pc+i+1];
 					OpCode op = GET_OPCODE(ins);
-					int b = GETARG_B(op);
+					int b = GETARG_B(ins);
 					TString* upvalname = NULL;
 					if (op == OP_MOVE) {
-						upvalname = f->locvars[b].varname;
+						upvalname = (b < f->sizelocvars)?f->locvars[b].varname:NULL;
 						if (upvalname == NULL || upvalname->tsv.len == 0) {
 							char names[32];
 							sprintf(names, "l_%d_%d", functionnum, b);
 							upvalname = luaS_new(glstate, names);
 						}
 					} else if (op == OP_GETUPVAL) {
-						upvalname = f->upvalues[b];
+						upvalname = (b < f->sizeupvalues)?f->upvalues[b]:NULL;
 						if (upvalname == NULL || upvalname->tsv.len == 0) {
 							char names[32];
 							sprintf(names, "u_%d_%d", functionnum, b);
@@ -2931,7 +2931,7 @@ LOGIC_NEXT_JMP:
 				if (upval.instack == 1) { // TODO 5.2 Check Maybe ?
 					// Get name from local name
 					// TODO 5.2 Check
-					upvalname = f->locvars[upval.idx].varname;
+					upvalname = (upval.idx < f->sizelocvars)?f->locvars[upval.idx].varname:NULL;
 					if (upvalname == NULL || upvalname->tsv.len == 0) {
 						char names[32];
 						sprintf(names, "l_%d_%d", functionnum, upval.idx);
