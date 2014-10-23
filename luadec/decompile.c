@@ -1640,57 +1640,40 @@ int CompareProto(const Proto* fleft, const Proto* fright, StringBuffer* str) {
 }
 
 char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcnumstr) {
-	int i = 0;
-	int baseIndent = indent;
+	int i;
 	char* output = NULL;
-	StringBuffer* str = StringBuffer_new(NULL);
-	Function* F = NewFunction(f);
-	F->loop_tree->indent = indent;
-	F->indent = indent;
-	F->funcnumstr = funcnumstr;
-	error = NULL;
+	StringBuffer* code = StringBuffer_newBySize(512);
 
-	/*
-	* Function parameters are stored in registers from 0 on.
-	*/
-	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char));
-		sprintf(x,"%s",LOCAL(i));
-		//sprintf(x,"l_%d_%d",functionnum, i);
-		TRY(DeclareVariable(F, x, i));
-		IS_VARIABLE(i) = 1;
+	StringBuffer_set(code, "function(");
+	if (f->numparams > 0) {
+		StringBuffer_addPrintf(code, "p%d", 0);
+		for (i = 1; i < f->numparams; i++) {
+			StringBuffer_addPrintf(code, ",p%d", i);
+		}
 	}
-	F->freeLocal = f->numparams;
+	StringBuffer_add(code, ") ");
 
-	TRY(FunctionHeader(F));
-	F->indent++;
-
-	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
-	TRY(RawAddStatement(F, str));
-
-	if (f->sizeupvalues > 0) {
-		StringBuffer_set(str, "local _upvalues_ = {");
-		listUpvalues(F->f, str);
-		StringBuffer_add(str, "}");
-		TRY(RawAddStatement(F, str));
+	if (NUPS(f) > 0) {
+		StringBuffer_add(code, "local _upvalues_ = {");
+		listUpvalues(f, code);
+		StringBuffer_add(code, "};");
 	}
 
-	F->indent--;
+	StringBuffer_add(code, " end");
 
-errorHandler:
-	output = PrintFunction(F);
-	DeleteFunction(F);
-	StringBuffer_delete(str);
+	output = StringBuffer_getBuffer(code);
+	StringBuffer_delete(code);
+
 	return output;
 }
 
 int listUpvalues(const Proto* f, StringBuffer* str) {
 	int i = 0;
 	StringBuffer_add(str, getUpvalName(f, i));
-	for (i = 1; i < f->sizeupvalues; i++) {
+	for (i = 1; i < NUPS(f); i++) {
 		StringBuffer_addPrintf(str, ", %s", getUpvalName(f, i));
 	}
-	return f->sizeupvalues;
+	return NUPS(f);
 }
 
 int isTestOpCode(OpCode op) {
@@ -2901,14 +2884,14 @@ LOGIC_NEXT_JMP:
 					TString* upvalname = NULL;
 					if (op == OP_MOVE) {
 						upvalname = (b < f->sizelocvars)?f->locvars[b].varname:NULL;
-						if (upvalname == NULL || upvalname->tsv.len == 0) {
+						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
 							char names[32];
 							sprintf(names, "l_%d_%d", functionnum, b);
 							upvalname = luaS_new(glstate, names);
 						}
 					} else if (op == OP_GETUPVAL) {
 						upvalname = (b < f->sizeupvalues)?f->upvalues[b]:NULL;
-						if (upvalname == NULL || upvalname->tsv.len == 0) {
+						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
 							char names[32];
 							sprintf(names, "u_%d_%d", functionnum, b);
 							upvalname = luaS_new(glstate, names);
@@ -2926,28 +2909,30 @@ LOGIC_NEXT_JMP:
 #if LUA_VERSION_NUM == 502
 			// upvalue names determined by cf->upvalues->instack and cf->upvalues->idx
 			for (i=0; i<uvn; i++) {
-				Upvaldesc upval = cf->upvalues[0];
-				TString* upvalname = NULL;
-				if (upval.instack == 1) { // TODO 5.2 Check Maybe ?
-					// Get name from local name
-					// TODO 5.2 Check
-					upvalname = (upval.idx < f->sizelocvars)?f->locvars[upval.idx].varname:NULL;
-					if (upvalname == NULL || upvalname->tsv.len == 0) {
-						char names[32];
-						sprintf(names, "l_%d_%d", functionnum, upval.idx);
-						upvalname = luaS_new(glstate, names);
+				Upvaldesc upval = cf->upvalues[i];
+				TString* upvalname = upval.name;
+				if (upvalname == NULL || upvalname->tsv.len == 0) {
+					if (upval.instack == 1) { // TODO 5.2 Check Maybe ?
+						// Get name from local name
+						// TODO 5.2 Check
+						upvalname = (upval.idx < f->sizelocvars)?f->locvars[upval.idx].varname:NULL;
+						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
+							char names[32];
+							sprintf(names, "l_%d_%d", functionnum, upval.idx);
+							upvalname = luaS_new(glstate, names);
+						}
+					} else {
+						// Get name from upvalue name
+						// TODO 5.2 Check
+						upvalname = f->upvalues[upval.idx].name;
+						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
+							char names[32];
+							sprintf(names, "u_%d_%d", functionnum, upval.idx);
+							upvalname = luaS_new(glstate, names);
+						}
 					}
-				} else {
-					// Get name from upvalue name
-					// TODO 5.2 Check
-					upvalname = f->upvalues[upval.idx].name;
-					if (upvalname == NULL || upvalname->tsv.len == 0) {
-						char names[32];
-						sprintf(names, "u_%d_%d", functionnum, upval.idx);
-						upvalname = luaS_new(glstate, names);
-					}
+					upval.name = upvalname;
 				}
-				cf->upvalues[i].name = upvalname;
 			}
 #endif
 			/* upvalue determinition end */
@@ -3097,7 +3082,7 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 		for (i = 0; i<uvn; i++) {
 			char names[32];
 			sprintf(names, "upval_%d_%d", 0, i);
-			UPVAL_NAME(cf, i) = luaS_new(glstate, names);
+			cf->upvalues[i] = luaS_new(glstate, names);
 		}
 	}
 #endif
@@ -3105,6 +3090,8 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	for (i = 0; i<uvn; i++) {
 		TString* upvalname = cf->upvalues[i].name;
 		if (upvalname == NULL || upvalname->tsv.len == 0) {
+			// TODO 5.2 Maybe we should trace up to get _ENV ?
+			// Also wen can get the location where upval defined
 			char names[32];
 			sprintf(names, "upval_%d_%d", 0, i);
 			cf->upvalues[i].name = luaS_new(glstate, names);

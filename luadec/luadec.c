@@ -367,11 +367,11 @@ static void strip(lua_State* L, Proto* f) {
 	f->upvalues=NULL; f->sizeupvalues=0;
 #endif
 #if LUA_VERSION_NUM == 502
-	for (i=0; i<n; i++) {
-		f->upvalues[i].name=NULL;
+	for (i=0; i<f->sizeupvalues; i++) {
+		f->upvalues[i].name=luaS_new(L, "");
 	}
 #endif
-	f->source=NULL;
+	f->source=luaS_new(L, "");
 	for (i=0; i<n; i++) {
 		strip(L,f->p[i]);
 	}
