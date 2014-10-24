@@ -36,7 +36,7 @@ extern lua_State* glstate;
 extern Proto* glproto;
 
 char unknown_local[] = { "ERROR_unknown_local_Rxxxx" };
-char unknown_upvalue[] = { "ERROR_unknown_upvalue_Rxxxx" };
+char unknown_upvalue[] = { "ERROR_unknown_upvalue_xxxx" };
 StringBuffer* errorStr;
 char errortmp[256];
 
@@ -44,21 +44,48 @@ char errortmp[256];
 * -------------------------------------------------------------------------
 */
 
-const char* getUpvalName(const Proto* f, int r) {
-	if (f->upvalues && r < f->sizeupvalues) {
-		return (char*)getstr(UPVAL_NAME(f, r));
-	} else {
-		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_R%d", r);
-		return unknown_upvalue;
+void FixLocalNames(Proto* f, const char* funcnumstr) {
+	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
+	int i;
+	if (f->sizelocvars < f->numparams) {
+		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams, LocVar);
+		for (i = f->sizelocvars; i < f->numparams; i++) {
+			sprintf(tmpname, "p_%s_%d", funcnumstr, i);
+			f->locvars[i].varname = luaS_new(glstate, tmpname);
+			f->locvars[i].startpc = 0;
+			f->locvars[i].endpc = f->sizecode;
+		}
+		f->sizelocvars = f->numparams;
 	}
+	for (i = 0; i < f->sizelocvars; i++) {
+		TString* name = f->locvars[i].varname;
+		if (name == NULL || name->tsv.len == 0 ||
+			strlen(getstr(name)) == 0 || !isIdentifier(getstr(name))) {
+			sprintf(tmpname, "l_%s_%d", funcnumstr, i);
+			name = luaS_new(glstate, tmpname);
+			f->locvars[i].varname = name;
+		}
+	}
+	free(tmpname);
 }
 
 const char* getLocalName(const Proto* f, int r) {
 	if (f->locvars && r < f->sizelocvars) {
+		// no need to test after FixLocalNames
 		return (char*)getstr(f->locvars[r].varname);
 	} else {
 		sprintf(unknown_local, "ERROR_unknown_local_R%d", r);
 		return unknown_local;
+	}
+}
+
+const char* getUpvalName(const Proto* f, int r) {
+	if (f->upvalues && r < f->sizeupvalues) {
+		// no need to test after FixUpvalNames
+		return (char*)getstr(UPVAL_NAME(f, r));
+	} else {
+		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_%d", r);
+		return unknown_upvalue;
 	}
 }
 
@@ -1325,6 +1352,7 @@ char* PrintFunction(Function* F) {
 	StringBuffer_prune(buff);
 
 	if (IsMain(F->f)) {
+		StringBuffer_addPrintf(buff, "-- params : %s\n", F->funcBlock->code);
 		PrintAstSub(F->funcBlock, buff, 0);
 	} else {
 		StringBuffer_addPrintf(buff, "function(%s)\n", F->funcBlock->code);
@@ -1444,27 +1472,6 @@ IndexType MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type) 
 		free(errorbuff);
 		return SQUARE_BRACKET;
 	}
-}
-
-void FunctionHeader(Function* F) {
-	const Proto* f = F->f;
-	StringBuffer* str = StringBuffer_new(NULL);
-	if (f->numparams > 0) {
-		int i = 0;
-		StringBuffer_set(str, LOCAL(i));
-		for (i = 1; i < f->numparams; i++) {
-			StringBuffer_addPrintf(str, ", %s", LOCAL(i));
-		}
-		if (f->is_vararg) {
-			StringBuffer_add(str, ", ...");
-		}
-	} else if (f->is_vararg) {
-		StringBuffer_set(str, "...");
-	} else {
-		StringBuffer_set(str, "");
-	}
-	F->funcBlock->code = StringBuffer_getBuffer(str);
-	StringBuffer_delete(str);
 }
 
 void ShowState(Function* F) {
@@ -1640,17 +1647,11 @@ int CompareProto(const Proto* fleft, const Proto* fright, StringBuffer* str) {
 }
 
 char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcnumstr) {
-	int i;
 	char* output = NULL;
 	StringBuffer* code = StringBuffer_newBySize(512);
 
 	StringBuffer_set(code, "function(");
-	if (f->numparams > 0) {
-		StringBuffer_addPrintf(code, "p%d", 0);
-		for (i = 1; i < f->numparams; i++) {
-			StringBuffer_addPrintf(code, ",p%d", i);
-		}
-	}
+	listParams(f, code);
 	StringBuffer_add(code, ") ");
 
 	if (NUPS(f) > 0) {
@@ -1667,13 +1668,29 @@ char* PrintFunctionOnlyParamsAndUpvalues(const Proto* f, int indent, char* funcn
 	return output;
 }
 
-int listUpvalues(const Proto* f, StringBuffer* str) {
+void listParams(const Proto* f, StringBuffer* str) {
+	if (f->numparams > 0) {
+		int i = 0;
+		StringBuffer_add(str, getLocalName(f, i));
+		for (i = 1; i < f->numparams; i++) {
+			StringBuffer_addPrintf(str, ", %s", getLocalName(f, i));
+		}
+		if (f->is_vararg) {
+			StringBuffer_add(str, ", ...");
+		}
+	} else if (f->is_vararg) {
+		StringBuffer_set(str, "...");
+	} else {
+		StringBuffer_set(str, "");
+	}
+}
+
+void listUpvalues(const Proto* f, StringBuffer* str) {
 	int i = 0;
 	StringBuffer_add(str, getUpvalName(f, i));
 	for (i = 1; i < NUPS(f); i++) {
 		StringBuffer_addPrintf(str, ", %s", getUpvalName(f, i));
 	}
-	return NUPS(f);
 }
 
 int isTestOpCode(OpCode op) {
@@ -1696,6 +1713,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 	LoopItem* next_child;
 
+	FixLocalNames(f, funcnumstr);
+
 	F = NewFunction(f);
 	F->funcnumstr = funcnumstr;
 	F->indent = indent;
@@ -1706,17 +1725,15 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		char* x = (char*)calloc(MAX(10,strlen(LOCAL(i))+1), sizeof(char));
-		sprintf(x,"%s",LOCAL(i));
-		//sprintf(x,"l_%d_%d",functionnum, i);
-		TRY(DeclareVariable(F, x, i));
+		TRY(DeclareVariable(F, LOCAL(i), i));
 		IS_VARIABLE(i) = 1;
-		free(x);
 	}
 	F->freeLocal = f->numparams;
 
+	StringBuffer_prune(str);
+	listParams(f, str);
+	F->funcBlock->code = StringBuffer_getBuffer(str);
 	if (!IsMain(f)) {
-		TRY(FunctionHeader(F));
 		F->indent++;
 	}
 
@@ -2867,88 +2884,84 @@ LOGIC_NEXT_JMP:
 			int uvn;
 			int cfnum = functionnum;
 			Proto* cf = f->p[c];
+			char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 
 			uvn = NUPS(cf);
 
 			/* determining upvalues */
-#if LUA_VERSION_NUM == 501
-			// upvalue names = next n opcodes after CLOSURE
 			if (!cf->upvalues) {
+				// lua 5.1 only
 				cf->sizeupvalues = uvn;
-				cf->upvalues = luaM_newvector(glstate,uvn,TString*);
+				cf->upvalues = luaM_newvector(glstate, uvn, UPVAL_TYPE);
+			}
 
-				for (i=0; i<uvn; i++) {
+			// always FixUpvalNames
+			// lua 5.1 : upvalue names = next n opcodes after CLOSURE
+			// lua 5.2 : upvalue names determined by cf->upvalues->instack and cf->upvalues->idx
+			for (i = 0; i < uvn; i++) {
+				TString* upvalname = UPVAL_NAME(cf, i);
+				if (upvalname == NULL || upvalname->tsv.len == 0 ||
+					strlen(getstr(upvalname)) == 0 || !isIdentifier(getstr(upvalname))) {
+#if LUA_VERSION_NUM == 501
 					Instruction ins = code[pc+i+1];
 					OpCode op = GET_OPCODE(ins);
 					int b = GETARG_B(ins);
-					TString* upvalname = NULL;
-					if (op == OP_MOVE) {
-						upvalname = (b < f->sizelocvars)?f->locvars[b].varname:NULL;
-						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
-							char names[32];
-							sprintf(names, "l_%d_%d", functionnum, b);
-							upvalname = luaS_new(glstate, names);
-						}
-					} else if (op == OP_GETUPVAL) {
-						upvalname = (b < f->sizeupvalues)?f->upvalues[b]:NULL;
-						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
-							char names[32];
-							sprintf(names, "u_%d_%d", functionnum, b);
-							upvalname = luaS_new(glstate, names);
-						}
-					} else {
-						char names[32];
-						sprintf(names, "upval_%d_%d", functionnum, i);
-						upvalname = luaS_new(glstate, names);
-					}
-					cf->upvalues[i] = upvalname;
-				}
-			}
-			ignoreNext = cf->sizeupvalues;
 #endif
 #if LUA_VERSION_NUM == 502
-			// upvalue names determined by cf->upvalues->instack and cf->upvalues->idx
-			for (i=0; i<uvn; i++) {
-				Upvaldesc upval = cf->upvalues[i];
-				TString* upvalname = upval.name;
-				if (upvalname == NULL || upvalname->tsv.len == 0) {
-					if (upval.instack == 1) { // TODO 5.2 Check Maybe ?
+					Upvaldesc upval = cf->upvalues[i];
+					int b = upval.idx;
+#endif
+
+#if LUA_VERSION_NUM == 501
+					if (op == OP_MOVE) {
+#endif
+#if LUA_VERSION_NUM == 502
+					if (upval.instack == 1) {
+#endif
 						// Get name from local name
-						// TODO 5.2 Check
-						upvalname = (upval.idx < f->sizelocvars)?f->locvars[upval.idx].varname:NULL;
-						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
-							char names[32];
-							sprintf(names, "l_%d_%d", functionnum, upval.idx);
-							upvalname = luaS_new(glstate, names);
+						if (f->locvars && b < f->sizelocvars) {
+							// no need to test after FixLocalNames
+							upvalname = f->locvars[b].varname;
+						} else {
+							sprintf(tmpname, "l_%d_%d", funcnumstr, b);
+							upvalname = luaS_new(glstate, tmpname);
+						}
+#if LUA_VERSION_NUM == 501
+					} else if (op == OP_GETUPVAL) {
+#endif
+#if LUA_VERSION_NUM == 502
+					} else if (upval.instack == 0) {
+#endif
+						// Get name from upvalue name
+						if (f->upvalues && b < f->sizeupvalues) {
+							// no need to check after FixUpvalNames
+							upvalname = UPVAL_NAME(f, b);
+						} else {
+							sprintf(tmpname, "u_%s_%d", funcnumstr, b);
+							upvalname = luaS_new(glstate, tmpname);
 						}
 					} else {
-						// Get name from upvalue name
-						// TODO 5.2 Check
-						upvalname = f->upvalues[upval.idx].name;
-						if (upvalname == NULL || upvalname->tsv.len == 0 || strlen(getstr(upvalname)) == 0) {
-							char names[32];
-							sprintf(names, "u_%d_%d", functionnum, upval.idx);
-							upvalname = luaS_new(glstate, names);
-						}
+						sprintf(tmpname, "up_%s_%d", funcnumstr, i);
+						upvalname = luaS_new(glstate, tmpname);
 					}
-					upval.name = upvalname;
+					UPVAL_NAME(cf, i) = upvalname;
 				}
 			}
-#endif
 			/* upvalue determinition end */
+			free(tmpname);
 
-			if ( func_checking == 1) {
+			if (func_checking == 1) {
 				char* code = NULL;
-				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 				functionnum = c;
 				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
 				code = PrintFunctionOnlyParamsAndUpvalues(cf, F->indent, newfuncnumstr);
 				StringBuffer_setBuffer(str, code);
 			} else if (!process_sub) {
 				StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, c);
-			} else{
+			} else {
 				char* code = NULL;
-				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 10, sizeof(char));
+				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 				functionnum = c;
 				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
 				code = ProcessCode(cf, F->indent, 0, newfuncnumstr);
@@ -2956,6 +2969,9 @@ LOGIC_NEXT_JMP:
 			}
 			TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 
+#if LUA_VERSION_NUM == 501
+			ignoreNext = cf->sizeupvalues;
+#endif
 			break;
 		}
 		default:
@@ -3073,31 +3089,31 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	int uvn = NUPS(cf);
 	char* code;
 	StringBuffer* buff = StringBuffer_newBySize(128);
+	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 
 	/* determining upvalues */
-#if LUA_VERSION_NUM == 501
 	if (!cf->upvalues) {
+		// Lua 5.1 only
 		cf->sizeupvalues = uvn;
-		cf->upvalues = luaM_newvector(glstate,uvn,TString*);
-		for (i = 0; i<uvn; i++) {
-			char names[32];
-			sprintf(names, "upval_%d_%d", 0, i);
-			cf->upvalues[i] = luaS_new(glstate, names);
+		cf->upvalues = luaM_newvector(glstate, uvn, UPVAL_TYPE);
+		for (i = 0; i < uvn; i++) {
+			sprintf(tmpname, "upval_%s_%d", funcnumstr, i);
+			UPVAL_NAME(cf, i) = luaS_new(glstate, tmpname);
+		}
+	} else {
+		// FixUpvalNames
+		for (i = 0; i < uvn; i++) {
+			TString* name = UPVAL_NAME(cf, i);
+			if (name == NULL || name->tsv.len == 0 ||
+				strlen(getstr(name)) == 0 || !isIdentifier(getstr(name))) {
+				// TODO 5.2 Maybe we should trace up to get _ENV ?
+				// Also wen can get the location where upval defined
+				sprintf(tmpname, "upval_%s_%d", funcnumstr, i);
+				UPVAL_NAME(cf, i) = luaS_new(glstate, tmpname);
+			}
 		}
 	}
-#endif
-#if LUA_VERSION_NUM == 502
-	for (i = 0; i<uvn; i++) {
-		TString* upvalname = cf->upvalues[i].name;
-		if (upvalname == NULL || upvalname->tsv.len == 0) {
-			// TODO 5.2 Maybe we should trace up to get _ENV ?
-			// Also wen can get the location where upval defined
-			char names[32];
-			sprintf(names, "upval_%d_%d", 0, i);
-			cf->upvalues[i].name = luaS_new(glstate, names);
-		}
-	}
-#endif
+	free(tmpname);
 
 	if (!IsMain(cf)) {
 		StringBuffer_set(buff, "local ");

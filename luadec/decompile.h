@@ -183,6 +183,7 @@ enum IndexType_ {
 	SQUARE_BRACKET=3
 };
 IndexType MakeIndex(Function* F, StringBuffer* str, char* rstr, IndexType type);
+int isIdentifier(const char* src);
 
 void luaU_decompile(Proto* f, int lflag);
 void luaU_decompileSubFunction(Proto* f, int dflag, const char* funcnumstr);
@@ -192,7 +193,8 @@ BoolOp* MakeBoolOp(char* op1, char* op2, OpCode op, int neg, int pc, int dest);
 void ClearBoolOp(BoolOp* ptr, void* dummy);
 void DeleteBoolOp(BoolOp* ptr);
 
-int listUpvalues(const Proto* f, StringBuffer* str);
+void listParams(const Proto* f, StringBuffer* str);
+void listUpvalues(const Proto* f, StringBuffer* str);
 
 char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr);
 char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr);
