@@ -1,7 +1,7 @@
 @echo luadec long test
 
-del error_fc.txt error_fc_ns.txt error_fc_fn.txt
-del result_fc.txt result_fc_ns.txt result_fc_fn.txt
+del error_fc.txt error_fc_ns.txt error_fc_fn.txt error_fc_s.txt
+del result_fc.txt result_fc_ns.txt result_fc_fn.txt result_fc_s.txt
 
 for /r ..\test %%f in (*.lua) do @luadec -fc %%f 2>>error_fc.txt | findstr /r /c:"-- function check" >>result_fc.txt
 for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -fc %%f 2>>error_fc.txt | findstr /r /c:"-- function check" >>result_fc.txt
@@ -11,6 +11,9 @@ for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -fc -ns %%f 2>>error_fc_ns.txt 
 
 for /r ..\test %%f in (*.lua) do @luadec -fc -fn 0_3 %%f 2>>error_fc_fn.txt | findstr /r /c:"-- function check" >>result_fc_fn.txt
 for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -fc -fn 0_3 %%f 2>>error_fc_fn.txt | findstr /r /c:"-- function check" >>result_fc_fn.txt
+
+for /r ..\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
+for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
 
 
 del error_dis.txt
@@ -41,3 +44,4 @@ rem @lua fun_check_count.lua result_fc_ab.txt
 
 lua fun_check_count.lua result_fc.txt
 lua fun_check_count.lua result_fc_c.txt
+lua fun_check_count.lua result_fc_s.txt

@@ -119,13 +119,13 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		case OP_LOADNIL:
 		{
 #if LUA_VERSION_NUM == 501
-			/*	A B	R(A), ..., R(A+B) := nil		*/
-			int rb = a + b;
-			sprintf(line, "R%d R%d", a, rb);
-#endif
-#if LUA_VERSION_NUM == 502
 			/*	A B	R(A), ..., R(B) := nil		*/
 			int rb = b;
+			sprintf(line, "R%d R%d", a, b);
+#endif
+#if LUA_VERSION_NUM == 502
+			/*	A B	R(A), ..., R(A+B) := nil		*/
+			int rb = a + b;
 			sprintf(line, "R%d %d", a, b);
 #endif
 			if (rb > a) {
@@ -330,6 +330,11 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			sprintf(line, "R%d %d", a, sbc);
 			StringBuffer_printf(lend, "R%d += R%d; if R%d <= R%d then R%d := R%d; PC += %d , goto %d end", a, a+2, a, a+1, a+3, a, sbc, dest);
 			break;
+		case OP_FORPREP:
+			/*	A sBx	R(A)-=R(A+2); pc+=sBx				*/
+			sprintf(line,"R%d %d",a,sbc);
+			StringBuffer_printf(lend,"R%d -= R%d; pc += %d (goto %d)",a,a+2,sbc,pc+sbc+1);
+			break;
 		case LUADEC_TFORLOOP:
 			/*	A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));	*/
 			sprintf(line,"R%d %d",a,c);
@@ -354,11 +359,6 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			StringBuffer_printf(lend,"if R%d ~= nil then { R%d := R%d ; pc += %d (goto %d) }",a+1,a, a+1, sbc, dest);
 			break;
 #endif
-		case OP_FORPREP:
-			/*	A sBx	R(A)-=R(A+2); pc+=sBx				*/
-			sprintf(line,"R%d %d",a,sbc);
-			StringBuffer_printf(lend,"R%d -= R%d; pc += %d (goto %d)",a,a+2,sbc,pc+sbc+1);
-			break;
 		case OP_SETLIST:
 		{
 			/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/

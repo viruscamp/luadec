@@ -1679,9 +1679,7 @@ void listParams(const Proto* f, StringBuffer* str) {
 			StringBuffer_add(str, ", ...");
 		}
 	} else if (f->is_vararg) {
-		StringBuffer_set(str, "...");
-	} else {
-		StringBuffer_set(str, "");
+		StringBuffer_add(str, "...");
 	}
 }
 
@@ -1739,7 +1737,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 	// make function comment
 	StringBuffer_printf(str, "-- function num : %s", funcnumstr);
-	if (f->sizeupvalues > 0) {
+	if (NUPS(f) > 0) {
 		StringBuffer_add(str, " , upvalues : ");
 		listUpvalues(f, str);
 	}
@@ -2125,11 +2123,17 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			* Read ... into register.
 			*/
 			if (b==0) {
+				IS_VARIABLE(a) = 0; PENDING(a) = 0;
 				TRY(AssignReg(F, a, "...", 0, 1));
+				CALL(a) = 1;
+				IS_VARIABLE(a+1) = 0; PENDING(a+1) = 0;
 				TRY(AssignReg(F, a+1, ".end", 0, 1));
+				CALL(a+1) = 2;
 			} else {
 				for (i = 0; i < b-1; i++) {
+					PENDING(a+i) = 0;
 					TRY(AssignReg(F, a+i, "...", 0, 1));
+					CALL(a+i) = i+1;
 				}
 			}
 			break;
@@ -2692,9 +2696,16 @@ LOGIC_NEXT_JMP:
 			}
 			if (o == OP_TAILCALL || c == 1 ) {
 				TRY(AddStatement(F, str));
-			} else {
+			} else if (c == 0) {
+				IS_VARIABLE(a) = 0; PENDING(a) = 0;
 				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
-				if (c == 0) TRY(AssignReg(F, a+1, ".end", 0, 1));
+				CALL(a) = 1;
+				IS_VARIABLE(a+1) = 0; PENDING(a+1) = 0;
+				TRY(AssignReg(F, a+1, ".end", 0, 1));
+				CALL(a+1) = 2;
+			} else {
+				PENDING(a) = 0;
+				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 				for (i = 0; i < c-1; i++) {
 					CALL(a+i) = i+1;
 				}
@@ -2889,11 +2900,15 @@ LOGIC_NEXT_JMP:
 			uvn = NUPS(cf);
 
 			/* determining upvalues */
+#if LUA_VERSION_NUM == 501
 			if (!cf->upvalues) {
-				// lua 5.1 only
 				cf->sizeupvalues = uvn;
 				cf->upvalues = luaM_newvector(glstate, uvn, UPVAL_TYPE);
+				for (i = 0; i < uvn; i++) {
+					UPVAL_NAME(cf, i) = NULL;
+				}
 			}
+#endif
 
 			// always FixUpvalNames
 			// lua 5.1 : upvalue names = next n opcodes after CLOSURE
@@ -2911,7 +2926,6 @@ LOGIC_NEXT_JMP:
 					Upvaldesc upval = cf->upvalues[i];
 					int b = upval.idx;
 #endif
-
 #if LUA_VERSION_NUM == 501
 					if (op == OP_MOVE) {
 #endif
@@ -3115,10 +3129,14 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 	}
 	free(tmpname);
 
+	StringBuffer_prune(buff);
 	if (!IsMain(cf)) {
-		StringBuffer_set(buff, "local ");
-		listUpvalues(cf, buff);
-		StringBuffer_addPrintf(buff, "\nDecompiledFunction_%s = ", funcnumstr);
+		if (NUPS(cf) > 0){
+			StringBuffer_add(buff, "local ");
+			listUpvalues(cf, buff);
+			StringBuffer_add(buff, "\n");
+		}
+		StringBuffer_addPrintf(buff, "DecompiledFunction_%s = ", funcnumstr);
 	}
 	code = ProcessCode(cf, 0, func_checking, funcnumstr);
 	StringBuffer_addPrintf(buff, "%s\n", code);
