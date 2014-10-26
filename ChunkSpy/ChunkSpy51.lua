@@ -549,14 +549,14 @@ function DecodeInit()
   -- opcode name table
   ---------------------------------------------------------------
   local op = [[
-    MOVE LOADK LOADBOOL LOADNIL GETUPVAL
-    GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE
-    NEWTABLE SELF ADD SUB MUL
-    DIV MOD POW UNM NOT
-    LEN CONCAT JMP EQ LT
-    LE TEST TESTSET CALL TAILCALL RETURN
-    FORLOOP FORPREP TFORLOOP SETLIST 
-    CLOSE CLOSURE VARARG
+    MOVE LOADK LOADBOOL LOADNIL GETUPVAL 
+    GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE 
+    NEWTABLE SELF ADD SUB MUL 
+    DIV MOD POW UNM NOT 
+    LEN CONCAT JMP EQ LT 
+    LE TEST TESTSET CALL TAILCALL 
+    RETURN FORLOOP FORPREP TFORLOOP SETLIST 
+    CLOSE CLOSURE VARARG 
   ]]
 
   iABC=0; iABx=1; iAsBx=2
@@ -1775,8 +1775,8 @@ function ChunkSpy(chunk_name, chunk)
     FormatLine(1, "numparams ("..func.numparams..")", pos + 1)
     FormatLine(1, "is_vararg ("..func.is_vararg..")", pos + 2)
     FormatLine(1, "maxstacksize ("..func.maxstacksize..")", pos + 3)
-    BriefLine(string.format("; %d upvalues, %d params, %d stacks",
-      func.nups, func.numparams, func.maxstacksize))
+    BriefLine(string.format("; %d upvalues, %d params, is_vararg = %d, %d stacks",
+      func.nups, func.numparams, func.is_vararg, func.maxstacksize))
     BriefLine(string.format(".function%s%d %d %d %d", config.DISPLAY_SEP,
       func.nups, func.numparams, func.is_vararg, func.maxstacksize))
 

@@ -556,14 +556,14 @@ function DecodeInit()
   -- opcode name table
   ---------------------------------------------------------------
   local op = [[
-    MOVE LOADK LOADKX LOADBOOL LOADNIL
-    GETUPVAL GETTABUP GETTABLE SETTABUP SETUPVAL
-    SETTABLE NEWTABLE SELF ADD SUB
-    MUL DIV MOD POW UNM
-    NOT LEN CONCAT JMP EQ
-    LT LE TEST TESTSET CALL
-    TAILCALL RETURN FORLOOP FORPREP TFORCALL
-    TFORLOOP SETLIST CLOSURE VARARG EXTRAARG
+    MOVE LOADK LOADKX LOADBOOL LOADNIL 
+    GETUPVAL GETTABUP GETTABLE SETTABUP SETUPVAL 
+    SETTABLE NEWTABLE SELF ADD SUB 
+    MUL DIV MOD POW UNM 
+    NOT LEN CONCAT JMP EQ 
+    LT LE TEST TESTSET CALL 
+    TAILCALL RETURN FORLOOP FORPREP TFORCALL 
+    TFORLOOP SETLIST CLOSURE VARARG EXTRAARG 
   ]]
 
   iABC=0; iABx=1; iAsBx=2; iAx=3
@@ -1720,22 +1720,15 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     local function DescUpvaluesAll()
       local n = func.sizeupvalues
-      DescLine("* upvalues:")
-      FormatLine(config.size_int, "sizeupvalues ("..n..")", func.pos_upvalues)
-      FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        local name = upvalue.name
-        if name then
-          DescString(name, upvalue.pos_name)
-        else
-          name = ''
-        end
-        DescLine("upvalue ["..(i - 1).."]: "..EscapeString(name))
+        local name = upvalue.name or ''
         BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(name, 1)
-                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
-        FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
-        FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
+                  ..config.DISPLAY_SEP..tostring(upvalue.instack)
+                  ..config.DISPLAY_SEP..tostring(upvalue.idx)
+                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1)
+                  ..config.DISPLAY_SEP.."instack="..tostring(upvalue.instack)
+                  ..config.DISPLAY_SEP.."idx="..tostring(upvalue.idx))
       end
     end
 
@@ -1748,12 +1741,7 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "sizeupvalues ("..n..")", func.pos_upvalues)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        local name = upvalue.name
-        if name then
-          DescString(name, upvalue.pos_name)
-        else
-          name = ''
-        end
+        local name = upvalue.name or ''
         DescLine("upvalue ["..(i - 1).."]: "..EscapeString(name))
         FormatLine(1, "  instack ("..upvalue.instack..")", upvalue.pos_instack)
         FormatLine(1, "  idx     ("..upvalue.idx..")",upvalue.pos_idx)
@@ -1769,10 +1757,8 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "size_upvalue_names ("..n..")", func.pos_upvalue_names)
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        DescString(upvalue.name, upvalue.pos_name)
         DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
-        BriefLine(".upvalue"..config.DISPLAY_SEP..EscapeString(upvalue.name, 1)
-                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
+        DescString(upvalue.name, upvalue.pos_name)
       end
     end
 
@@ -1889,8 +1875,8 @@ function ChunkSpy(chunk_name, chunk)
     FormatLine(1, "numparams ("..func.numparams..")", pos)
     FormatLine(1, "is_vararg ("..func.is_vararg..")", pos + 1)
     FormatLine(1, "maxstacksize ("..func.maxstacksize..")", pos + 2)
-    BriefLine(string.format("; %d upvalues, %d params, %d stacks",
-      func.sizeupvalues, func.numparams, func.maxstacksize))
+    BriefLine(string.format("; %d upvalues, %d params, is_vararg = %d, %d stacks",
+      func.sizeupvalues, func.numparams, func.is_vararg, func.maxstacksize))
     BriefLine(string.format(".function%s%d %d %d %d", config.DISPLAY_SEP,
       func.sizeupvalues, func.numparams, func.is_vararg, func.maxstacksize))
 

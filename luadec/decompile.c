@@ -71,7 +71,7 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 
 const char* getLocalName(const Proto* f, int r) {
 	if (f->locvars && r < f->sizelocvars) {
-		// no need to test after FixLocalNames
+		// TODO completely wrong , it's not like this
 		return (char*)getstr(f->locvars[r].varname);
 	} else {
 		sprintf(unknown_local, "ERROR_unknown_local_R%d", r);
