@@ -35,7 +35,7 @@ extern int guess_locals;
 extern lua_State* glstate;
 extern Proto* glproto;
 
-char unknown_local[] = { "ERROR_unknown_local_Rxxxx" };
+char unknown_local[] = { "ERROR_unknown_local_xxxx" };
 char unknown_upvalue[] = { "ERROR_unknown_upvalue_xxxx" };
 StringBuffer* errorStr;
 char errortmp[256];
@@ -45,17 +45,33 @@ char errortmp[256];
 */
 
 void FixLocalNames(Proto* f, const char* funcnumstr) {
-	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 	int i;
-	if (f->sizelocvars < f->numparams) {
-		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams, LocVar);
+	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
+#if LUA_VERSION_NUM == 501
+	int func_endpc = f->sizecode - 1;
+#endif
+#if LUA_VERSION_NUM == 502
+	int func_endpc = f->sizecode;
+#endif
+	// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another param arg
+	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2 6, 2 is main, 6 use ... only , never use arg
+	// Lua 5.2 : is_vararg = 0 1 , never use arg
+	int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
+	if (f->sizelocvars < f->numparams + param_arg) {
+		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + param_arg, LocVar);
 		for (i = f->sizelocvars; i < f->numparams; i++) {
 			sprintf(tmpname, "p_%s_%d", funcnumstr, i);
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
-			f->locvars[i].endpc = f->sizecode;
+			f->locvars[i].endpc = func_endpc;
 		}
-		f->sizelocvars = f->numparams;
+		if (param_arg == 1) {
+			sprintf(tmpname, "arg");
+			f->locvars[i].varname = luaS_new(glstate, tmpname);
+			f->locvars[i].startpc = 0;
+			f->locvars[i].endpc = func_endpc;
+		}
+		f->sizelocvars = f->numparams + param_arg;
 	}
 	for (i = 0; i < f->sizelocvars; i++) {
 		TString* name = f->locvars[i].varname;
@@ -69,22 +85,24 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 	free(tmpname);
 }
 
-const char* getLocalName(const Proto* f, int r) {
-	if (f->locvars && r < f->sizelocvars) {
-		// TODO completely wrong , it's not like this
-		return (char*)getstr(f->locvars[r].varname);
+// i : index of Proto.locvars, not reg number
+const char* getLocalName(const Proto* f, int i) {
+	if (f->locvars && i < f->sizelocvars) {
+		// no need to test after FixLocalNames
+		return (char*)getstr(f->locvars[i].varname);
 	} else {
-		sprintf(unknown_local, "ERROR_unknown_local_R%d", r);
+		sprintf(unknown_local, "ERROR_unknown_local_%d", i);
 		return unknown_local;
 	}
 }
 
-const char* getUpvalName(const Proto* f, int r) {
-	if (f->upvalues && r < f->sizeupvalues) {
+// i : index of Proto.upvalues
+const char* getUpvalName(const Proto* f, int i) {
+	if (f->upvalues && i < f->sizeupvalues) {
 		// no need to test after FixUpvalNames
-		return (char*)getstr(UPVAL_NAME(f, r));
+		return (char*)getstr(UPVAL_NAME(f, i));
 	} else {
-		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_%d", r);
+		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_%d", i);
 		return unknown_upvalue;
 	}
 }
@@ -93,11 +111,11 @@ char* luadec_strdup(const char* src) {
 	return ((src) ? strdup(src) : NULL);
 }
 
-#define UPVALUE(r) (getUpvalName(F->f,r))
+#define UPVALUE(i) (getUpvalName(F->f,i))
+#define LOCAL(i) (getLocalName(F->f,i))
+#define LOCAL_STARTPC(i) F->f->locvars[i].startpc
 #define REGISTER(r) F->R[r]
 #define PRIORITY(r) (r>=MAXSTACK ? 0 : F->Rprio[r])
-#define LOCAL(r) (getLocalName(F->f,r))
-#define LOCAL_STARTPC(r) F->f->locvars[r].startpc
 #define PENDING(r) F->Rpend[r]
 #define CALL(r) F->Rcall[r]
 #define IS_TABLE(r) F->Rtabl[r]
@@ -2932,6 +2950,7 @@ LOGIC_NEXT_JMP:
 #if LUA_VERSION_NUM == 502
 					if (upval.instack == 1) {
 #endif
+						// TODO completely wrong, f->locvars[b] is not R[b]
 						// Get name from local name
 						if (f->locvars && b < f->sizelocvars) {
 							// no need to test after FixLocalNames
