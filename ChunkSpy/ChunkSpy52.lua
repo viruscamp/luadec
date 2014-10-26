@@ -1636,7 +1636,7 @@ function ChunkSpy(chunk_name, chunk)
   -- displays function information
   -- * decoupled from LoadFunction due to 5.2 chunk rearrangement
   ---------------------------------------------------------------
-  function DescFunction(func, num, level)
+  function DescFunction(func, num, level, funcnumstr)
     -------------------------------------------------------------
     -- brief display mode with indentation style option
     -------------------------------------------------------------
@@ -1805,7 +1805,8 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "sizep ("..n..")", func.pos_ps)
       for i = 1, n do
         -- recursive call back on itself, next level
-        DescFunction(func.p[i], i - 1, level + 1)
+        local newfuncnumstr = funcnumstr..'_'..(i - 1)
+        DescFunction(func.p[i], i - 1, level + 1, newfuncnumstr)
       end
     end
 
@@ -1856,10 +1857,10 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     DescLine("")
     BriefLine("")
-    FormatLine(0, "** function ["..num.."] definition (level "..level..")",
+    FormatLine(0, "** function ["..num.."] definition (level "..level..") "..funcnumstr,
                func.pos_linedefined)
-    BriefLine("; function ["..num.."] definition (level "..level..")")
-    DescLine("** start of function **")
+    BriefLine("; function ["..num.."] definition (level "..level..") "..funcnumstr)
+    DescLine("** start of function "..funcnumstr.." **")
 
     -- optionally initialize source listing merging
     SourceInit(func.source)
@@ -1883,13 +1884,11 @@ function ChunkSpy(chunk_name, chunk)
     -- display parts of a chunk
     if config.DISPLAY_FLAG and config.DISPLAY_BRIEF then
       -- brief displays 'declarations' first
-      DescSource()
-      DescLines()
       DescLocals()
       DescUpvaluesAll()
       DescConstantKs()
-      DescConstantPs()
       DescCode()
+      DescConstantPs()
     else
       -- normal displays positional order
       DescCode()
@@ -1916,15 +1915,15 @@ function ChunkSpy(chunk_name, chunk)
                       func.stat.consts + func.stat.funcs +
                       func.stat.code + func.stat.upvalue_names
     DisplayStat("* TOTAL size    = "..func.stat.total.." bytes")
-    DescLine("** end of function **\n")
-    BriefLine("; end of function\n")
+    DescLine("** end of function "..funcnumstr.." **\n")
+    BriefLine("; end of function "..funcnumstr.."\n")
   end
 
   ---------------------------------------------------------------
   -- actual call to start the function loading process
   ---------------------------------------------------------------
   result.func = LoadFunction("(chunk)", 0, 1)
-  DescFunction(result.func, 0, 1)
+  DescFunction(result.func, 0, 1, "0")
   stat.total = idx - 1
   DisplayStat("* TOTAL size = "..stat.total.." bytes")
   result.stat = stat
