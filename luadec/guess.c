@@ -25,81 +25,130 @@
 
 extern lua_State* glstate;
 
-typedef struct llist_ llist;
-struct llist_ {
-	int startpc;
-	int endpc;
-	llist* next;
+/****************************************
+Lua 5.1
+opmode = {
+	[0]=iABC,iABx,iABC,iABC,iABC,
+	iABx,iABC,iABx,iABC,iABC,
+	iABC,iABC,iABC,iABC,iABC,
+	iABC,iABC,iABC,iABC,iABC,
+	iABC,iABC,iAsBx,iABC,iABC,
+	iABC,iABC,iABC,iABC,iABC,
+	iABC,iAsBx,iAsBx,iABC,iABC,
+	iABC,iABx,iABC
+}
+
+op = [[
+	MOVE LOADK LOADBOOL LOADNIL GETUPVAL
+	GETGLOBAL GETTABLE SETGLOBAL SETUPVAL SETTABLE
+	NEWTABLE SELF ADD SUB MUL
+	DIV MOD POW UNM NOT
+	LEN CONCAT JMP EQ LT
+	LE TEST TESTSET CALL TAILCALL
+	RETURN FORLOOP FORPREP TFORLOOP SETLIST 
+	CLOSE CLOSURE VARARG
+]]
+****************************************/
+
+// 0100 = assign Ra
+// 0010 = assign Rb
+// 0001 = assign Rc
+int op_regassign[] = {
+	0100,0100,0100,0100,0000,
+	0100,0100,0000,0000,0000,
+	0100,0000,0100,0100,0100,
+	0100,0100,0100,0100,0100,
+	0100,0100,0000,0000,0000,
+	0000,0100,0010,0000,0000,
+	0000,0000,0100,0000,0000,
+	0000,0100,0000
 };
 
-llist* add(llist* list, int startpc, int endpc) {
-	list->startpc = startpc;
-	list->endpc = endpc;
-	list->next = (llist*)calloc(1, sizeof(llist));
-	list->next->next = NULL;
-	return list->next;
-}
+// 0100 = use Ra
+// 0010 = use Rb
+// 0001 = use Rc
+int op_regusage[] = {
+	0010,0000,0000,0000,0000,
+	0000,0011,0100,0100,0011,
+	0000,0011,0011,0011,0011,
+	0011,0011,0011,0010,0010,
+	0010,0000,0000,0011,0011,
+	0011,0000,0100,0000,0000,
+	0000,0000,0000,0000,0000,
+	0000,0100,0000
+};
 
-void deletellist(llist* list) {
-	llist* curr;
-	llist* next;
-	curr = list;
-	while(curr){
-		next = curr->next;
-		free(curr);
-		curr = next;
-	}
-}
+#define T int
+#include "macro-array.h"
+#undef T
+
+#define T LocVar
+#include "macro-array.h"
+#undef T
+
+#define last(l) (l.values[l.size-1])
+#define addi(l, i) intArray_Push(&l, i)
+#define add(l, a, b) do{ LocVar lv; lv.startpc=a; lv.endpc=b; LocVarArray_Push(&l, lv); }while(0)
 
 int luaU_guess_locals(Proto* f, int main) {
-	int blockend_size = MAXARG_A+1;
-	int* blockend = (int*)calloc(blockend_size, sizeof(int));
-	int block;
+	intArray blocklist;
+	LocVarArray locallist;
 	int regassign[MAXARG_A+1];
 	int regusage[MAXARG_A+1];
 	int regblock[MAXARG_A+1];
 	int lastfree;
 	int i,i2,x,pc;
-	llist list_begin;
-	llist* list_next = &list_begin;
+
+#if LUA_VERSION_NUM == 501
+	int func_endpc = f->sizecode - 1;
+#endif
+#if LUA_VERSION_NUM == 502
+	int func_endpc = f->sizecode;
+#endif
 
 	if (f->lineinfo != NULL) {
 		return 0;
 	}
 
-	if (f->sizelocvars>0) {
+	if (f->sizelocvars > 0) {
 		return 0;
 	}
 
-	list_begin.next = NULL;
-	block = 0;
-	lastfree = 0;
-	blockend[block] = f->sizecode-1;
+	intArray_Init(&blocklist, MAXARG_A+1);
+	addi(blocklist, func_endpc);
 
+	LocVarArray_Init(&locallist, MAXARG_A+1);
+
+	lastfree = 0;
 	for (i=0; i<f->maxstacksize; i++) {
 		regassign[i] = 0;
 		regusage[i] = 0;
 		regblock[i] = 0;
 	}
 
-	// parameters, varargs, nil optimizations
+	// parameters
 	for (i = 0; i < f->numparams; i++) {
-		list_next = add(list_next,0,blockend[block]);
+		add(locallist,0,func_endpc);
 		regassign[lastfree] = 0;
 		regusage[lastfree] = 1;
-		regblock[lastfree] = blockend[block];
+		regblock[lastfree] = func_endpc;
 		lastfree++;
 	}
-	if ((f->is_vararg==7) || ((f->is_vararg&2))) {
-		if (main!=0) {
-			list_next = add(list_next,0,blockend[block]);
-			lastfree++;
-			regassign[lastfree] = 0;
-			regusage[lastfree] = 1;
-			regblock[lastfree] = blockend[block];
-			lastfree++;
-		}
+	// vararg
+	// Lua 5.1 #define LUA_COMPAT_VARARG : 0 2 3 7, 2 is main, 3 and 7 has another param arg
+	// Lua 5.1 #undef LUA_COMPAT_VARARG  : 0 2 6, 2 is main, 6 use ... only , never use arg
+	// Lua 5.2 : 0 1 , never use arg
+	int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
+	if (param_arg == 1) {
+		add(locallist,0,func_endpc);
+		lastfree++;
+		regassign[lastfree] = 0;
+		regusage[lastfree] = 1;
+		regblock[lastfree] = func_endpc;
+		lastfree++;
 	}
+#if LUA_VERSION_NUM == 501
+	// nil optimizations
 	{
 		Instruction i = f->code[0];
 		OpCode o = GET_OPCODE(i);
@@ -108,40 +157,60 @@ int luaU_guess_locals(Proto* f, int main) {
 		int c = GETARG_C(i);
 		int ixx,num_nil = -1;
 		switch (o) {
-#if LUA_VERSION_NUM == 502
-			case OP_SETTABUP:
-				if (!IS_CONSTANT(b)) {
+		// read Ra only
+		case OP_SETGLOBAL:
+		case OP_SETUPVAL:
+		case OP_TESTSET:
+			num_nil = a;
+			break;
+		// read Rb only
+		case OP_MOVE:
+		case OP_UNM:
+		case OP_NOT:
+		case OP_LEN:
+			if (!IS_CONSTANT(b)) {
 					num_nil = b;
-				}
-			case OP_GETTABUP:
-				if (!IS_CONSTANT(c)) {
-					num_nil = MAX(num_nil,c);
-				}
-				break;
-#endif
-#if LUA_VERSION_NUM == 501
-			case OP_SETGLOBAL:
-#endif
-			case OP_SETUPVAL:
-				num_nil = a;
-				break;
-			case OP_JMP:
-				break;
-			default:
-				num_nil = a-1;
-				break;
+			}
+			break;
+		// read Rb and Rc
+		case OP_GETTABLE:
+		case OP_SETTABLE:
+		case OP_SELF:
+		case OP_ADD:
+		case OP_SUB:
+		case OP_MUL:
+		case OP_DIV:
+		case OP_MOD:
+		case OP_POW:
+		case OP_EQ:
+		case OP_LT:
+		case OP_LE:
+			if (!IS_CONSTANT(b)) {
+				num_nil = b;
+			}
+			if (!IS_CONSTANT(c)) {
+				num_nil = MAX(num_nil, c);
+			}
+			break;
+		case OP_RETURN:
+			// read Ra to a+b-2
+			// only return 1 value
+			// move before return multiple values
+			num_nil = MAX(num_nil, a+b-2);
+			break;
 		}
 		for (ixx = lastfree; ixx <= num_nil; ixx++) {
 			if (ixx!=num_nil) {
-				list_next = add(list_next,0,blockend[block]);
+				add(locallist,0,last(blocklist));
 				lastfree++;
 			}
 			regassign[lastfree] = 0;
 			regusage[lastfree] = 1;
-			regblock[lastfree] = blockend[block];
+			regblock[lastfree] = last(blocklist);
 			lastfree++;
 		}
 	}
+#endif
 
 	// start code checking
 	for (pc = 0; pc < f->sizecode; pc++) {
@@ -382,14 +451,10 @@ int luaU_guess_locals(Proto* f, int main) {
 			regblock[a+1] = dest;
 			regblock[a+2] = dest;
 			regblock[a+3] = dest-1;
-			block++;
-			if (block >= blockend_size) {
-				blockend_size = blockend_size * 2;
-				blockend = (int*)realloc(blockend, blockend_size);
-			}
-			blockend[block] = dest-1;
+
+			addi(blocklist, dest-1);
 			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
-				blockend[block]--;
+				last(blocklist)--;
 			}
 			break;
 		case OP_JMP:
@@ -414,15 +479,10 @@ int luaU_guess_locals(Proto* f, int main) {
 				}
 			}
 			if (dest>pc) {
-				block++;
-				if (block >= blockend_size) {
-					blockend_size = blockend_size * 2;
-					blockend = (int*)realloc(blockend, blockend_size);
+				addi(blocklist, dest-1);
+				if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
+					last(blocklist)--;
 				}
-				blockend[block] = dest-1;
-			}
-			if (GET_OPCODE(f->code[dest-2])==OP_JMP) {
-				blockend[block]--;
 			}
 			break;
 #if LUA_VERSION_NUM == 501
@@ -434,15 +494,15 @@ int luaU_guess_locals(Proto* f, int main) {
 		default:
 			break;
 		}
-
-		for (i=1; i<=block; i++) {
-			x = blockend[i];
+		
+		for (i=1; i<=blocklist.size-1; i++) {
+			x = blocklist.values[i];
 			i2 = i-1;
-			while ((i2>=0) && (blockend[i2]<x)) {
-				blockend[i2+1] = blockend[i2];
+			while ((i2>=0) && (blocklist.values[i2]<x)) {
+				blocklist.values[i2+1] = blocklist.values[i2];
 				i2 = i2-1;
 			}
-			blockend[i2+1] = x;
+			blocklist.values[i2+1] = x;
 		}
 
 		if (loadreg!=-1) {
@@ -477,57 +537,45 @@ int luaU_guess_locals(Proto* f, int main) {
 		for (i=setreg; i<=setregto; i++) {
 			if (i>i2) {
 				regassign[i] = pc+1;
-				regblock[i] = blockend[block];
+				regblock[i] = last(blocklist);
 			}
 		}
 
 		for (i=lastfree; i<=i2; i++) {
 			//fprintf(stderr,"%d %d %d %d\n",i,regassign[i],regblock[i],block);
-			list_next = add(list_next,regassign[i],regblock[i]);
+			add(locallist,regassign[i],regblock[i]);
 			lastfree++;
 		}
 
-		while (block >= 0 && blockend[block] <= pc+1) {
-			block--;
+		while (blocklist.size > 0 && last(blocklist) <= pc+1) {
+			intArray_Pop(&blocklist);
 		}
-		if (block < 0) {
+		if (blocklist.size == 0) {
 			fprintf(stderr, "cannot find blockend > %d , pc = %d, f->sizecode = %d\n", pc+1, pc, f->sizecode);
-			block = 0;
 		}
 		while ((lastfree!=0) && (regblock[lastfree-1] <= pc+1)) {
 			lastfree--;
 			regusage[lastfree]=0;
 		}
 	}
-	free(blockend);
+	intArray_Clear(&blocklist);
 
 	// print out information
 	{
-		int length = 0;
-		llist* list = &list_begin;
-
-		while (list->next!=NULL) {
-			length++;
-			list = list->next;
-		}
+		int length = locallist.size;
 		f->sizelocvars = length;
 		if (f->sizelocvars>0) {
 			f->locvars = luaM_newvector(glstate,f->sizelocvars,LocVar);
-			list = &list_begin;
-			length = 0;
-			while (list->next != NULL) {
+			for(i = 0; i < length; i++) {
 				char names[10];
 				sprintf(names,"l_%d_%d",main,length);
 				f->locvars[length].varname = luaS_new(glstate, names);
-				f->locvars[length].startpc = list->startpc;
-				f->locvars[length].endpc = list->endpc;
-				length++;
-				list = list->next;
+				f->locvars[length].startpc = locallist.values[i].startpc;
+				f->locvars[length].endpc = locallist.values[i].endpc;
 			}
 		}
 	}
-
-	deletellist(list_begin.next);
+	LocVarArray_Clear(&locallist);
 
 	// run with all functions
 	for (i=0; i<f->sizep; i++) {
