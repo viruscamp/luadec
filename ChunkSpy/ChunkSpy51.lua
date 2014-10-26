@@ -1643,10 +1643,10 @@ function ChunkSpy(chunk_name, chunk)
         local locvar = func.locvars[i]
         DescString(locvar.varname, locvar.pos_varname)
         DescLine("local ["..(i - 1).."]: "..EscapeString(locvar.varname))
-        BriefLine(".local"..config.DISPLAY_SEP..EscapeString(locvar.varname, 1)
-                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
         FormatLine(config.size_int, "  startpc ("..locvar.startpc..")", locvar.pos_startpc)
         FormatLine(config.size_int, "  endpc   ("..locvar.endpc..")",locvar.pos_endpc)
+        BriefLine(".local"..config.DISPLAY_SEP..EscapeString(locvar.varname, 1)
+                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
       end
     end
 
