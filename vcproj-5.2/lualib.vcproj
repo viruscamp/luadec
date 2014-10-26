@@ -62,6 +62,7 @@
 			/>
 			<Tool
 				Name="VCLibrarianTool"
+				OutputFile="$(OutDir)\liblua52.lib"
 			/>
 			<Tool
 				Name="VCALinkTool"
@@ -126,6 +127,7 @@
 			/>
 			<Tool
 				Name="VCLibrarianTool"
+				OutputFile="$(OutDir)\liblua52.lib"
 			/>
 			<Tool
 				Name="VCALinkTool"

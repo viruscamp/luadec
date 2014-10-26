@@ -64,7 +64,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="$(OutDir)\lualib.lib"
+				AdditionalDependencies="$(OutDir)\liblua51.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -141,7 +141,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="$(OutDir)\lualib.lib"
+				AdditionalDependencies="$(OutDir)\liblua51.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -201,6 +201,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\luadec\macro-array.c"
+				>
+			</File>
+			<File
 				RelativePath="..\luadec\proto.c"
 				>
 			</File>
@@ -236,6 +240,10 @@
 			</File>
 			<File
 				RelativePath="..\luadec\lua-compat.h"
+				>
+			</File>
+			<File
+				RelativePath="..\luadec\macro-array.h"
 				>
 			</File>
 			<File
