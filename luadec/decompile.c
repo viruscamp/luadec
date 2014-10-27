@@ -1786,8 +1786,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		int dest = sbc + pc + 1;
 		int real_end = GetJmpAddr(F,pc + 1);
 
-		Instruction i_1 = code[pc-1];
-		OpCode o_1 = GET_OPCODE(i_1);
+		OpCode o_1 = OP_VARARG + 1;
+		if (pc > 0) {
+			o_1 = GET_OPCODE(code[pc-1]);
+		}
 
 		while (pc < F->loop_ptr->start) {
 			F->loop_ptr = F->loop_ptr->parent;
@@ -1808,7 +1810,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		}
 
 #if LUA_VERSION_NUM == 501
-		if (o == OP_JMP && o_1 == OP_TFORLOOP) {
+		if (o == OP_JMP && pc > 0 && o_1 == OP_TFORLOOP) {
 			// OP_TFORLOOP /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++	*/
 			// OP_JMP /* sBx	pc += sBx */
 #endif
@@ -1828,7 +1830,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			continue;
 		}
 
-		if (o == OP_JMP) {
+		if (o == OP_JMP && pc > 0) {
 			AstStatement* jmp = NULL;
 			AstStatement* jmpdest = cast(AstStatement*, F->jmpdests.tail);
 			while (jmpdest && jmpdest->line > dest) {

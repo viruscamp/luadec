@@ -98,6 +98,7 @@ int luaU_guess_locals(Proto* f, int main) {
 	int regblock[MAXARG_A+1];
 	int lastfree;
 	int i,i2,x,pc;
+	int param_arg;
 
 #if LUA_VERSION_NUM == 501
 	int func_endpc = f->sizecode - 1;
@@ -138,7 +139,7 @@ int luaU_guess_locals(Proto* f, int main) {
 	// Lua 5.1 #define LUA_COMPAT_VARARG : 0 2 3 7, 2 is main, 3 and 7 has another param arg
 	// Lua 5.1 #undef LUA_COMPAT_VARARG  : 0 2 6, 2 is main, 6 use ... only , never use arg
 	// Lua 5.2 : 0 1 , never use arg
-	int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
+	param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
 	if (param_arg == 1) {
 		add(locallist,0,func_endpc);
 		lastfree++;
@@ -495,7 +496,7 @@ int luaU_guess_locals(Proto* f, int main) {
 			break;
 		}
 		
-		for (i=1; i<=blocklist.size-1; i++) {
+		for (i=1; i<blocklist.size; i++) {
 			x = blocklist.values[i];
 			i2 = i-1;
 			while ((i2>=0) && (blocklist.values[i2]<x)) {
@@ -568,10 +569,10 @@ int luaU_guess_locals(Proto* f, int main) {
 			f->locvars = luaM_newvector(glstate,f->sizelocvars,LocVar);
 			for(i = 0; i < length; i++) {
 				char names[10];
-				sprintf(names,"l_%d_%d",main,length);
-				f->locvars[length].varname = luaS_new(glstate, names);
-				f->locvars[length].startpc = locallist.values[i].startpc;
-				f->locvars[length].endpc = locallist.values[i].endpc;
+				sprintf(names,"l_%d_%d",main,i);
+				f->locvars[i].varname = luaS_new(glstate, names);
+				f->locvars[i].startpc = locallist.values[i].startpc;
+				f->locvars[i].endpc = locallist.values[i].endpc;
 			}
 		}
 	}

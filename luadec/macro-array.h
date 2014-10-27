@@ -61,7 +61,7 @@ void TArray_Clear(TArray* ia) {
 void TArray_Push(TArray* ia, T value) {
 	if (ia->size >= ia->capacity) {
 		ia->capacity = ia->capacity * 2;
-		ia->values = (T*)realloc(ia->values, ia->capacity);
+		ia->values = (T*)realloc(ia->values, (ia->capacity) * sizeof(T));
 	}
 	ia->values[ia->size] = value;
 	ia->size++;
