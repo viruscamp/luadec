@@ -54,8 +54,8 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 	int func_endpc = f->sizecode;
 #endif
 	// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another param arg
-	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2 6, 2 is main, 6 use ... only , never use arg
-	// Lua 5.2 : is_vararg = 0 1 , never use arg
+	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2, 2 is main or which use ..., never use arg
+	// Lua 5.2 : is_vararg = 0 1 , never use arg, but main has a global arg
 	int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
 	if (f->sizelocvars < f->numparams + param_arg) {
 		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + param_arg, LocVar);
