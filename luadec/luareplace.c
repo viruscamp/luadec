@@ -37,7 +37,7 @@
 
 int debug = 0;							/* debug decompiler? */
 static int printfuncnum = 0;			/* print function nums? */
-static int strict = 0;					/* strict mode? */
+static int strict = 1;					/* strict mode? */
 static int replace_sub = 0;				/* replace all sub functions of dest function with src function? */
 
 lua_State* glstate;
@@ -74,7 +74,7 @@ static void usage(const char* message, const char* arg) {
 		" Available options are:\n"
 		"  -o name  output to file 'name' (default is \"%s\")\n"
 		"  -pn      print all sub function numbers of <dest.lua> and exit\n"
-		"  -s       strip mode on, stop on replacing incompatible function with different numparams nups or is_vararg\n"
+		"  -ls      turn strip mode off, try to replacing incompatible function with different numparams nups or is_vararg\n"
 		"  -rs      replace sub functions of dest function with those of src function\n"
 		"  -v       show version information\n"
 		"  --       stop handling options\n",
@@ -106,8 +106,8 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("-pn")) {
 			printfuncnum = 1;
 		}
-		else if (IS("-s")) {		/* strict mode */
-			strict = 1;
+		else if (IS("-ls")) {		/* turn strict mode off*/
+			strict = 0;
 		}
 		else if (IS("-rs")) {
 			replace_sub = 1;
@@ -175,7 +175,7 @@ Proto* findParentFunction(Proto* f, const char* funcnumstr, int* subindex, char*
 
 int checkProto(const Proto* fleft, const Proto* fright, int c) {
 	char warnmessage[64];
-	int diff = 0;
+	int diff = 0, stop = 0;
 	*warnmessage = '\0';
 	if (fleft->numparams != fright->numparams){
 		diff++;
@@ -184,6 +184,7 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 	if (NUPS(fleft) != NUPS(fright)){
 		diff++;
 		strcat(warnmessage, "nups ");
+		stop = 1;
 	}
 	if (fleft->is_vararg != fright->is_vararg){
 		diff++;
@@ -195,32 +196,44 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 		} else {
 			fprintf(stderr, "  warning! incompatible function : different %s", warnmessage);
 		}
+#if LUA_VERSION_NUM == 502
+		if (stop > 0) {
+			fatal("Lua 5.2 cannot replace function with different nups");
+		}
+#endif
 	}
 	return diff;
 }
 
 int replaceFunction(Proto* fparent, int cdest, Proto* fsrc) {
-	int diff = checkProto(fparent->p[cdest], fsrc, -1);
+	int diff = checkProto(fparent->p[cdest], fsrc);
+	Proto* freplaced = fparent->p[cdest];
+	UPVAL_TYPE* upvalues = fsrc->upvalues;
+	fsrc->upvalues = freplaced->upvalues;
+	freplaced->upvalues = upvalues;
 	fparent->p[cdest] = fsrc;
-	if (diff > 0){
-		return diff;
-	}
-	return 0;
+	return diff;
 }
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 int replaceSubFunctions(Proto* fdest, Proto* fsrc) {
 	int i = 0, diff = 0;
+	UPVAL_TYPE* upvalues;
+	Proto* freplaced;
 	int minsizep = MIN(fdest->sizep, fsrc->sizep);
 	for (i = 0; i < minsizep; i++){
 		diff += checkProto(fdest->p[i], fsrc->p[i], i);
+		
+		upvalues = fsrc->p[i]->upvalues;
+		fsrc->p[i]->upvalues = fdest->p[i]->upvalues;
+		fdest->p[i]->upvalues = upvalues;
+		
+		freplaced = fdest->p[i];
 		fdest->p[i] = fsrc->p[i];
+		fsrc->p[i] = freplaced;
 	}
-	if (diff > 0){
-		return diff;
-	}
-	return 0;
+	return diff;
 }
 
 static int writer(lua_State* L, const void* p, size_t size, void* u) {
@@ -310,11 +323,11 @@ int main(int argc, char* argv[]) {
 		}
 		fprintf(stderr, "Replacing %s %s with %s %s ...\n", destfile, realdestnum, srcfile, realsrcnum);
 		diff = replaceFunction(fparent, cdest, fsrc);
-		fprintf(stderr, "1 function replaced ok.\n");
+		fprintf(stderr, "1 function replaced.\n");
 	} else {
 		fprintf(stderr, "Replacing sub functions of %s %s with those of %s %s ...\n", destfile, realdestnum, srcfile, realsrcnum);
 		diff = replaceSubFunctions(fdest, fsrc);
-		fprintf(stderr, "%d function replaced ok.", MIN(fdest->sizep, fsrc->sizep));
+		fprintf(stderr, "%d functions replaced.", MIN(fdest->sizep, fsrc->sizep));
 		if (fdest->sizep != fsrc->sizep) {
 			fprintf(stderr, " The dest has %d sub functions, but the src has %d . Please have a check.\n", fdest->sizep, fsrc->sizep);
 		} else {

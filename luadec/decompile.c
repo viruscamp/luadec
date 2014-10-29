@@ -44,34 +44,31 @@ char errortmp[256];
 * -------------------------------------------------------------------------
 */
 
-void FixLocalNames(Proto* f, const char* funcnumstr) {
+void FixLocalNames(Function* F) {
+	Proto* f = (Proto*)(F->f);
+	const char* funcnumstr = F->funcnumstr;
 	int i;
 	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
-#if LUA_VERSION_NUM == 501
 	int func_endpc = f->sizecode - 1;
-#endif
 #if LUA_VERSION_NUM == 502
-	int func_endpc = f->sizecode;
+	func_endpc = f->sizecode;
 #endif
-	// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another param arg
-	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2, 2 is main or which use ..., never use arg
-	// Lua 5.2 : is_vararg = 0 1 , never use arg, but main has a global arg
-	int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
-	if (f->sizelocvars < f->numparams + param_arg) {
-		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + param_arg, LocVar);
+
+	if (f->sizelocvars < f->numparams + F->param_arg) {
+		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + F->param_arg, LocVar);
 		for (i = f->sizelocvars; i < f->numparams; i++) {
 			sprintf(tmpname, "p_%s_%d", funcnumstr, i);
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
 			f->locvars[i].endpc = func_endpc;
 		}
-		if (param_arg == 1) {
+		if (F->param_arg == 1) {
 			sprintf(tmpname, "arg");
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
 			f->locvars[i].endpc = func_endpc;
 		}
-		f->sizelocvars = f->numparams + param_arg;
+		f->sizelocvars = f->numparams + F->param_arg;
 	}
 	for (i = 0; i < f->sizelocvars; i++) {
 		TString* name = f->locvars[i].varname;
@@ -1091,6 +1088,11 @@ Function* NewFunction(const Proto* f) {
 	self->intspos = 0;
 
 	self->funcnumstr = NULL;
+
+	// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another parament arg
+	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2, 2 is main or which use ..., never use arg
+	// Lua 5.2 : is_vararg = 0 1 , never use parament arg, but main has a global arg
+	self->param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
 	return self;
 }
 
@@ -1256,7 +1258,7 @@ void DeclareLocals(Function* F) {
 	*/
 	if (F->pc == 0) {
 		startparams = F->f->numparams;
-		if ((F->f->is_vararg&1) && (F->f->is_vararg&2)) {
+		if (F->param_arg) {
 			startparams++;
 		}
 	}
@@ -1729,13 +1731,13 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 	LoopItem* next_child;
 
-	FixLocalNames(f, funcnumstr);
-
 	F = NewFunction(f);
 	F->funcnumstr = funcnumstr;
 	F->indent = indent;
 	F->pc = 0;
 	error = NULL;
+
+	FixLocalNames(F);
 
 	/*
 	* Function parameters are stored in registers from 0 on.
@@ -1767,7 +1769,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		TRY(RawAddStatement(F, str));
 	}
 
-	if ((f->is_vararg&1) && (f->is_vararg&2)) {
+	if (F->param_arg) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
 		F->freeLocal++;
 	}
