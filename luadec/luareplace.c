@@ -206,7 +206,7 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 }
 
 int replaceFunction(Proto* fparent, int cdest, Proto* fsrc) {
-	int diff = checkProto(fparent->p[cdest], fsrc);
+	int diff = checkProto(fparent->p[cdest], fsrc, -1);
 	Proto* freplaced = fparent->p[cdest];
 	UPVAL_TYPE* upvalues = fsrc->upvalues;
 	fsrc->upvalues = freplaced->upvalues;
