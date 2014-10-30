@@ -44,31 +44,27 @@ char errortmp[256];
 * -------------------------------------------------------------------------
 */
 
-void FixLocalNames(Function* F) {
-	Proto* f = (Proto*)(F->f);
-	const char* funcnumstr = F->funcnumstr;
+void FixLocalNames(Proto* f, const char* funcnumstr) {
 	int i;
 	char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
-	int func_endpc = f->sizecode - 1;
-#if LUA_VERSION_NUM == 502
-	func_endpc = f->sizecode;
-#endif
+	int need_arg = NEED_ARG(f);
+	int func_endpc = FUNC_BLOCK_END(f);
 
-	if (f->sizelocvars < f->numparams + F->param_arg) {
-		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + F->param_arg, LocVar);
+	if (f->sizelocvars < f->numparams + need_arg) {
+		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + need_arg, LocVar);
 		for (i = f->sizelocvars; i < f->numparams; i++) {
 			sprintf(tmpname, "p_%s_%d", funcnumstr, i);
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
 			f->locvars[i].endpc = func_endpc;
 		}
-		if (F->param_arg == 1) {
+		if (need_arg) {
 			sprintf(tmpname, "arg");
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
 			f->locvars[i].endpc = func_endpc;
 		}
-		f->sizelocvars = f->numparams + F->param_arg;
+		f->sizelocvars = f->numparams + need_arg;
 	}
 	for (i = 0; i < f->sizelocvars; i++) {
 		TString* name = f->locvars[i].varname;
@@ -1089,10 +1085,6 @@ Function* NewFunction(const Proto* f) {
 
 	self->funcnumstr = NULL;
 
-	// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another parament arg
-	// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2, 2 is main or which use ..., never use arg
-	// Lua 5.2 : is_vararg = 0 1 , never use parament arg, but main has a global arg
-	self->param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
 	return self;
 }
 
@@ -1258,7 +1250,7 @@ void DeclareLocals(Function* F) {
 	*/
 	if (F->pc == 0) {
 		startparams = F->f->numparams;
-		if (F->param_arg) {
+		if (NEED_ARG(F->f)) {
 			startparams++;
 		}
 	}
@@ -1737,7 +1729,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	F->pc = 0;
 	error = NULL;
 
-	FixLocalNames(F);
+	FixLocalNames(f, funcnumstr);
 
 	/*
 	* Function parameters are stored in registers from 0 on.
@@ -1769,7 +1761,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		TRY(RawAddStatement(F, str));
 	}
 
-	if (F->param_arg) {
+	if (NEED_ARG(f)) {
 		TRY(DeclareVariable(F, "arg", F->freeLocal));
 		F->freeLocal++;
 	}

@@ -98,10 +98,7 @@ int luaU_guess_locals(Proto* f, int main) {
 	int regblock[MAXARG_A+1];
 	int lastfree;
 	int i,i2,x,pc;
-	int func_endpc = f->sizecode - 1;
-#if LUA_VERSION_NUM == 502
-	func_endpc = f->sizecode;
-#endif
+	int func_endpc = FUNC_BLOCK_END(f);
 
 	if (f->lineinfo != NULL) {
 		return 0;
@@ -131,22 +128,18 @@ int luaU_guess_locals(Proto* f, int main) {
 		regblock[lastfree] = func_endpc;
 		lastfree++;
 	}
-#if LUA_VERSION_NUM == 501
+
 	// vararg
-	{
-		// Lua 5.1 #define LUA_COMPAT_VARARG : is_vararg = 0 2 3 7, 2 is main, 3 and 7 has another param arg
-		// Lua 5.1 #undef LUA_COMPAT_VARARG  : is_vararg = 0 2, 2 is main or which use ..., never use arg
-		// Lua 5.2 : is_vararg = 0 1 , never use arg, but main has a global arg
-		int param_arg = ((f->is_vararg == 3) || (f->is_vararg == 7))?1:0;
-		if (param_arg) {
-			add(locallist,0,func_endpc);
-			lastfree++;
-			regassign[lastfree] = 0;
-			regusage[lastfree] = 1;
-			regblock[lastfree] = func_endpc;
-			lastfree++;
-		}
+	if (NEED_ARG(f)) {
+		add(locallist,0,func_endpc);
+		lastfree++;
+		regassign[lastfree] = 0;
+		regusage[lastfree] = 1;
+		regblock[lastfree] = func_endpc;
+		lastfree++;
 	}
+
+#if LUA_VERSION_NUM == 501
 	// nil optimizations
 	{
 		Instruction i = f->code[0];

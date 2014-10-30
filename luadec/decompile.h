@@ -110,9 +110,6 @@ struct Function_ {
 	int intend[100];
 
 	char* funcnumstr;
-
-	/* need additional parament arg? */
-	int param_arg;
 };
 
 typedef struct DecTableItem_ DecTableItem;
