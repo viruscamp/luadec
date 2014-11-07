@@ -116,7 +116,7 @@ typedef struct DecTableItem_ DecTableItem;
 struct DecTableItem_ {
 	ListItem super;
 	char* value;
-	int numeric;
+	int index;
 	char* key;
 };
 
@@ -124,14 +124,11 @@ typedef struct DecTable_ DecTable;
 struct DecTable_ {
 	ListItem super;
 	int reg;
-	int topNumeric;
-	List numeric;
+	List array;
+	int arraySize;
 	List keyed;
 	int keyedSize;
-	int arraySize;
-	int used;
 	int pc;
-	Function* F;
 };
 
 typedef struct Variable_ Variable;

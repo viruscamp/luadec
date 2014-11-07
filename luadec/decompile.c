@@ -82,7 +82,7 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 const char* getLocalName(const Proto* f, int i) {
 	if (f->locvars && i < f->sizelocvars) {
 		// no need to test after FixLocalNames
-		return (char*)getstr(f->locvars[i].varname);
+		return getstr(f->locvars[i].varname);
 	} else {
 		sprintf(unknown_local, "ERROR_unknown_local_%d", i);
 		return unknown_local;
@@ -93,7 +93,7 @@ const char* getLocalName(const Proto* f, int i) {
 const char* getUpvalName(const Proto* f, int i) {
 	if (f->upvalues && i < f->sizeupvalues) {
 		// no need to test after FixUpvalNames
-		return (char*)getstr(UPVAL_NAME(f, i));
+		return getstr(UPVAL_NAME(f, i));
 	} else {
 		sprintf(unknown_upvalue, "ERROR_unknown_upvalue_%d", i);
 		return unknown_upvalue;
@@ -107,6 +107,7 @@ char* luadec_strdup(const char* src) {
 #define UPVALUE(i) (getUpvalName(F->f,i))
 #define LOCAL(i) (getLocalName(F->f,i))
 #define LOCAL_STARTPC(i) F->f->locvars[i].startpc
+#define LOCAL_ENDPC(i) F->f->locvars[i].endpc
 #define REGISTER(r) F->R[r]
 #define PRIORITY(r) (r>=MAXSTACK ? 0 : F->Rprio[r])
 #define PENDING(r) F->Rpend[r]
@@ -114,8 +115,6 @@ char* luadec_strdup(const char* src) {
 #define IS_TABLE(r) F->Rtabl[r]
 #define IS_VARIABLE(r) F->Rvar[r]
 
-#define fb2int(x) (luaO_fb2int(x))
-#define int2fb(x) (luaO_int2fb(x))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
@@ -802,13 +801,13 @@ void AssignReg(Function* F, int reg, const char* src, int prio, int mayTest) {
 ** Table Functions
 */
 
-DecTableItem* NewTableItem(const char* value, int num, const char* key) {
+DecTableItem* NewTableItem(const char* value, int index, const char* key) {
 	DecTableItem* self = (DecTableItem*)calloc(1, sizeof(DecTableItem));
 	self->super.prev = NULL;
 	self->super.next = NULL;
-	self->key = luadec_strdup(key);
 	self->value = luadec_strdup(value);
-	self->numeric = num;
+	self->index = index;
+	self->key = luadec_strdup(key);
 	return self;
 }
 
@@ -834,14 +833,14 @@ int MatchTable(DecTable* tbl, int* reg) {
 
 void DeleteTable(DecTable* tbl) {
 	ClearList(&(tbl->keyed), (ListItemFn)ClearTableItem);
-	ClearList(&(tbl->numeric), (ListItemFn)ClearTableItem);
+	ClearList(&(tbl->array), (ListItemFn)ClearTableItem);
 	free(tbl);
 }
 
 void CloseTable(Function* F, int r) {
 	DecTable* tbl = (DecTable*)RemoveFromList(&(F->tables), FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &r));
 	DeleteTable(tbl);
-	F->Rtabl[r] = 0;
+	IS_TABLE(r) = 0;
 }
 
 void PrintTableItemNumeric(StringBuffer* str, DecTableItem* item) {
@@ -874,10 +873,10 @@ char* PrintTable(Function* F, int r, int returnCopy) {
 	StringBuffer* str = StringBuffer_new("{");
 	DecTable* tbl = (DecTable*)FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &r);
 	if (tbl == NULL) {
-		F->Rtabl[r] = 0;
+		IS_TABLE(r) = 0;
 		return F->R[r];
 	}
-	item = cast(DecTableItem*, tbl->numeric.head);
+	item = cast(DecTableItem*, tbl->array.head);
 	if (item) {
 		numerics = 1;
 		PrintTableItemNumeric(str, item);
@@ -914,43 +913,37 @@ char* PrintTable(Function* F, int r, int returnCopy) {
 	return result;
 }
 
-DecTable* NewTable(int r, Function* F, int b, int c, int pc) {
+DecTable* NewTable(int r, int b, int c, int pc) {
 	DecTable* self = (DecTable*)calloc(1, sizeof(DecTable));
 	self->super.prev = NULL;
 	self->super.next = NULL;
-	InitList(&(self->numeric));
+	InitList(&(self->array));
 	InitList(&(self->keyed));
 	self->reg = r;
-	self->topNumeric = 0;
-	self->F = F;
-	self->arraySize = fb2int(b);
-	self->keyedSize = fb2int(c); //1<<c;
+	self->arraySize = luaO_fb2int(b);
+	self->keyedSize = luaO_fb2int(c);
 	self->pc = pc;
-	PENDING(r) = 1;
 	return self;
+}
+
+void StartTable(Function* F, int r, int b, int c, int pc) {
+	DecTable* tbl = NewTable(r, b, c, pc);
+	AddToListHead(&(F->tables), (ListItem*)tbl);
+	PENDING(r) = 1;
+	IS_TABLE(r) = 1;
 }
 
 void AddToTable(Function* F, DecTable* tbl, const char* value, const char* key) {
 	DecTableItem* item;
-	List* type;
-	int index;
+	List* list;
 	if (key == NULL) {
-		type = &(tbl->numeric);
-		index = tbl->topNumeric;
-		tbl->topNumeric++;
+		list = &(tbl->array);
+		item = NewTableItem(value, list->size, NULL);
 	} else {
-		type = &(tbl->keyed);
-		tbl->used++;
-		index = 0;
+		list = &(tbl->keyed);
+		item = NewTableItem(value, 0, key);
 	}
-	item = NewTableItem(value, index, key);
-	AddToList(type, (ListItem*)item);
-}
-
-void StartTable(Function* F, int r, int b, int c, int pc) {
-	DecTable* tbl = NewTable(r, F, b, c, pc);
-	AddToListHead(&(F->tables), (ListItem*)tbl);
-	F->Rtabl[r] = 1;
+	AddToList(list, (ListItem*)item);
 }
 
 void SetList(Function* F, int a, int b, int c) {
