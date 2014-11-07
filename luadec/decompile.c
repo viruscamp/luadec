@@ -387,7 +387,7 @@ LogicExp* MakeBoolean(Function* F, int* thenaddr, int* endif) {
 	for (curr = realLast; curr; curr = cast(BoolOp*, curr->super.prev)) {
 		int dest = curr->dest;
 		if ((elseaddr > *thenaddr) &&
-			( ((curr->op == OP_TEST) || (curr->op == OP_TESTSET)) ? (dest > elseaddr+1) :
+			(((curr->op == OP_TEST) || (curr->op == OP_TESTSET)) ? (dest > elseaddr+1) :
 			(dest > elseaddr))) {
 				last = curr;
 				*thenaddr = curr->pc + 2;
@@ -1164,7 +1164,7 @@ void OutputAssignments(Function* F) {
 		}
 		StringBuffer_prepend(vars, dest);
 
-		if (src && (srcs > 0 || (srcs == 0 && strcmp(src, "nil") != 0) || walk == tail )) {
+		if (src && (srcs > 0 || (srcs == 0 && strcmp(src, "nil") != 0) || walk == tail)) {
 			if (srcs > 0) {
 				StringBuffer_prepend(exps, ", ");
 			}
@@ -1317,7 +1317,7 @@ void DeclareLocals(Function* F) {
 				StringBuffer_add(rhs, GetR(F, r));
 				if (error) return;
 			} else {
-				if (locals > 0){
+				if (locals > 0) {
 					StringBuffer_add(str, ", ");
 				}
 				StringBuffer_add(str, LOCAL(i));
@@ -1383,13 +1383,13 @@ char* RegisterOrConstant(Function* F, int r) {
 
 // isalpha in stdlib is undefined when ch>=256 , may throw a assertion error.
 int luadec_isalpha(int ch) {
-	return ( ch>='A' && ch<='Z' ) || ( ch>='a' && ch<='z' );
+	return (ch>='A' && ch<='Z') || (ch>='a' && ch<='z');
 }
 int luadec_isdigit(int ch) {
-	return ( ch>='0' && ch<='9' );
+	return (ch>='0' && ch<='9');
 }
 int luadec_isalnum(int ch) {
-	return ( ch>='0' && ch<='9' ) || ( ch>='a' && ch<='z' ) || ( ch>='A' && ch<='Z' );
+	return (ch>='0' && ch<='9') || (ch>='a' && ch<='z') || (ch>='A' && ch<='Z');
 }
 
 const int numofkeywords = 23;
@@ -1697,7 +1697,7 @@ void listUpvalues(const Proto* f, StringBuffer* str) {
 }
 
 int isTestOpCode(OpCode op) {
-	return ( op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET );
+	return (op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET);
 }
 
 char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
@@ -1863,7 +1863,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					**	end
 					** end
 					*/
-					if (!((F->loop_ptr->type == WHILE ) && (dest == F->loop_ptr->start))) {
+					if (!((F->loop_ptr->type == WHILE) && (dest == F->loop_ptr->start))) {
 						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
 					}
@@ -1991,7 +1991,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		if ((F->loop_ptr->start == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE)) {
 			LoopItem* walk = F->loop_ptr;
 
-			while (walk->parent && (walk->parent->start == pc ) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE)) {
+			while (walk->parent && (walk->parent->start == pc) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE)) {
 				walk = walk->parent;
 			}
 
@@ -2622,7 +2622,7 @@ LOGIC_NEXT_JMP:
 			if (F->testpending) {
 				F->testjump = dest;
 			}
-			if (( F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc )) {
+			if ((F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc)) {
 				int endif, thenaddr;
 				char* test = NULL;
 				LogicExp* exp = NULL;
@@ -2701,7 +2701,7 @@ LOGIC_NEXT_JMP:
 				c += GETARG_B(code[pc+1]) - GETARG_A(code[pc+1]) + 1;
 				// ignoreNext = 1;
 			}
-			if (o == OP_TAILCALL || c == 1 ) {
+			if (o == OP_TAILCALL || c == 1) {
 				TRY(AddStatement(F, str));
 			} else if (c == 0) {
 				IS_VARIABLE(a) = 0; PENDING(a) = 0;
@@ -3139,7 +3139,7 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 
 	StringBuffer_prune(buff);
 	if (!IsMain(cf)) {
-		if (NUPS(cf) > 0){
+		if (NUPS(cf) > 0) {
 			StringBuffer_add(buff, "local ");
 			listUpvalues(cf, buff);
 			StringBuffer_add(buff, "\n");

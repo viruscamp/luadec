@@ -123,12 +123,12 @@ static int doargs(int argc, char* argv[]) {
 	return i;
 }
 
-int getOpIndex(const char* str){
+int getOpIndex(const char* str) {
 	char* endptr;
 	long val = strtol(str, &endptr, 10);
 	if (errno || endptr == str) {
 		int i;
-		for (i = 0; i < NUM_OPCODES; i++){
+		for (i = 0; i < NUM_OPCODES; i++) {
 			if (strcmp(str, luaP_opnames[i]) == 0) {
 				return i;
 			}
@@ -149,23 +149,23 @@ int generateOp2op(const char* opcodes_def) {
 	FILE* F = (opcodes_def == NULL) ? stdout : fopen(opcodes_def, "rt");
 	if (F == NULL) cannot("open", opcodes_def);
 
-	for (i = 0; i < OP2OP_SIZE; i++){
+	for (i = 0; i < OP2OP_SIZE; i++) {
 		op2op[i] = i;
 	}
 
 	while ((readcount = fscanf(F, "%30s %30s\n", left, right)) != EOF) {
 		linenum++;
-		if (readcount == 2){
+		if (readcount == 2) {
 			int li = getOpIndex(left);
 			int ri = getOpIndex(right);
 			if (0 <= li && li < OP2OP_SIZE && 0 <= ri && ri < OP2OP_SIZE) {
 				op2op[li] = ri;
 			} else {
-				fprintf(stderr, " error in line %d : cannot find OpCode or OpNumber not in range( 0 - %d).\n", linenum, OP2OP_SIZE);
+				fprintf(stderr, " error in line %d : cannot find OpCode or OpNumber not in range(0 - %d).\n", linenum, OP2OP_SIZE);
 				retval = 0;
 				break;
 			}
-		} else if( readcount == 1 || readcount > 2) {
+		} else if (readcount == 1 || readcount > 2) {
 			fprintf(stderr, " error in line %d : One line must have 2 OpCode or OpNumber.\n", linenum);
 			retval = 0;
 			break;
@@ -177,27 +177,27 @@ int generateOp2op(const char* opcodes_def) {
 }
 
 void swapOpCode(Proto* f) {
-	int pc, fi;
+	int pc, i;
 	
-	for (pc = 0; pc < f->sizecode; pc++){
-		Instruction i = f->code[pc];
-		OpCode op = GET_OPCODE(i);
+	for (pc = 0; pc < f->sizecode; pc++) {
+		Instruction ins = f->code[pc];
+		OpCode op = GET_OPCODE(ins);
 		OpCode newop = op2op[op];
-		f->code[pc] = SET_OPCODE(i, newop);
+		f->code[pc] = SET_OPCODE(ins, newop);
 	}
 
-	for (fi = 0; fi < f->sizep; fi++){
-		swapOpCode(f->p[fi]);
+	for (i = 0; i < f->sizep; i++) {
+		swapOpCode(f->p[i]);
 	}
 }
 
 int CompareAndGenOp2op(const Proto* input_proto, const Proto* allopcodes_proto) {
-	int i = 0, pc = 0, diff = 0;
-	int sizecode = input_proto->sizecode;
-	for (i = 0; i < OP2OP_SIZE; i++){
+	int pc, i;
+	int diff = 0;
+	for (i = 0; i < OP2OP_SIZE; i++) {
 		op2op[i] = i;
 	}
-	for (pc = 0; pc < sizecode; pc++){
+	for (pc = 0; pc < input_proto->sizecode; pc++) {
 		OpCode leftop = GET_OPCODE(input_proto->code[pc]);
 		OpCode rightop = GET_OPCODE(allopcodes_proto->code[pc]);
 		op2op[leftop] = rightop;
@@ -206,8 +206,9 @@ int CompareAndGenOp2op(const Proto* input_proto, const Proto* allopcodes_proto) 
 }
 
 int PrintOp2op() {
-	int count = 0, i = 0;
-	for (i = 0; i < OP2OP_SIZE; i++){
+	int i;
+	int count = 0;
+	for (i = 0; i < OP2OP_SIZE; i++) {
 		int j = op2op[i];
 		if (i != j) {
 			count++;

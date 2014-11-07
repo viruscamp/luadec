@@ -299,7 +299,7 @@ static int doargs(int argc, char* argv[]) {
 				usage("'-se' needs an argument", NULL);
 			} else {
 				string_encoding = getEncoding(argv[i]);
-				if (string_encoding == 0){
+				if (string_encoding == 0) {
 					string_encoding = ASCII;
 					usage("'-se' unknown argument: %s, available encodings are "ENCODINGS, argv[i]);
 				}

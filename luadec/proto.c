@@ -29,7 +29,7 @@ const int priorities[22] = {
 	2, 5
 }; // Lua5.1 specific
 
-char* convertToUpper(const char* str){
+char* convertToUpper(const char* str) {
 	char *newstr, *p;
 	p = newstr = strdup(str);
 	while (*p++ = toupper(*p));
@@ -152,21 +152,21 @@ char* DecompileString(const Proto* f, int n) {
 		default:
 			if (*s >= 0x20 && *s < 0x7F) {
 				ret[p++] = *s;
-			} else if ( string_encoding == GB2312 && i+1 < len
+			} else if (string_encoding == GB2312 && i+1 < len
 				&& *s >= 0xA1 && *s <= 0xF7
 				&& *(s+1) >= 0xA1 && *(s+1) <= 0xFE
 				) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-			} else if ( (string_encoding == GBK || string_encoding == GB18030) && i+1 < len
+			} else if ((string_encoding == GBK || string_encoding == GB18030) && i+1 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& *(s+1) >= 0x40 && *(s+1) <= 0xFE && *(s+1) != 0x7F
 				) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-			} else if ( string_encoding == GB18030 && i+3 < len
+			} else if (string_encoding == GB18030 && i+3 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& *(s+1) >= 0x30 && *(s+1) <= 0x39
 				&& *(s+2) >= 0x81 && *(s+2) <= 0xFE
@@ -179,7 +179,7 @@ char* DecompileString(const Proto* f, int n) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-			} else if ( string_encoding == BIG5 && i+1 < len
+			} else if (string_encoding == BIG5 && i+1 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& ((*(s+1) >= 0x40 && *(s+1) <= 0x7E) || (*(s+1) >= 0xA1 && *(s+1) <= 0xFE))
 				) {

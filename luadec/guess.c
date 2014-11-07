@@ -558,7 +558,7 @@ int luaU_guess_locals(Proto* f, int main) {
 		f->sizelocvars = length;
 		if (f->sizelocvars>0) {
 			f->locvars = luaM_newvector(glstate,f->sizelocvars,LocVar);
-			for(i = 0; i < length; i++) {
+			for (i = 0; i < length; i++) {
 				char names[10];
 				sprintf(names,"l_%d_%d",main,i);
 				f->locvars[i].varname = luaS_new(glstate, names);

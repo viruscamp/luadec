@@ -177,20 +177,20 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 	char warnmessage[64];
 	int diff = 0, stop = 0;
 	*warnmessage = '\0';
-	if (fleft->numparams != fright->numparams){
+	if (fleft->numparams != fright->numparams) {
 		diff++;
 		strcat(warnmessage, "numparams ");
 	}
-	if (NUPS(fleft) != NUPS(fright)){
+	if (NUPS(fleft) != NUPS(fright)) {
 		diff++;
 		strcat(warnmessage, "nups ");
 		stop = 1;
 	}
-	if (fleft->is_vararg != fright->is_vararg){
+	if (fleft->is_vararg != fright->is_vararg) {
 		diff++;
 		strcat(warnmessage, "is_vararg ");
 	}
-	if (diff > 0){
+	if (diff > 0) {
 		if (c >= 0) {
 			fprintf(stderr, "  warning! incompatible function %d : different %s", c, warnmessage);
 		} else {
@@ -218,11 +218,12 @@ int replaceFunction(Proto* fparent, int cdest, Proto* fsrc) {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 int replaceSubFunctions(Proto* fdest, Proto* fsrc) {
-	int i = 0, diff = 0;
+	int i;
+	int diff = 0;
 	UPVAL_TYPE* upvalues;
 	Proto* freplaced;
 	int minsizep = MIN(fdest->sizep, fsrc->sizep);
-	for (i = 0; i < minsizep; i++){
+	for (i = 0; i < minsizep; i++) {
 		diff += checkProto(fdest->p[i], fsrc->p[i], i);
 		
 		upvalues = fsrc->p[i]->upvalues;
@@ -315,7 +316,7 @@ int main(int argc, char* argv[]) {
 		fsrc = fsrc->p[csrc];
 	}
 
-	if (!replace_sub){
+	if (!replace_sub) {
 		if (fparent == NULL) {
 			if (realdestnum) { free(realdestnum); realdestnum = NULL; }
 			if (realsrcnum) { free(realsrcnum); realsrcnum = NULL; }
@@ -338,7 +339,7 @@ int main(int argc, char* argv[]) {
 	if (realdestnum) { free(realdestnum); realdestnum = NULL; }
 	if (realsrcnum) { free(realsrcnum); realsrcnum = NULL; }
 
-	if (strict == 1 && diff > 0){
+	if (strict == 1 && diff > 0) {
 		fatal("strip mode on and incompatible functions found, stop writing output.");
 	}
 

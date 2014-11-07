@@ -141,7 +141,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			sprintf(line, "R%d %d", a, b);
 			if (b > 2) {
 				StringBuffer_printf(lend, "R%d to R%d := ...", a, a+b-2);
-			} else if (b == 2){
+			} else if (b == 2) {
 				StringBuffer_printf(lend, "R%d := ...", a);
 			} else if (b == 0) {
 				StringBuffer_printf(lend, "R%d to top := ...", a);
@@ -311,13 +311,13 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		case OP_RETURN:
 			/*	A B	return R(A), ... ,R(A+B-2)	(see note)	*/
 			sprintf(line,"R%d %d",a,b);
-			if (b>2) {
+			if (b > 2) {
 				sprintf(tmp, "R%d to R%d", a, a+b-2);
-			} else if (b==2){
+			} else if (b == 2) {
 				sprintf(tmp, "R%d", a);
-			} else if (b==1){
+			} else if (b == 1) {
 				sprintf(tmp, "");
-			} else if (b==0){
+			} else if (b == 0) {
 				sprintf(tmp, "R%d to top", a);
 			}
 
@@ -338,7 +338,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		case LUADEC_TFORLOOP:
 			/*	A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));	*/
 			sprintf(line,"R%d %d",a,c);
-			if (c==1){
+			if (c == 1) {
 				sprintf(tmp2, "R%d", a+3);
 			}else if (c>1) {
 				sprintf(tmp2, "R%d to R%d", a+3, a+c+2);
@@ -364,12 +364,12 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/
 			int startindex = (c-1)*LFIELDS_PER_FLUSH;
 			sprintf(line,"R%d %d %d",a,b,c);
-			if ( b == 0 ){
+			if (b == 0) {
 				StringBuffer_printf(lend, "R%d[%d] to R%d[top] := R%d to top",
 					a, startindex, a, a+1);
-			} else if ( b == 1){
+			} else if (b == 1) {
 				StringBuffer_printf(lend, "R%d[%d] := R%d",a,startindex,a+1);
-			} else if ( b > 1){
+			} else if (b > 1) {
 				StringBuffer_printf(lend, "R%d[%d] to R%d[%d] := R%d to R%d",
 					a, startindex, a, startindex+b-1, a+1, a+b);
 			}
@@ -396,11 +396,11 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			break;
 		}
 		printf("%5d [-]: %-9s %-13s; %s\n",pc,luaP_opnames[o],line,StringBuffer_getRef(lend));
-		if(tmpconstant1){
+		if (tmpconstant1) {
 			free(tmpconstant1);
 			tmpconstant1 = NULL;
 		}
-		if(tmpconstant2){
+		if (tmpconstant2) {
 			free(tmpconstant2);
 			tmpconstant2 = NULL;
 		}
@@ -411,7 +411,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	if (process_sub && f->sizep != 0) {
 		char* subname = (char*)calloc(name_len + 10, sizeof(char));
 		for (pc=0; pc < f->sizep; pc++) {
-			if (name_len > 0){
+			if (name_len > 0) {
 				sprintf(subname, "%s_%d", name, pc);
 			} else {
 				sprintf(subname, "%d", pc);
