@@ -89,7 +89,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			tmpconstant1 = DecompileConstant(f,bc);
 			StringBuffer_printf(lend,"R%d := %s",a,tmpconstant1);
 			break;
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_LOADKX:
 		{
 			/*	A 	R(A) := Kst(extra arg)				*/
@@ -123,7 +123,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			int rb = b;
 			sprintf(line, "R%d R%d", a, b);
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 			/*	A B	R(A), ..., R(A+B) := nil		*/
 			int rb = a + b;
 			sprintf(line, "R%d %d", a, b);
@@ -159,7 +159,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			StringBuffer_printf(lend,"R%d := %s",a,GLOBAL(bc));
 			break;
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_GETTABUP:
 			/*	A B C	R(A) := UpValue[B][RK(C)]			*/
 			sprintf(line,"R%d U%d %c%d",a,b,CC(c),CV(c));
@@ -180,7 +180,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			StringBuffer_printf(lend,"%s := R%d",GLOBAL(bc),a);
 			break;
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_SETTABUP:
 			/*	A B C	UpValue[A][RK(B)] := RK(C)			*/
 			sprintf(line,"U%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
@@ -224,6 +224,20 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			/*	A B C	R(A) := RK(B) % RK(C)				*/
 		case OP_MOD:
 			/*	A B C	R(A) := RK(B) ^ RK(C)				*/
+#if LUA_VERSION_NUM == 503
+		case OP_IDIV:
+			/*	A B C	R(A) := RK(B) // RK(C)				*/
+		case OP_BAND:
+			/*	A B C	R(A) := RK(B) & RK(C)				*/
+		case OP_BOR:
+			/*	A B C	R(A) := RK(B) | RK(C)				*/
+		case OP_BXOR:
+			/*	A B C	R(A) := RK(B) ~ RK(C)				*/
+		case OP_SHL:
+			/*	A B C	R(A) := RK(B) << RK(C)				*/
+		case OP_SHR:
+			/*	A B C	R(A) := RK(B) >> RK(C)				*/
+#endif
 			sprintf(line,"R%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
 			tmpconstant1 = RK(b);
 			tmpconstant2 = RK(c);
@@ -235,8 +249,12 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			/*	A B	R(A) := not R(B)				*/
 		case OP_LEN:
 			/*	A B	R(A) := length of R(B)				*/
+#if LUA_VERSION_NUM == 503
+		case OP_BNOT:
+			/*	A B	R(A) := ~R(B)					*/
+#endif
 			sprintf(line,"R%d R%d",a,b);
-			StringBuffer_printf(lend,"R%d := %s R%d",a,operators[o],b);
+			StringBuffer_printf(lend,"R%d := %sR%d",a,operators[o],b);
 			break;
 		case OP_CONCAT:
 			/*	A B C	R(A) := R(B).. ... ..R(C)			*/
@@ -248,7 +266,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			dest = pc + sbc + 1;
 			sprintf(line, "%d", sbc);
 			StringBuffer_printf(lend, "PC += %d (goto %d)", sbc, dest);
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 			// instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A-1)
 			// lua-5.2/src/lopcodes.h line 199 is wrong. See lua-5.2/src/lvm.c line 504:
 			// if (a > 0) luaF_close(L, ci->u.l.base + a - 1);
@@ -351,7 +369,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			StringBuffer_addPrintf(lend, "; if R%d ~= nil then R%d := R%d else goto %d", a+3, a+2, a+3, pc+2);
 #endif
 			break;
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_TFORLOOP:
 			/*	A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx }*/
 			dest = pc + sbc + 1;

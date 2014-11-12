@@ -196,9 +196,9 @@ int checkProto(const Proto* fleft, const Proto* fright, int c) {
 		} else {
 			fprintf(stderr, "  warning! incompatible function : different %s", warnmessage);
 		}
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		if (stop > 0) {
-			fatal("Lua 5.2 cannot replace function with different nups");
+			fatal(LUA_VERSION " cannot replace function with different nups");
 		}
 #endif
 	}

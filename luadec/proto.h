@@ -23,13 +23,15 @@
 
 extern const char* operators[];
 
-extern const int priorities[];
+extern int priorities[];
 
 extern int string_encoding;
 
+void InitOperators();
+
 int getEncoding(const char* src);
 
-char* DecompileString(const Proto* f, int n);
+char* DecompileString(const TValue* o);
 
 char* DecompileConstant(const Proto* f, int i);
 
