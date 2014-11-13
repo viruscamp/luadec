@@ -286,7 +286,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			sprintf(line,"%d %c%d %c%d",a,CC(b),CV(b),CC(c),CV(c));
 			tmpconstant1 = RK(b);
 			tmpconstant2 = RK(c);
-			StringBuffer_printf(lend,"if %s %s %s then goto %d else goto %d",tmp,(a?invopstr(o):opstr(o)),tmp2,pc+2,dest);
+			StringBuffer_printf(lend,"if %s %s %s then goto %d else goto %d",tmpconstant1,(a?invopstr(o):opstr(o)),tmpconstant2,pc+2,dest);
 			break;
 		case OP_TEST:
 			/*	A C	if not (R(A) <=> C) then pc++			*/
