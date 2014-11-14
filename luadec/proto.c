@@ -13,21 +13,35 @@
 #include "lua-compat.h"
 #include "proto.h"
 
-const char* operators[22] = {
-	" ", " ", " ", " ", " ",
-	" ", " ", " ", " ", " ",
-	" ", " ","+", "-", "*",
-	"/", "%", "^", "-", "not ",
-	"#", ".."
-}; // Lua5.1 specific
+const char* operators[NUM_OPCODES];
+int priorities[NUM_OPCODES];
 
-const int priorities[22] = {
-	0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0,
-	0, 0, 4, 4, 3,
-	3, 3, 1, 2, 2,
-	2, 5
-}; // Lua5.1 specific
+void InitOperators() {
+	int i;
+	for (i = 0; i < NUM_OPCODES; i++) {
+		operators[i] = " ";
+		priorities[i] = 0;
+	}
+	operators[OP_POW] = "^"; priorities[OP_POW] = 1;
+	operators[OP_NOT] = "not "; priorities[OP_NOT] = 2;
+	operators[OP_LEN] = "#"; priorities[OP_LEN] = 2;
+	operators[OP_UNM] = "-"; priorities[OP_UNM] = 2;
+	operators[OP_MUL] = "*"; priorities[OP_MUL] = 3;
+	operators[OP_DIV] = "/"; priorities[OP_DIV] = 3;
+	operators[OP_MOD] = "%"; priorities[OP_MOD] = 3;
+	operators[OP_ADD] = "+"; priorities[OP_ADD] = 4;
+	operators[OP_SUB] = "-"; priorities[OP_SUB] = 4;
+	operators[OP_CONCAT] = ".."; priorities[OP_CONCAT] = 5;
+#if LUA_VERSION_NUM == 503
+	operators[OP_BNOT] = "~"; priorities[OP_BNOT] = 2;
+	operators[OP_IDIV] = "//"; priorities[OP_IDIV] = 3;
+	operators[OP_SHL] = "<<"; priorities[OP_SHL] = 6;
+	operators[OP_SHR] = ">>"; priorities[OP_SHR] = 6;
+	operators[OP_BAND] = "&"; priorities[OP_BAND] = 7;
+	operators[OP_BXOR] = "~"; priorities[OP_BXOR] = 8;
+	operators[OP_BOR] = "|"; priorities[OP_BOR] = 9;
+#endif
+}
 
 char* convertToUpper(const char* str) {
 	char *newstr, *p;
@@ -37,27 +51,23 @@ char* convertToUpper(const char* str) {
 }
 
 int getEncoding(const char* enc) {
+	int ret = 0;
 	char* src = convertToUpper(enc);
 	if (strcmp(src, "ASCII") == 0) {
-		return ASCII;
-	}
-	if (strcmp(src, "GB2312") == 0) {
-		return GB2312;
-	}
-	if (strcmp(src, "GBK") == 0) {
-		return GBK;
-	}
-	if (strcmp(src, "GB18030") == 0) {
-		return GB18030;
-	}
-	if (strcmp(src, "BIG5") == 0) {
-		return BIG5;
-	}
-	if (strcmp(src, "UTF8") == 0) {
-		return UTF8;
+		ret = ASCII;
+	} else if (strcmp(src, "GB2312") == 0) {
+		ret = GB2312;
+	} else 	if (strcmp(src, "GBK") == 0) {
+		ret = GBK;
+	} else 	if (strcmp(src, "GB18030") == 0) {
+		ret = GB18030;
+	} else 	if (strcmp(src, "BIG5") == 0) {
+		ret = BIG5;
+	} else 	if (strcmp(src, "UTF8") == 0) {
+		ret = UTF8;
 	}
 	free(src);
-	return 0;
+	return ret;
 }
 
 
@@ -99,11 +109,11 @@ int isUTF8(const unsigned char* buff, int size) {
 }
 
 // PrintString from luac is not 8-bit clean
-char* DecompileString(const Proto* f, int n) {
+char* DecompileString(const TValue* o) {
 	int i, utf8length;
-	TString* ts = rawtsvalue(&f->k[n]);
+	TString* ts = rawtsvalue(o);
 	const unsigned char* s = (const unsigned char*)getstr(ts);
-	int len = ts->tsv.len;
+	int len = LUA_STRLEN(ts);
 	char* ret = (char*)calloc(len * 4 + 3, sizeof(char));
 	int p = 0;
 	ret[p++] = '"';
@@ -210,34 +220,55 @@ char* DecompileConstant(const Proto* f, int i) {
 	const TValue* o = &f->k[i];
 	switch (ttype(o)) {
 	case LUA_TBOOLEAN:
-		{
-			if (bvalue(o)) {
-				char* ret = strdup("true");
-				return ret;
-			} else {
-				char* ret = strdup("false");
-				return ret;
-			}
-		}
-	case LUA_TNUMBER:
-		{
-			char* ret = (char*)calloc(100, sizeof(char));
-			sprintf(ret, LUA_NUMBER_FMT, nvalue(o));
+	{
+		if (bvalue(o)) {
+			char* ret = strdup("true");
+			return ret;
+		} else {
+			char* ret = strdup("false");
 			return ret;
 		}
-	case LUA_TSTRING:
-		{
-			return DecompileString(f, i);
-		}
+	}
 	case LUA_TNIL:
-		{
-			char* ret = strdup("nil");
-			return ret;
-		}
+	{
+		char* ret = strdup("nil");
+		return ret;
+	}
+#if LUA_VERSION_NUM == 501 || LUA_VERSION_NUM == 502
+	case LUA_TNUMBER:
+	{
+		char* ret = (char*)calloc(128, sizeof(char));
+		sprintf(ret, LUA_NUMBER_FMT, nvalue(o));
+		return ret;
+	}
+	case LUA_TSTRING:
+	{
+		return DecompileString(o);
+	}
+#endif
+#if LUA_VERSION_NUM == 503
+	case LUA_TNUMFLT:
+	{
+		char* ret = (char*)calloc(128, sizeof(char));
+		sprintf(ret, LUA_NUMBER_FMT, fltvalue(o));
+		return ret;
+	}
+	case LUA_TNUMINT:
+	{
+		char* ret = (char*)calloc(128, sizeof(char));
+		sprintf(ret, LUA_INTEGER_FMT, ivalue(o));
+		return ret;
+	}
+	case LUA_TSHRSTR:
+	case LUA_TLNGSTR:
+	{
+		return DecompileString(o);
+	}
+#endif
 	default:
-		{
-			char* ret = strdup("Unknown_Type_Error");
-			return ret;
-		}
+	{
+		char* ret = strdup("Unknown_Type_Error");
+		return ret;
+	}
 	}
 }

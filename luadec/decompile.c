@@ -68,7 +68,7 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 	}
 	for (i = 0; i < f->sizelocvars; i++) {
 		TString* name = f->locvars[i].varname;
-		if (name == NULL || name->tsv.len == 0 ||
+		if (name == NULL || LUA_STRLEN(name) == 0 ||
 			strlen(getstr(name)) == 0 || !isIdentifier(getstr(name))) {
 			sprintf(tmpname, "l_%s_%d", funcnumstr, i);
 			name = luaS_new(glstate, tmpname);
@@ -1786,7 +1786,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		if (o == OP_CLOSE) {
 			int startreg = a;
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		if (o == OP_JMP && a > 0) {
 			// instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A-1)
 			int startreg = a - 1;
@@ -1801,7 +1801,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			// OP_TFORLOOP /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));if R(A+3) ~= nil then R(A+2)=R(A+3) else pc++	*/
 			// OP_JMP /* sBx	pc += sBx */
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		if (o == OP_TFORLOOP) {
 			// OP_TFORCALL /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2)); */
 			// OP_TFORLOOP /* A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx } */
@@ -1905,7 +1905,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		if (pc == 0) {
 			int ixx, num_nil = -1;
 			switch (o) {
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 				case OP_SETTABUP:
 					if (!IS_CONSTANT(b)) {
 						num_nil = b;
@@ -2068,7 +2068,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			free(ctt);
 			break;
 		}
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_LOADKX:
 		{
 			int ax = GETARG_Ax(code[pc+1]);
@@ -2114,7 +2114,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			// 5.1	A B	R(A) to R(B) := nil
 			rb = b;
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 			// 5.2	A B	R(A) to R(A+B) := nil
 			rb = a + b;
 #endif
@@ -2159,7 +2159,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			break;
 		}
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_GETTABUP:
 		{
 			/*	A B C	R(A) := UpValue[B][RK(C)]			*/
@@ -2207,7 +2207,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			break;
 		}
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_SETTABUP:
 		{
 			/*	A B C	UpValue[A][RK(B)] := RK(C)			*/
@@ -2299,6 +2299,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		case OP_DIV:
 		case OP_POW:
 		case OP_MOD:
+#if LUA_VERSION_NUM == 503
+		case OP_IDIV:
+		case OP_BAND:
+		case OP_BOR:
+		case OP_BXOR:
+		case OP_SHL:
+		case OP_SHR:
+#endif
 		{
 			char *bstr, *cstr;
 			const char *oper = operators[o];
@@ -2328,6 +2336,9 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		case OP_UNM:
 		case OP_NOT:
 		case OP_LEN:
+#if LUA_VERSION_NUM == 503
+		case OP_BNOT:
+#endif
 		{
 			const char *bstr;
 			int prio = priorities[o];
@@ -2796,7 +2807,7 @@ LOGIC_NEXT_JMP:
 			ignoreNext = 1;
 			break;
 		}
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_TFORLOOP:
 			break;
 #endif
@@ -2922,21 +2933,21 @@ LOGIC_NEXT_JMP:
 			// lua 5.2 : upvalue names determined by cf->upvalues->instack and cf->upvalues->idx
 			for (i = 0; i < uvn; i++) {
 				TString* upvalname = UPVAL_NAME(cf, i);
-				if (upvalname == NULL || upvalname->tsv.len == 0 ||
+				if (upvalname == NULL || LUA_STRLEN(upvalname) == 0 ||
 					strlen(getstr(upvalname)) == 0 || !isIdentifier(getstr(upvalname))) {
 #if LUA_VERSION_NUM == 501
 					Instruction ins = code[pc+i+1];
 					OpCode op = GET_OPCODE(ins);
 					int b = GETARG_B(ins);
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 					Upvaldesc upval = cf->upvalues[i];
 					int b = upval.idx;
 #endif
 #if LUA_VERSION_NUM == 501
 					if (op == OP_MOVE) {
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 					if (upval.instack == 1) {
 #endif
 						// TODO completely wrong, f->locvars[b] is not R[b]
@@ -2951,7 +2962,7 @@ LOGIC_NEXT_JMP:
 #if LUA_VERSION_NUM == 501
 					} else if (op == OP_GETUPVAL) {
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 					} else if (upval.instack == 0) {
 #endif
 						// Get name from upvalue name
@@ -3126,7 +3137,7 @@ char* ProcessSubFunction(Proto* cf, int func_checking, char* funcnumstr) {
 		// FixUpvalNames
 		for (i = 0; i < uvn; i++) {
 			TString* name = UPVAL_NAME(cf, i);
-			if (name == NULL || name->tsv.len == 0 ||
+			if (name == NULL || LUA_STRLEN(name) == 0 ||
 				strlen(getstr(name)) == 0 || !isIdentifier(getstr(name))) {
 				// TODO 5.2 Maybe we should trace up to get _ENV ?
 				// Also wen can get the location where upval defined

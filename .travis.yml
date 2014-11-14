@@ -7,6 +7,7 @@ compiler:
 env:
   - LUAVER=5.1
   - LUAVER=5.2
+  - LUAVER=5.3
 
 before_script:
   - cd lua-$LUAVER/src && make linux CC=$CC && cd ../../luadec

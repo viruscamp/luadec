@@ -366,7 +366,7 @@ static void strip(lua_State* L, Proto* f) {
 	luadec_freearray(L, f->upvalues, f->sizeupvalues, TString*);
 	f->upvalues=NULL; f->sizeupvalues=0;
 #endif
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 	for (i=0; i<f->sizeupvalues; i++) {
 		f->upvalues[i].name=luaS_new(L, "");
 	}
@@ -419,6 +419,7 @@ int main(int argc, char* argv[]) {
 	if (argc<=0) {
 		usage("no input files given",NULL);
 	}
+	InitOperators();
 	L = lua_open();
 	glstate = L;
 	luaB_opentests(L);

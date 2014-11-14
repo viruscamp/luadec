@@ -196,7 +196,7 @@ void PrintJmpDestStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 		}
 		StringBuffer_add(buff, "\n");
 	}
-#if LUA_VERSION_NUM == 502
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 	if (stmt->code != NULL) {
 		PrintIndent(buff, indent);
 		StringBuffer_addPrintf(buff, "::pc_%d::\n", stmt->line);
