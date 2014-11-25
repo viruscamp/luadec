@@ -220,20 +220,9 @@ char* DecompileConstant(const Proto* f, int i) {
 	const TValue* o = &f->k[i];
 	switch (ttype(o)) {
 	case LUA_TBOOLEAN:
-	{
-		if (bvalue(o)) {
-			char* ret = strdup("true");
-			return ret;
-		} else {
-			char* ret = strdup("false");
-			return ret;
-		}
-	}
+		return strdup(bvalue(o)?"true":"false");
 	case LUA_TNIL:
-	{
-		char* ret = strdup("nil");
-		return ret;
-	}
+		return strdup("nil");
 #if LUA_VERSION_NUM == 501 || LUA_VERSION_NUM == 502
 	case LUA_TNUMBER:
 	{
@@ -242,9 +231,7 @@ char* DecompileConstant(const Proto* f, int i) {
 		return ret;
 	}
 	case LUA_TSTRING:
-	{
 		return DecompileString(o);
-	}
 #endif
 #if LUA_VERSION_NUM == 503
 	case LUA_TNUMFLT:
@@ -261,14 +248,9 @@ char* DecompileConstant(const Proto* f, int i) {
 	}
 	case LUA_TSHRSTR:
 	case LUA_TLNGSTR:
-	{
 		return DecompileString(o);
-	}
 #endif
 	default:
-	{
-		char* ret = strdup("Unknown_Type_Error");
-		return ret;
-	}
+		return strdup("Unknown_Type_Error");
 	}
 }
