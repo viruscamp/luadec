@@ -2414,7 +2414,8 @@ function main()
           if not b then error("--rewrite option needs a profile name") end
           if b == "local" then
             CheckLuaVersion("--rewrite local needs %s")
-          end          config.DISPLAY_FLAG = false
+          end
+          config.DISPLAY_FLAG = false
           config.REWRITE_FLAG = true
           if b == "local" or CONFIGURATION[b] then
             config.REWRITE_PROFILE = b
