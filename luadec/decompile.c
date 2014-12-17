@@ -1700,6 +1700,23 @@ int isTestOpCode(OpCode op) {
 	return (op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET);
 }
 
+AstStatement* leaveBlock(AstStatment* currStmt, StatementType type, const char* errorMsg) {
+	AstStatment* funcRoot = NULL;
+	while (currStmt && currStmt->type != type) {
+		if (currStmt->type == FUNC_ROOT) {
+			funcRoot = currStmt;
+		}
+		currStmt = currStmt->parent;
+	}
+
+	if (currStmt) {
+		return currStmt->parent;
+	} else {
+		SET_ERROR(F, errorMsg);
+		return funcRoot;
+	}
+}
+
 char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int i = 0;
 
@@ -1970,11 +1987,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 		while (RemoveFromSet(F->do_closes, pc)) {
 			AstStatement* block = F->currStmt;
-			if (block->type == BLOCK_STMT) {
-				F->currStmt = block->parent;
-			} else {
-				SET_ERROR(F, "unexpected 'end' of 'do'");
-			}
+			F->currStmt = leaveBlock(block, BLOCK_STMT, "unexpected 'end' of 'do'");
 		}
 
 		while ((F->currStmt->type == IF_THEN_STMT || F->currStmt->type == IF_ELSE_STMT)
@@ -2773,10 +2786,14 @@ LOGIC_NEXT_JMP:
 			F->intspos--;
 			F->ignore_for_variables = 0;
 
-			if (currStmt->type == FORLOOP_STMT) {
+			while (currStmt && currStmt->type != FORLOOP_STMT) {
+				currStmt = currStmt->parent;
+			}
+
+			if (currStmt) {
 				F->currStmt = currStmt->parent;
 			} else {
-				SET_ERROR(F, "unexpected 'end' of 'for' loop");
+				SET_ERROR(F, "cannot find FORLOOP_STMT of OP_FORLOOP");
 			}
 			break;
 		}
@@ -2799,11 +2816,16 @@ LOGIC_NEXT_JMP:
 			F->intspos--;
 
 			F->ignore_for_variables = 0;
-			if (currStmt->type == TFORLOOP_STMT) {
+
+			while (currStmt && currStmt->type != TFORLOOP_STMT) {
+				currStmt = currStmt->parent;
+			}
+			if (currStmt) {
 				F->currStmt = currStmt->parent;
 			} else {
-				SET_ERROR(F, "unexpected 'end' of generic 'for' loop");
+				SET_ERROR(F, "cannot find TFORLOOP_STMT of OP_TFORLOOP");
 			}
+
 			ignoreNext = 1;
 			break;
 		}
