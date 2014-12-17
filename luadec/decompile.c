@@ -1700,11 +1700,15 @@ int isTestOpCode(OpCode op) {
 	return (op == OP_EQ || op == OP_LE || op == OP_LT || op == OP_TEST || op == OP_TESTSET);
 }
 
-AstStatement* leaveBlock(AstStatment* currStmt, StatementType type, const char* errorMsg) {
-	AstStatment* funcRoot = NULL;
+AstStatement* LeaveBlock(Function* F, AstStatement* currStmt, StatementType type) {
+	char msg[128];
 	while (currStmt && currStmt->type != type) {
-		if (currStmt->type == FUNC_ROOT) {
-			funcRoot = currStmt;
+		sprintf(msg, "LeaveBlock: unexpected jumping out %s", stmttype[currStmt->type]);
+		SET_ERROR(F, msg);
+		if (currStmt->type == FUNC_ROOT || currStmt->type == FORLOOP_STMT || currStmt->type == TFORLOOP_STMT) {
+			sprintf(msg, "LeaveBlock: cannot find end of %s , stop at %s", stmttype[type], stmttype[currStmt->type]);
+			SET_ERROR(F, msg);
+			return currStmt;
 		}
 		currStmt = currStmt->parent;
 	}
@@ -1712,8 +1716,9 @@ AstStatement* leaveBlock(AstStatment* currStmt, StatementType type, const char* 
 	if (currStmt) {
 		return currStmt->parent;
 	} else {
-		SET_ERROR(F, errorMsg);
-		return funcRoot;
+		sprintf(msg, "LeaveBlock: cannot find end of %s ,fatal NULL returned", stmttype[type]);
+		SET_ERROR(F, msg);
+		return NULL;
 	}
 }
 
@@ -1987,7 +1992,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 		while (RemoveFromSet(F->do_closes, pc)) {
 			AstStatement* block = F->currStmt;
-			F->currStmt = leaveBlock(block, BLOCK_STMT, "unexpected 'end' of 'do'");
+			F->currStmt = LeaveBlock(F, block, BLOCK_STMT);
 		}
 
 		while ((F->currStmt->type == IF_THEN_STMT || F->currStmt->type == IF_ELSE_STMT)
@@ -2417,11 +2422,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 						}
 					}
 				}
-				if (F->currStmt->type == WHILE_STMT) {
-					F->currStmt = F->currStmt->parent;
-				} else {
-					SET_ERROR(F, "unexpected 'end' of 'while'");
-				}
+				F->currStmt = LeaveBlock(F, F->currStmt, WHILE_STMT);
 			} else if (F->currStmt->type == IF_THEN_STMT && ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc + 1)) { // jmp before 'else'
 				AstStatement* ifstmt = F->currStmt->parent;
 				F->currStmt = ElseStmt(ifstmt);
@@ -2650,14 +2651,20 @@ LOGIC_NEXT_JMP:
 				int endif, thenaddr;
 				char* test = NULL;
 				LogicExp* exp = NULL;
+				AstStatement* currStmt = F->currStmt;
+				AstStatement* parentStmt = NULL;
 				TRY(exp = MakeBoolean(F, &thenaddr, &endif));
 				TRY(test = WriteBoolean(exp, &thenaddr, &endif, 0));
-				if (F->currStmt->type == REPEAT_STMT) {
-					F->currStmt->code = test;
+
+				while (currStmt && currStmt->type != REPEAT_STMT) {
+					currStmt = currStmt->parent;
+				}
+				if (currStmt) {
+					currStmt->code = test;
 					test = NULL;
-					F->currStmt = F->currStmt->parent;
+					F->currStmt = currStmt->parent;
 				} else {
-					SET_ERROR(F, "unexpected 'until' of 'repeat'");
+					SET_ERROR(F, "LeaveBlock: cannot find 'until' of 'repeat'");
 				}
 				if (test) free(test);
 				if (exp) DeleteLogicExpTree(exp);
@@ -2786,15 +2793,7 @@ LOGIC_NEXT_JMP:
 			F->intspos--;
 			F->ignore_for_variables = 0;
 
-			while (currStmt && currStmt->type != FORLOOP_STMT) {
-				currStmt = currStmt->parent;
-			}
-
-			if (currStmt) {
-				F->currStmt = currStmt->parent;
-			} else {
-				SET_ERROR(F, "cannot find FORLOOP_STMT of OP_FORLOOP");
-			}
+			F->currStmt = LeaveBlock(F, currStmt, FORLOOP_STMT);
 			break;
 		}
 		case LUADEC_TFORLOOP: // TODO: CHECK
@@ -2817,14 +2816,7 @@ LOGIC_NEXT_JMP:
 
 			F->ignore_for_variables = 0;
 
-			while (currStmt && currStmt->type != TFORLOOP_STMT) {
-				currStmt = currStmt->parent;
-			}
-			if (currStmt) {
-				F->currStmt = currStmt->parent;
-			} else {
-				SET_ERROR(F, "cannot find TFORLOOP_STMT of OP_TFORLOOP");
-			}
+			F->currStmt = LeaveBlock(F, currStmt, TFORLOOP_STMT);
 
 			ignoreNext = 1;
 			break;
