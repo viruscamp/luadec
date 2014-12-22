@@ -145,7 +145,7 @@ int GetJmpAddr(Function* F, int addr) {
 void RawAddStatement(Function* F, StringBuffer* str);
 void DeclareLocal(Function* F, int ixx, const char* value);
 
-LoopItem* NewLoopItem(LoopType type, int prep, int start, int body, int end, int out) {
+LoopItem* NewLoopItem(StatementType type, int prep, int start, int body, int end, int out) {
 	LoopItem* self = (LoopItem*)calloc(1, sizeof(LoopItem));
 
 	self->parent = NULL;
@@ -159,6 +159,9 @@ LoopItem* NewLoopItem(LoopType type, int prep, int start, int body, int end, int
 	self->body = body;
 	self->end = end;
 	self->out = out;
+
+	self->indent = 0;
+	self->block = MakeBlockStatement(type, NULL);
 
 	return self;
 }
@@ -196,28 +199,9 @@ int AddToLoopTree(Function* F, LoopItem* item) {
 }
 
 void DeleteLoopTree(LoopItem* item) {
-	LoopItem* next = item;
-	while (item) {
-		if (item->child) {
-			next = item->child;
-			item->child = NULL;
-		} else {
-			if (item->next) {
-				next = item->next;
-				item->next = NULL;
-			} else {
-				next = item->parent;
-			}
-			free(item);
-		}
-		item = next;
-	}
-}
-
-void DeleteLoopTree2(LoopItem* item) {
 	if (item == NULL) return;
-	DeleteLoopTree2(item->child);
-	DeleteLoopTree2(item->next);
+	DeleteLoopTree(item->child);
+	DeleteLoopTree(item->next);
 	free(item);
 }
 
@@ -623,7 +607,7 @@ void RawAddAstStatement(Function* F, AstStatement* stmt) {
 			//TODO check list.size
 			int blockSize = block->sub->size;
 
-			AstStatement* dostmt = MakeBlockStatement(BLOCK_STMT, NULL);
+			AstStatement* dostmt = MakeBlockStatement(DO_STMT, NULL);
 			dostmt->line = lpc;
 
 			while (curr) {
@@ -651,8 +635,9 @@ void FlushWhile1(Function* F) {
 	LoopItem* walk = F->loop_ptr;
 	StringBuffer* str = StringBuffer_new(NULL);
 
-	if (walk->type == WHILE && walk->start <= F->pc && walk->body == -1) {
-		AstStatement* whilestmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
+	if (walk->type == WHILE_STMT && walk->start <= F->pc && walk->body == -1) {
+		AstStatement* whilestmt = walk->block;
+		whilestmt->code = strdup("1");
 		RawAddAstStatement(F, whilestmt);
 		F->currStmt = whilestmt;
 		walk->body = walk->start;
@@ -667,7 +652,7 @@ void FlushBoolean(Function* F) {
 		FlushWhile1(F);
 	}
 	while (F->bools.size > 0) {
-		int flushWhile = 0;
+		AstStatement* whilestmt = NULL;
 		int endif = 0, thenaddr = 0;
 		char* test = NULL;
 		StringBuffer* str = StringBuffer_new(NULL);
@@ -679,14 +664,14 @@ void FlushBoolean(Function* F) {
 		//TODO find another method to determine while loop body to output while do
 		//search parent
 		walk = F->loop_ptr;
-		if (walk->type == WHILE && walk->out == endif -1 && walk->body == -1) {
+		if (walk->type == WHILE_STMT && walk->out == endif -1 && walk->body == -1) {
 			int whileStart = walk->start;
 			walk->body = thenaddr;
-			flushWhile = 1;
+			whilestmt = walk->block;
 		}
 
-		if (flushWhile) {
-			AstStatement* whilestmt = MakeBlockStatement(WHILE_STMT, test);
+		if (whilestmt) {
+			whilestmt->code = test;
 			test = NULL;
 			RawAddAstStatement(F, whilestmt);
 			F->currStmt = whilestmt;
@@ -1058,11 +1043,13 @@ Function* NewFunction(const Proto* f) {
 	InitList(&(self->vpend));
 	self->tpend = NewIntSet(0);
 
-	self->loop_tree = NewLoopItem(FUNC_ROOT,-1,-1,0,f->sizecode-1,f->sizecode);
+	self->loop_tree = NewLoopItem(FUNCTION_STMT,-1,-1,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
-	self->funcBlock = MakeBlockStatement(FUNCTION_STMT, NULL);
+	self->funcBlock = self->loop_tree->block;
 	self->currStmt = self->funcBlock;
+
+	self->loop_tree->block = self->funcBlock;
 
 	InitList(&(self->breaks));
 	InitList(&(self->continues));
@@ -1705,7 +1692,7 @@ AstStatement* LeaveBlock(Function* F, AstStatement* currStmt, StatementType type
 	while (currStmt && currStmt->type != type) {
 		sprintf(msg, "LeaveBlock: unexpected jumping out %s", stmttype[currStmt->type]);
 		SET_ERROR(F, msg);
-		if (currStmt->type == FUNC_ROOT || currStmt->type == FORLOOP_STMT || currStmt->type == TFORLOOP_STMT) {
+		if (currStmt->type == FUNCTION_STMT || currStmt->type == FORLOOP_STMT || currStmt->type == TFORLOOP_STMT) {
 			sprintf(msg, "LeaveBlock: cannot find end of %s , stop at %s", stmttype[type], stmttype[currStmt->type]);
 			SET_ERROR(F, msg);
 			return currStmt;
@@ -1828,13 +1815,13 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			// OP_TFORCALL /* A C	R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2)); */
 			// OP_TFORLOOP /* A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx } */
 #endif
-			LoopItem* item = NewLoopItem(TFORLOOP, dest-1, dest, dest, pc, real_end);
+			LoopItem* item = NewLoopItem(TFORLOOP_STMT, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
 			continue;
 		}
 
 		if (o == OP_FORLOOP) {
-			LoopItem* item = NewLoopItem(FORLOOP, dest-1, dest, dest, pc, real_end);
+			LoopItem* item = NewLoopItem(FORLOOP_STMT, dest-1, dest, dest, pc, real_end);
 			AddToLoopTree(F, item);
 			continue;
 		}
@@ -1885,13 +1872,13 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					**	end
 					** end
 					*/
-					if (!((F->loop_ptr->type == WHILE) && (dest == F->loop_ptr->start))) {
-						LoopItem* item = NewLoopItem(REPEAT, dest, dest, dest, pc, real_end);
+					if (!((F->loop_ptr->type == WHILE_STMT) && (dest == F->loop_ptr->start))) {
+						LoopItem* item = NewLoopItem(REPEAT_STMT, dest, dest, dest, pc, real_end);
 						AddToLoopTree(F, item);
 					}
 				} else {
 					// WHILE jump back
-					LoopItem* item = NewLoopItem(WHILE, dest, dest, -1, pc, real_end);
+					LoopItem* item = NewLoopItem(WHILE_STMT, dest, dest, -1, pc, real_end);
 					AddToLoopTree(F, item);
 				}
 			}
@@ -1985,14 +1972,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		TRY(ReleaseLocals(F));
 
 		while (RemoveFromSet(F->do_opens, pc)) {
-			AstStatement* blockstmt = MakeBlockStatement(BLOCK_STMT, NULL);
+			AstStatement* blockstmt = MakeBlockStatement(DO_STMT, NULL);
 			AddAstStatement(F, cast(AstStatement*, blockstmt));
 			F->currStmt = blockstmt;
 		}
 
 		while (RemoveFromSet(F->do_closes, pc)) {
 			AstStatement* block = F->currStmt;
-			F->currStmt = LeaveBlock(F, block, BLOCK_STMT);
+			F->currStmt = LeaveBlock(F, block, DO_STMT);
 		}
 
 		while ((F->currStmt->type == IF_THEN_STMT || F->currStmt->type == IF_ELSE_STMT)
@@ -2006,31 +1993,32 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			AddToStatement(F->currStmt, jmpdest);
 		}
 
-		if ((F->loop_ptr->start == pc) && (F->loop_ptr->type == REPEAT || F->loop_ptr->type == WHILE)) {
+		if ((F->loop_ptr->start == pc) && (F->loop_ptr->type == REPEAT_STMT || F->loop_ptr->type == WHILE_STMT)) {
 			LoopItem* walk = F->loop_ptr;
 
-			while (walk->parent && (walk->parent->start == pc) &&(walk->parent->type == REPEAT || walk->parent->type == WHILE)) {
+			while (walk->parent && (walk->parent->start == pc) &&(walk->parent->type == REPEAT_STMT || walk->parent->type == WHILE_STMT)) {
 				walk = walk->parent;
 			}
 
 			while (!(walk == F->loop_ptr)) {
 				AstStatement* loopstmt = NULL;
-				if (walk->type == WHILE) {
+				if (walk->type == WHILE_STMT) {
 					walk->body = walk->start;
-					loopstmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
-				} else if (walk->type == REPEAT) {
-					loopstmt = MakeBlockStatement(REPEAT_STMT, NULL);
+					loopstmt = walk->block;
+					loopstmt->code = strdup("1");
+				} else if (walk->type == REPEAT_STMT) {
+					loopstmt = walk->block;
 				}
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
 				walk = walk->child;
 			}
 
-			if (walk->type == REPEAT) {
-				AstStatement* loopstmt = MakeBlockStatement(REPEAT_STMT, NULL);
+			if (walk->type == REPEAT_STMT) {
+				AstStatement* loopstmt = walk->block;
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
-			} else if (walk->type == WHILE) { 
+			} else if (walk->type == WHILE_STMT) {
 				/*
 				** try to process all while as " while 1 do if "
 				** see the lua code:
@@ -2048,7 +2036,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				** 	end
 				** end
 				*/
-				AstStatement* loopstmt = MakeBlockStatement(WHILE_STMT, strdup("1"));
+				AstStatement* loopstmt = walk->block;
+				loopstmt->code = strdup("1");
 				RawAddAstStatement(F, cast(AstStatement*, loopstmt));
 				F->currStmt = loopstmt;
 				walk->body = walk->start;
@@ -2433,12 +2422,9 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				* generic 'for'
 				*/
 				int i;
-				//int step;
 				const char *generator, *control, *state;
-				//char *variables[20];
 				const char* vname[40];
-				AstStatement* forstmt = NULL;
-				//int stepLen;
+				AstStatement* tforstmt = NULL;
 
 				a = GETARG_A(idest);
 				c = GETARG_C(idest);
@@ -2495,9 +2481,14 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+2+c;
-				forstmt = MakeBlockStatement(TFORLOOP_STMT, StringBuffer_getBuffer(str));
-				AddAstStatement(F, forstmt);
-				F->currStmt = forstmt;
+
+				if (F->loop_ptr->type != TFORLOOP_STMT) {
+					fprintf(stderr, "F->loop_ptr->type != TFORLOOP_STMT");
+				}
+				tforstmt = F->loop_ptr->block; // TODO check TFORLOOP_STMT
+				tforstmt->code = StringBuffer_getBuffer(str);
+				AddAstStatement(F, tforstmt);
+				F->currStmt = tforstmt;
 				break;
 			} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 				/*
@@ -2647,7 +2638,7 @@ LOGIC_NEXT_JMP:
 			if (F->testpending) {
 				F->testjump = dest;
 			}
-			if ((F->loop_ptr->type == REPEAT) && (F->loop_ptr->end == F->pc)) {
+			if ((F->loop_ptr->type == REPEAT_STMT) && (F->loop_ptr->end == F->pc)) {
 				int endif, thenaddr;
 				char* test = NULL;
 				LogicExp* exp = NULL;
@@ -2898,7 +2889,12 @@ LOGIC_NEXT_JMP:
 				F->Rinternal[a + 3] = 1;
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+3;
-				forstmt = MakeBlockStatement(FORLOOP_STMT, StringBuffer_getBuffer(str));
+
+				if (F->loop_ptr->type != FORLOOP_STMT) {
+					fprintf(stderr, "F->loop_ptr->type != FORLOOP_STMT");
+				}
+				forstmt = F->loop_ptr->block; // TODO check FORLOOP_STMT
+				forstmt->code = StringBuffer_getBuffer(str);
 				AddAstStatement(F, forstmt);
 				F->currStmt = forstmt;
 				break;

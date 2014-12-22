@@ -41,20 +41,23 @@ void PrintAstSub(AstStatement* blockstmt, StringBuffer* buff, int indent) {
 	}
 }
 
-AstStatement* MakeSimpleStatement(char* code) {
+AstStatement* MakeStatement(StatementType type, char* code) {
 	AstStatement* stmt = (AstStatement*)calloc(1, sizeof(AstStatement));
-	stmt->type = SIMPLE_STMT;
+	stmt->type = type;
 	stmt->code = code;
 	stmt->sub = NULL;
+	stmt->sub_print_count = 0;
+	return stmt;
+}
+
+AstStatement* MakeSimpleStatement(char* code) {
+	AstStatement* stmt = MakeStatement(SIMPLE_STMT, code);
 	return stmt;
 }
 
 AstStatement* MakeBlockStatement(StatementType type, char* code) {
-	AstStatement* stmt = (AstStatement*)calloc(1, sizeof(AstStatement));
-	stmt->type = type;
-	stmt->code = code;
+	AstStatement* stmt = MakeStatement(type, code);
 	stmt->sub = NewList();
-	stmt->sub_print_count = 0;
 	return stmt;
 }
 
@@ -105,7 +108,7 @@ void PrintBlockStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 	StringBuffer* startCode = StringBuffer_new(NULL);
 	StringBuffer* endCode = StringBuffer_new(NULL);
 	switch (stmt->type) {
-	case BLOCK_STMT:
+	case DO_STMT:
 		StringBuffer_printf(startCode, "do");
 		StringBuffer_printf(endCode, "end");
 		break;
@@ -209,7 +212,7 @@ void PrintAstStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 	case SIMPLE_STMT:
 		PrintSimpleStatement(stmt, buff, indent);
 		break;
-	case BLOCK_STMT:
+	case DO_STMT:
 	case FUNCTION_STMT:
 	case WHILE_STMT:
 	case REPEAT_STMT:

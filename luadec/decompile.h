@@ -16,16 +16,6 @@ struct BoolOp_ {
 	int dest;
 };
 
-typedef enum LoopType_ LoopType;
-enum LoopType_ {
-	FUNC_ROOT,
-	WHILE,
-	WHILE1,
-	REPEAT,
-	FORLOOP,
-	TFORLOOP
-};
-
 typedef struct LoopItem_ LoopItem;
 struct LoopItem_ {
 	LoopItem* parent;
@@ -33,7 +23,7 @@ struct LoopItem_ {
 	LoopItem* prev;
 	LoopItem* next;
 
-	LoopType type;
+	StatementType type;
 	int prep;
 	int start;
 	int body;
@@ -41,6 +31,7 @@ struct LoopItem_ {
 	int out;
 
 	int indent;
+	AstStatement* block;
 };
 
 typedef struct Function_ Function;
