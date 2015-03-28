@@ -304,6 +304,10 @@
 				RelativePath="..\lua-5.3\src\lctype.c"
 				>
 			</File>
+			<File
+				RelativePath="..\lua-5.3\src\lutf8lib.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -407,7 +411,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\lua-5.3\src\lutf8lib.c"
+				RelativePath="..\lua-5.3\src\lprefix.h"
 				>
 			</File>
 		</Filter>

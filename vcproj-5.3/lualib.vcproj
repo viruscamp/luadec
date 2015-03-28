@@ -388,6 +388,10 @@
 				RelativePath="..\lua-5.3\src\lctype.h"
 				>
 			</File>
+			<File
+				RelativePath="..\lua-5.3\src\lprefix.h"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
