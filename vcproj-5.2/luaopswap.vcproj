@@ -184,10 +184,6 @@
 				RelativePath="..\luadec\luaopswap.c"
 				>
 			</File>
-			<File
-				RelativePath="..\luadec\lundump-5.2.c"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"

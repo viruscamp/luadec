@@ -74,9 +74,13 @@ allopcodes.luac: $(BINDIR)/allopcodes.lua
 allopcodes_luac.h: allopcodes.luac
 	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
 
+LUNDUMP:=
+ifeq ($(LUAVER),5.1)
+	LUNDUMP:=lundump-5.1.o
+endif
+lundump-5.1.o: lundump-5.1.c
 luaopswap.o: luaopswap.c allopcodes_lua.h allopcodes_luac.h
-lundump-$(LUAVER).o: lundump-$(LUAVER).c
-luaopswap: luaopswap.o lundump-$(LUAVER).o $(LIBDIR)/liblua.a
+luaopswap: luaopswap.o $(LUNDUMP) $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
 clean:
