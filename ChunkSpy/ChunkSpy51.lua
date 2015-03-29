@@ -9,6 +9,7 @@
   The COPYRIGHT file describes the conditions under which this
   software may be distributed (basically a Lua 5-style license.)
 
+  https://github.com/viruscamp/luadec/tree/master/ChunkSpy
   http://luaforge.net/projects/chunkspy/
   http://www.geocities.com/keinhong/chunkspy.html
   See the ChangeLog for more information.

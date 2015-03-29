@@ -2,7 +2,7 @@
 --[[-------------------------------------------------------------------
 
   ChunkSpy.lua
-  A Lua 5.2 binary chunk disassembler
+  A Lua 5.3 binary chunk disassembler
   ChunkSpy was inspired by Nick Trout's vmmerge5.lua
 
   Copyright (c) 2004-2006 Kein-Hong Man <khman@users.sf.net>
@@ -26,9 +26,9 @@
 --]]-------------------------------------------------------------------
 
 title = [[
-ChunkSpy: A Lua 5.2 binary chunk disassembler
-Version 0.9.9 (20141022)
-Copyright (c) 2004-2006 Kein-Hong Man , 2014 VirusCamp
+ChunkSpy: A Lua 5.3 binary chunk disassembler
+Version 0.9.9 (20150329)
+Copyright (c) 2004-2006 Kein-Hong Man , 2014-2015 VirusCamp
 The COPYRIGHT file describes the conditions under which this
 software may be distributed (basically a Lua 5-style license.)
 ]]
@@ -122,11 +122,11 @@ CONFIGURATION = {
 config = {}
 
 function CheckLuaVersion(fmt)
-  if _VERSION ~= "Lua 5.2" then
+  if _VERSION ~= "Lua 5.3" then
     if type(fmt) == "string" then
-      msg = string.format(fmt, "Lua 5.2")
+      msg = string.format(fmt, "Lua 5.3")
     else
-      msg = "needs Lua 5.2"
+      msg = "needs Lua 5.3"
     end
     error(msg)
   end
@@ -140,7 +140,7 @@ function SetProfile(profile)
     local LUA_SAMPLE = string.dump(function() end)
     -- config.* profile parms set in ChunkSpy() call...
     config.SIGNATURE = "\27Lua"
-    config.LUAC_TAIL = "\25\147\r\n\26\n"
+    config.LUAC_DATA = "\25\147\r\n\26\n"
     local ok, _ = pcall(ChunkSpy, "", LUA_SAMPLE)
     if not ok then error("error compiling sample to test local profile") end
     config.DISPLAY_FLAG, config.AUTO_DETECT = flag1, flag2
@@ -149,7 +149,7 @@ function SetProfile(profile)
     local c = CONFIGURATION[profile]
     if not c then return false end
     if not c.SIGNATURE then c.SIGNATURE = "\27Lua" end
-    if not c.LUAC_TAIL then c.LUAC_TAIL = "\25\147\r\n\26\n" end
+    if not c.LUAC_DATA then c.LUAC_DATA = "\25\147\r\n\26\n" end
     for i, v in pairs(c) do config[i] = v end
   end
   return true
@@ -162,13 +162,13 @@ SetProfile("x86 standard") -- default profile
 --   added for constant table; TEST_NUMBER removed; FORMAT added
 -----------------------------------------------------------------------
 config.SIGNATURE    = "\27Lua"
-config.LUAC_TAIL    = "\25\147\r\n\26\n" -- new in 5.2 tail of header
+config.LUAC_DATA    = "\25\147\r\n\26\n" -- new in 5.2 tail of header, LUAC_DATA="\x19\x93\r\n\x1a\n"
 -- TEST_NUMBER no longer needed, using size_lua_Number + integral
 config.LUA_TNIL     = 0
 config.LUA_TBOOLEAN = 1
 config.LUA_TNUMBER  = 3
 config.LUA_TSTRING  = 4
-config.VERSION      = 82 -- 0x52
+config.VERSION      = 83 -- 0x53
 config.FORMAT       = 0  -- LUAC_FORMAT (new in 5.1)
 config.FPF          = 50 -- LFIELDS_PER_FLUSH
 config.SIZE_OP      = 6  -- instruction field bits
@@ -560,11 +560,13 @@ function DecodeInit()
     MOVE LOADK LOADKX LOADBOOL LOADNIL 
     GETUPVAL GETTABUP GETTABLE SETTABUP SETUPVAL 
     SETTABLE NEWTABLE SELF ADD SUB 
-    MUL DIV MOD POW UNM 
-    NOT LEN CONCAT JMP EQ 
-    LT LE TEST TESTSET CALL 
-    TAILCALL RETURN FORLOOP FORPREP TFORCALL 
-    TFORLOOP SETLIST CLOSURE VARARG EXTRAARG 
+    MUL MOD POW DIV IDIV 
+    BAND BOR BXOR SHL SHR 
+    UNM BNOT NOT LEN CONCAT 
+    JMP EQ LT LE TEST 
+    TESTSET CALL TAILCALL RETURN FORLOOP 
+    FORPREP TFORCALL TFORLOOP SETLIST CLOSURE 
+    VARARG EXTRAARG 
   ]]
 
   iABC=0; iABx=1; iAsBx=2; iAx=3
@@ -573,10 +575,12 @@ function DecodeInit()
     iABC,iABC,iABC,iABC,iABC,
     iABC,iABC,iABC,iABC,iABC,
     iABC,iABC,iABC,iABC,iABC,
-    iABC,iABC,iABC,iAsBx,iABC,
     iABC,iABC,iABC,iABC,iABC,
-    iABC,iABC,iAsBx,iAsBx,iABC,
-    iAsBx,iABC,iABx,iABC,iAx
+    iABC,iABC,iABC,iABC,iABC,
+    iAsBx,iABC,iABC,iABC,iABC,
+    iABC,iABC,iABC,iABC,iAsBx,
+    iAsBx,iABC,iAsBx,iABC,iABx,
+    iABC,iAx
   }
 
   ---------------------------------------------------------------
@@ -611,6 +615,13 @@ function DecodeInit()
     [config.opcodes["eq"]]="==",
     [config.opcodes["lt"]]="<",
     [config.opcodes["le"]]="<=",
+    [config.opcodes["idiv"]]="//",
+    [config.opcodes["band"]]="&",
+    [config.opcodes["bor"]]="|",
+    [config.opcodes["bxor"]]="~",
+    [config.opcodes["shl"]]="<<",
+    [config.opcodes["shr"]]=">>",
+    [config.opcodes["bnot"]]="~",
   }
   ---------------------------------------------------------------
   -- initialize text widths and formats for display
@@ -1276,19 +1287,14 @@ function ChunkSpy(chunk_name, chunk)
   end
   FormatLine(1, "format (0=official)", previdx)
 
-  ---------------------------------------------------------------
-  -- test endianness
-  ---------------------------------------------------------------
-  TestChunk(1, idx, "endianness byte")
-  local endianness = LoadByte()
-  if not config.AUTO_DETECT then
-    if endianness ~= config.endianness then
-      error("unsupported endianness")
-    end
-  else
-    config.endianness = endianness
+  -- new in 5.2 called LUAC_TAIL, in 5.3 move here and rename to LUAC_DATA
+  len = string.len(config.LUAC_DATA)
+  TestChunk(len, idx, "LUAC_DATA")
+  local LUAC_DATA = LoadBlock(len, true)
+  if LUAC_DATA ~= config.LUAC_DATA then
+    error("header LUAC_DATA not found, this is not a Lua chunk")
   end
-  FormatLine(1, "endianness (1=little endian)", previdx)
+  FormatLine(len, "LUAC_DATA: "..EscapeString(LUAC_DATA, 1), previdx)
 
   ---------------------------------------------------------------
   -- test sizes
@@ -1307,14 +1313,16 @@ function ChunkSpy(chunk_name, chunk)
     FormatLine(1, string.format("size of %s (%s)", sizename, typename), previdx)
   end
   -- byte sizes
-  TestSize("size_int", "int", "bytes")
-  TestSize("size_size_t", "size_t", "bytes")
-  TestSize("size_Instruction", "Instruction", "bytes")
-  TestSize("size_lua_Number", "number", "bytes")
+  TestSize("size int", "int", "bytes")
+  TestSize("size size_t", "size_t", "bytes")
+  TestSize("size Instruction", "Instruction", "bytes")
+  TestSize("size lua_Integer", "Integer", "bytes")
+  TestSize("size lua_Number", "Number", "bytes")
   -- initialize decoder (see the 5.0.2 script if you want to customize
   -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
-  DecodeInit()
+  --DecodeInit()
 
+  --[[
   ---------------------------------------------------------------
   -- test integral flag (from 5.1)
   ---------------------------------------------------------------
@@ -1341,7 +1349,9 @@ function ChunkSpy(chunk_name, chunk)
     end
   end
   DescLine("* number type: "..config.number_type)
+  --]]
 
+  --[[
   ---------------------------------------------------------------
   -- primitive platform auto-detection
   ---------------------------------------------------------------
@@ -1366,15 +1376,37 @@ function ChunkSpy(chunk_name, chunk)
   end
   DescLine("* "..config.description)
   if config.DISPLAY_BRIEF then WriteLine(config.DISPLAY_COMMENT..config.description) end
+  --]]
   
-  -- LUAC_TAIL new in 5.2
-  len = string.len(config.LUAC_TAIL)
-  TestChunk(len, idx, "LUAC_TAIL")
-  local luac_tail = LoadBlock(len, true)
-  if luac_tail ~= config.LUAC_TAIL then
-    error("header LUAC_TAIL not found, this is not a Lua chunk")
+  ---------------------------------------------------------------
+  -- test endianness
+  -- LUAC_INT = 0x5678 in lua 5.3
+  ---------------------------------------------------------------
+  TestChunk(8, idx, "endianness bytes")
+  local endianness = LoadBlock(8)
+  if not config.AUTO_DETECT then
+    if endianness ~= config.endianness then
+      error("unsupported endianness")
+    end
+  else
+    config.endianness = endianness
   end
-  FormatLine(len, "LUAC_TAIL: "..EscapeString(luac_tail, 1), previdx)
+  FormatLine(8, "endianness", previdx)
+
+  ---------------------------------------------------------------
+  -- test endianness
+  -- LUAC_NUM=cast_num(370.5) in lua 5.3
+  ---------------------------------------------------------------
+  TestChunk(8, idx, "float format bytes")
+  local float_format = LoadBlock(8)
+  if not config.AUTO_DETECT then
+    if float_format ~= config.float_format then
+      error("unsupported float format")
+    end
+  else
+    config.float_format = float_format
+  end
+  FormatLine(8, "float format", previdx)
 
   -- end of global header
   stat.header = idx - 1
@@ -1983,7 +2015,7 @@ function WriteBinaryChunk(parsed, tofile)
   DumpByte(config.size_Instruction)
   DumpByte(config.size_lua_Number)
   DumpByte(config.integral)
-  Dump(config.LUAC_TAIL)
+  Dump(config.LUAC_DATA)
   DecodeInit()
   -- no more test number in 5.1
 
@@ -2475,7 +2507,7 @@ function main()
   ---------------------------------------------------------------
   -- check Lua version
   ---------------------------------------------------------------
-  if _VERSION ~= "Lua 5.2" then
+  if _VERSION ~= "Lua 5.3" then
     if _VERSION < "Lua 5.1" then
       error("this version of ChunkSpy requires Lua 5.1 or 5.2 or 5.3")
     end
