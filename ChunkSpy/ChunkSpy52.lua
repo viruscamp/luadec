@@ -2475,12 +2475,12 @@ function main()
   -- check Lua version
   ---------------------------------------------------------------
   if _VERSION ~= "Lua 5.2" then
-    if _VERSION == "Lua 5.1" then
-      print("using Lua 5.1, process binary chunk only")
-    else
-      error("this version of ChunkSpy requires Lua 5.1 or 5.2")
+    if _VERSION < "Lua 5.1" then
+      error("this version of ChunkSpy requires Lua 5.1 or 5.2 or 5.3")
     end
-  else
+    print("using ".._VERSION..", process binary chunk only")
+  end
+  if _VERSION > "Lua 5.1" then
     loadstring = load
   end
   ---------------------------------------------------------------
@@ -2577,7 +2577,8 @@ function main()
     elseif gotfile then
       ChunkSpy_DoFiles(files)
     else
-      print(title) print("ChunkSpy: nothing to do!")
+      print(title)
+      print("ChunkSpy: nothing to do!")
     end
     OutputExit()
   end

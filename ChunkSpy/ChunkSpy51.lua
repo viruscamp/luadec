@@ -2357,12 +2357,13 @@ function main()
   -- check Lua version
   ---------------------------------------------------------------
   if _VERSION ~= "Lua 5.1" then
-    if _VERSION == "Lua 5.2" then
-      loadstring = load
-      print("using Lua 5.2, process binary chunk only")
-    else
-      error("this version of ChunkSpy requires Lua 5.1 or 5.2")
+    if _VERSION < "Lua 5.1" then
+      error("this version of ChunkSpy requires Lua 5.1 or 5.2 or 5.3")
     end
+    print("using ".._VERSION..", process binary chunk only")
+  end
+  if _VERSION > "Lua 5.1" then
+    loadstring = load
   end
   ---------------------------------------------------------------
   -- handle arguments
@@ -2389,7 +2390,8 @@ function main()
         elseif a == "--brief" then
           config.DISPLAY_BRIEF = true
         elseif a == "--interact" then
-          CheckLuaVersion("--interact needs %s")          perform = ChunkSpy_Interact
+          CheckLuaVersion("--interact needs %s")
+          perform = ChunkSpy_Interact
         ---------------------------------------------------------
         elseif a == "-o" or a == "--source" then
           if not b then error("-o option needs a file name") end
@@ -2425,7 +2427,8 @@ function main()
           i = i + 1
         ---------------------------------------------------------
         elseif a == "--run" then
-          CheckLuaVersion("--run needs %s")          config.DISPLAY_FLAG = false
+          CheckLuaVersion("--run needs %s")
+          config.DISPLAY_FLAG = false
           config.AUTO_DETECT = true
           config.RUN_FLAG = true
         ---------------------------------------------------------
@@ -2456,7 +2459,8 @@ function main()
     elseif gotfile then
       ChunkSpy_DoFiles(files)
     else
-      print(title) print("ChunkSpy: nothing to do!")
+      print(title)
+      print("ChunkSpy: nothing to do!")
     end
     OutputExit()
   end
