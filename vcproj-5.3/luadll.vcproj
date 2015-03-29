@@ -65,7 +65,9 @@
 				OutputFile="$(OutDir)\lua53.dll"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
+				ProgramDatabaseFile="$(TargetDir)lua53.pdb"
 				SubSystem="2"
+				ImportLibrary="$(TargetDir)lua53.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -140,9 +142,11 @@
 				OutputFile="$(OutDir)\lua53.dll"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
+				ProgramDatabaseFile="$(TargetDir)lua53.pdb"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
+				ImportLibrary="$(TargetDir)lua53.lib"
 				TargetMachine="1"
 			/>
 			<Tool

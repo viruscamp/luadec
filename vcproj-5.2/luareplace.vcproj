@@ -25,7 +25,6 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -102,7 +101,6 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-git-srcversion.cmd&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
