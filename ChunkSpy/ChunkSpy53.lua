@@ -83,32 +83,38 @@ lines to be strung together.
 
 CONFIGURATION = {
   ["x86 standard"] = {
-    description = "x86 standard (32-bit, little endian, doubles)",
+    description = "x86 standard (32-bit, little endian, long long, double)",
     endianness = 1,             -- 1 = little endian
     size_int = 4,               -- (data type sizes in bytes)
     size_size_t = 4,
     size_Instruction = 4,
+    size_lua_Integer = 8,
+    integer_type = "long long",
     size_lua_Number = 8,        -- this & integral identifies the
     integral = 0,               -- type of lua_Number
     number_type = "double",     -- used for lookups
   },
   ["big endian int"] = {
-    description = "(32-bit, big endian, ints)",
+    description = "(32-bit, big endian, int, int)",
     endianness = 0,
     size_int = 4,
     size_size_t = 4,
     size_Instruction = 4,
+    size_lua_Integer = 4,
+    integer_type = "int",
     size_lua_Number = 4,
     integral = 1,
     number_type = "int",
   },
   -- you can add more platforms here
   ["x86 single"] = {
-    description = "x86 single (32-bit, little endian, singles)",
+    description = "x86 single (32-bit, little endian, int, single)",
     endianness = 1,
     size_int = 4,
     size_size_t = 4,
     size_Instruction = 4,
+    size_lua_Integer = 4,
+    integer_type = "int",
     size_lua_Number = 4,
     integral = 0,
     number_type = "single",
@@ -167,7 +173,11 @@ config.LUAC_DATA    = "\25\147\r\n\26\n" -- new in 5.2 tail of header, LUAC_DATA
 config.LUA_TNIL     = 0
 config.LUA_TBOOLEAN = 1
 config.LUA_TNUMBER  = 3
+config.LUA_TNUMFLT  = config.LUA_TNUMBER | (0 << 4)
+config.LUA_TNUMINT  = config.LUA_TNUMBER | (1 << 4)
 config.LUA_TSTRING  = 4
+config.LUA_TSHRSTR  = config.LUA_TSTRING | (0 << 4)
+config.LUA_TLNGSTR  = config.LUA_TSTRING | (1 << 4)
 config.VERSION      = 83 -- 0x53
 config.FORMAT       = 0  -- LUAC_FORMAT (new in 5.1)
 config.FPF          = 50 -- LFIELDS_PER_FLUSH
@@ -178,6 +188,15 @@ config.SIZE_C       = 9
 -- MAX_STACK no longer needed for instruction decoding, removed
 -- LUA_FIRSTINDEX currently not supported; used in SETLIST
 config.LUA_FIRSTINDEX = 1
+
+config.typestr = {
+[config.LUA_TNIL] = "LUA_TNIL",
+[config.LUA_TBOOLEAN] = "LUA_TBOOLEAN",
+[config.LUA_TNUMFLT] = "LUA_TNUMFLT",
+[config.LUA_TNUMINT] = "LUA_TNUMINT",
+[config.LUA_TSHRSTR] = "LUA_TSHRSTR",
+[config.LUA_TLNGSTR] = "LUA_TLNGSTR",
+}
 
 -----------------------------------------------------------------------
 -- display options: you can set your defaults here
@@ -234,55 +253,62 @@ LUANUMBER_ID = {
 -- Converts an 8-byte little-endian string to a IEEE754 double number
 -- * NOTE: see warning about accuracy in the header comments!
 -----------------------------------------------------------------------
-convert_from["double"] = function(x)
+local function convert_from_double(x)
   local sign = 1
   local mantissa = string.byte(x, 7) % 16
   for i = 6, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
   if string.byte(x, 8) > 127 then sign = -1 end
   local exponent = (string.byte(x, 8) % 128) * 16 +
                    math.floor(string.byte(x, 7) / 16)
-  if exponent == 0 then return 0 end
-  mantissa = (math.ldexp(mantissa, -52) + 1) * sign
+  if exponent == 0 then return 0.0 end
+  mantissa = (math.ldexp(mantissa, -52) + 1.0) * sign
   return math.ldexp(mantissa, exponent - 1023)
 end
+convert_from["double"] = convert_from_double
 
 -----------------------------------------------------------------------
 -- Converts a 4-byte little-endian string to a IEEE754 single number
 -- * TODO UNTESTED!!! *
 -----------------------------------------------------------------------
-convert_from["single"] = function(x)
+local function convert_from_single(x)
   local sign = 1
   local mantissa = string.byte(x, 3) % 128
   for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
   if string.byte(x, 4) > 127 then sign = -1 end
   local exponent = (string.byte(x, 4) % 128) * 2 +
                    math.floor(string.byte(x, 3) / 128)
-  if exponent == 0 then return 0 end
-  mantissa = (math.ldexp(mantissa, -23) + 1) * sign
+  if exponent == 0 then return 0.0 end
+  mantissa = (math.ldexp(mantissa, -23) + 1.0) * sign
   return math.ldexp(mantissa, exponent - 127)
 end
+convert_from["single"] = convert_from_single
 
 -----------------------------------------------------------------------
 -- Converts a little-endian integer string to a number
 -- * TODO UNTESTED!!! *
 -----------------------------------------------------------------------
-convert_from["int"] = function(x)
+local function convert_from_int(x, size_int)
+  size_int = size_int or 8
   local sum = 0
-  for i = config.size_lua_Number, 1, -1 do
-    sum = sum * 256 + string.byte(x, i)
-  end
+  local highestbyte = string.byte(x, size_int)
   -- test for negative number
-  if string.byte(x, config.size_lua_Number) > 127 then
-    sum = sum - math.ldexp(1, 8 * config.size_lua_Number)
+  if highestbyte <= 127 then
+    sum = highestbyte
+  else
+    sum = highestbyte - 256
+  end
+  for i = size_int-1, 1, -1 do
+    sum = sum * 256 + string.byte(x, i)
   end
   return sum
 end
+convert_from["int"] = function(x) return convert_from_int(x, 4) end
 
 -----------------------------------------------------------------------
 -- * WARNING this will fail for large long longs (64-bit numbers)
 --   because long longs exceeds the precision of doubles.
 -----------------------------------------------------------------------
-convert_from["long long"] = convert_from["int"]
+convert_from["long long"] = convert_from_int
 
 -----------------------------------------------------------------------
 -- Converts a IEEE754 double number to an 8-byte little-endian string
@@ -335,17 +361,18 @@ end
 -- * TODO UNTESTED!!! *
 -----------------------------------------------------------------------
 
-convert_to["int"] = function(x)
+convert_to["int"] = function(x, size_int)
+  size_int = size_int or config.size_lua_Integer or 4
   local v = ""
   x = math.floor(x)
   if x >= 0 then
-    for i = 1, config.size_lua_Number do
+    for i = 1, size_int do
       v = v..string.char(x % 256); x = math.floor(x / 256)
     end
   else-- x < 0
     x = -x
     local carry = 1
-    for i = 1, config.size_lua_Number do
+    for i = 1, size_int do
       local c = 255 - (x % 256) + carry
       if c == 256 then c = 0; carry = 1 else carry = 0 end
       v = v..string.char(c); x = math.floor(x / 256)
@@ -671,7 +698,7 @@ function DecodeInst(code, iValues)
   for i = 1, #iSeq do
     -- if need more bits, suck in a byte at a time
     while cBits < iSeq[i] do
-      cValue = string.byte(code, cPos) * math.ldexp(1, cBits) + cValue
+      cValue = string.byte(code, cPos) * 2 ^ cBits + cValue
       cPos = cPos + 1; cBits = cBits + 8
     end
     -- extract and set an instruction field
@@ -702,7 +729,7 @@ function EncodeInst(inst)
   while i < config.size_Instruction do
     -- if need more bits, suck in a field at a time
     while cBits < 8 do
-      cValue = inst[config.nABC[cPos]] * math.ldexp(1, cBits) + cValue
+      cValue = inst[config.nABC[cPos]] << cBits + cValue
       cBits = cBits + config.iABC[cPos]; cPos = cPos + 1
     end
     -- extract bytes to instruction string
@@ -932,13 +959,20 @@ function DescribeInst(inst, pos, func)
          isop("MUL") or   -- MUL A B C
          isop("DIV") or   -- DIV A B C
          isop("MOD") or   -- MOD A B C
-         isop("POW") then -- POW A B C
+         isop("POW") or   -- POW A B C
+         isop("IDIV") or  -- IDIV A B C
+         isop("BAND") or  -- BAND A B C
+         isop("BOR") or   -- BOR A B C
+         isop("BXOR") or  -- BXOR A B C
+         isop("SHL") or   -- SHL A B C
+         isop("SHR") then -- SHR A B C
     Operand = OperandABC(inst)
     Comment = string.format("%s := %s %s %s",R(a),RK(b),config.operators[inst.OP],RK(c))
   ---------------------------------------------------------------
-  elseif isop("UNM") or   -- UNM A B
-         isop("NOT") or   -- NOT A B
-         isop("LEN") then -- LEN A B
+  elseif isop("UNM") or    -- UNM A B
+         isop("NOT") or    -- NOT A B
+         isop("LEN") or    -- LEN A B
+         isop("BNOT") then -- BNOT A B
     Operand = OperandAB(inst)
     Comment = string.format("%s := %s %s",R(a),config.operators[inst.OP],RK(b))
   ---------------------------------------------------------------
@@ -1318,9 +1352,10 @@ function ChunkSpy(chunk_name, chunk)
   TestSize("size Instruction", "Instruction", "bytes")
   TestSize("size lua_Integer", "Integer", "bytes")
   TestSize("size lua_Number", "Number", "bytes")
+
   -- initialize decoder (see the 5.0.2 script if you want to customize
   -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
-  --DecodeInit()
+  DecodeInit()
 
   --[[
   ---------------------------------------------------------------
@@ -1383,7 +1418,9 @@ function ChunkSpy(chunk_name, chunk)
   -- LUAC_INT = 0x5678 in lua 5.3
   ---------------------------------------------------------------
   TestChunk(8, idx, "endianness bytes")
-  local endianness = LoadBlock(8)
+  local endianness_bytes = LoadBlock(8)
+  local endianness_value = convert_from["long long"](endianness_bytes, 8)
+  --[[
   if not config.AUTO_DETECT then
     if endianness ~= config.endianness then
       error("unsupported endianness")
@@ -1391,22 +1428,25 @@ function ChunkSpy(chunk_name, chunk)
   else
     config.endianness = endianness
   end
-  FormatLine(8, "endianness", previdx)
+  --]]
+  FormatLine(8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
 
   ---------------------------------------------------------------
   -- test endianness
-  -- LUAC_NUM=cast_num(370.5) in lua 5.3
+  -- LUAC_NUM = cast_num(370.5) in lua 5.3
   ---------------------------------------------------------------
   TestChunk(8, idx, "float format bytes")
-  local float_format = LoadBlock(8)
-  if not config.AUTO_DETECT then
-    if float_format ~= config.float_format then
-      error("unsupported float format")
-    end
-  else
-    config.float_format = float_format
-  end
-  FormatLine(8, "float format", previdx)
+  local float_format_bytes = LoadBlock(8)
+  local float_format_value = convert_from["double"](float_format_bytes)
+  FormatLine(8, "float format "..float_format_value, previdx)
+  
+  ---------------------------------------------------------------
+  -- test endianness
+  -- LUAC_NUM = cast_num(370.5) in lua 5.3
+  ---------------------------------------------------------------
+  TestChunk(1, idx, "global closure additional size")
+  local global_closure_additional_size = LoadByte()
+  FormatLine(1, "global closure additional size "..global_closure_additional_size, previdx)
 
   -- end of global header
   stat.header = idx - 1
@@ -1459,6 +1499,22 @@ function ChunkSpy(chunk_name, chunk)
     end
 
     -------------------------------------------------------------
+    -- loads a integer (lua_Integer type)
+    -------------------------------------------------------------
+    local function LoadInteger()
+      local x = LoadBlock(config.size_lua_Integer)
+      if not x then
+        error("could not load lua_Integer")
+      else
+        local convert_func = convert_from[config.integer_type]
+        if not convert_func then
+          error("could not find conversion function for lua_Integer")
+        end
+        return convert_func(x)
+      end
+    end
+
+    -------------------------------------------------------------
     -- loads a number (lua_Number type)
     -------------------------------------------------------------
     local function LoadNumber()
@@ -1478,19 +1534,32 @@ function ChunkSpy(chunk_name, chunk)
     -- load a string (size, data pairs)
     -------------------------------------------------------------
     local function LoadString()
-      local len = LoadSize()
+      local len = LoadByte()
+      local islngstr = nil
       if not len then
         error("could not load String")
-      else
-        if len == 0 then        -- there is no error, return a nil
-          return nil
-        end
-        TestChunk(len, idx, "LoadString")
-        -- note that ending NUL is removed
-        local s = string.sub(chunk, idx, idx + len - 2)
-        idx = idx + len
-        return s
+        return
       end
+      if len == 255 then
+        len = LoadSize()
+        islngstr = true
+      end
+      if len == 0 then        -- there is no error, return a nil
+        return nil, len, islngstr
+      end
+      if len == 1 then
+        return "", len, islngstr
+      end
+      TestChunk(len - 1, idx, "LoadString")
+      local s = string.sub(chunk, idx, idx + len - 2)
+      idx = idx + len - 1
+      return s, len, islngstr
+    end
+
+    local function LoadString53()
+      local str = {}
+      str.val, str.len, str.islngstr = LoadString()
+      return str
     end
 
     -------------------------------------------------------------
@@ -1516,7 +1585,8 @@ function ChunkSpy(chunk_name, chunk)
       func.sizelocvars = n
       for i = 1, n do
         local locvar = {}
-        locvar.varname = LoadString()
+        locvar.varname53 = LoadString53()
+        locvar.varname = locvar.varname53.val
         locvar.pos_varname = previdx
         locvar.startpc = LoadInt()
         locvar.pos_startpc = previdx
@@ -1547,25 +1617,29 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     -- load constants information (data)
     -------------------------------------------------------------
-    local function LoadConstantKs()
+    local function LoadConstants()
       local n = LoadInt()
       func.pos_ks = previdx
       func.k = {}
+      func.typek = {}
       func.sizek = n
       func.posk = {}
       for i = 1, n do
         local t = LoadByte()
+        func.typek[i] = t
         func.posk[i] = previdx
-        if t == config.LUA_TNUMBER then
-          func.k[i] = LoadNumber()
+        if t == config.LUA_TNIL then
+          func.k[i] = nil
         elseif t == config.LUA_TBOOLEAN then
           local b = LoadByte()
           if b == 0 then b = false else b = true end
           func.k[i] = b
-        elseif t == config.LUA_TSTRING then
-          func.k[i] = LoadString()
-        elseif t == config.LUA_TNIL then
-          func.k[i] = nil
+        elseif t == config.LUA_TNUMFLT then
+          func.k[i] = LoadNumber()
+        elseif t == config.LUA_TNUMINT then
+          func.k[i] = LoadInteger()
+        elseif t == config.LUA_TSHRSTR or t == config.LUA_TLNGSTR then
+          func.k[i] = LoadString53()
         else
           error("bad constant type "..t.." at "..previdx)
         end
@@ -1575,7 +1649,7 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     -- load constants information (local functions)
     -------------------------------------------------------------
-    local function LoadConstantPs()
+    local function LoadProtos()
       local n = LoadInt()
       func.pos_ps = previdx
       func.p = {}
@@ -1604,15 +1678,16 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     local function LoadUpvalueNames()
       local n = LoadInt()
-      if n ~= 0 and n~= func.sizeupvalues then
-        error(string.format("bad nupvalues: read %d, expected %d", n, func.sizeupvalues))
+      if n > func.sizeupvalues then
+        error(string.format("bad upvalue_names: read %d, expected %d", n, func.sizeupvalues))
         return
       end
       func.size_upvalue_names = n
       func.pos_upvalue_names = previdx
       for i = 1, n do
         local upvalue = func.upvalues[i]
-        upvalue.name = LoadString()
+        upvalue.name53 = LoadString53()
+        upvalue.name = upvalue.name53.val
         upvalue.pos_name = previdx
       end
     end
@@ -1628,6 +1703,12 @@ function ChunkSpy(chunk_name, chunk)
       start = idx
     end
 
+    -- source file name, move here in Lua 5.3
+    func.source53 = LoadString53()
+    func.source = func.source53.val
+    func.pos_source = previdx
+    if func.source == nil and level == 1 then func.source = funcname end
+
     -- line where the function was defined
     func.linedefined = LoadInt()
     func.pos_linedefined = previdx
@@ -1637,25 +1718,20 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
-    if TestChunk(4, idx, "function header") then return end
+    if TestChunk(3, idx, "function header") then return end
     func.numparams = LoadByte()
     func.is_vararg = LoadByte()
     func.maxstacksize = LoadByte()
     SetStat("header")
 
     -------------------------------------------------------------
-    -- these are lists, LoadConstantPs() may be recursive
+    -- these are lists, LoadProtos() may be recursive
     -------------------------------------------------------------
-    -- load parts of a chunk (rearranged in 5.1)
+    -- load parts of a chunk
     LoadCode()       SetStat("code")
-    LoadConstantKs() SetStat("consts")
-    LoadConstantPs() SetStat("funcs")
+    LoadConstants()  SetStat("consts")
     LoadUpvalues()   SetStat("upvalues")
-
-    -- source file name
-    func.source = LoadString()
-    func.pos_source = previdx
-    if func.source == "" and level == 1 then func.source = funcname end
+    LoadProtos()     SetStat("funcs")
 
     LoadLines()          SetStat("lines")
     LoadLocals()         SetStat("locals")
@@ -1684,16 +1760,21 @@ function ChunkSpy(chunk_name, chunk)
 
     -------------------------------------------------------------
     -- describe a string (size, data pairs)
+    -- changed for lua 5.3
+    -- s = { val=nil, len=0, islngstr=nil }, { val="", len=1, islngstr=nil }, { val="ab", len=3, islngstr=nil }
     -------------------------------------------------------------
-    local function DescString(s, pos)
-      local len = string.len(s or "")
-      if len > 0 then 
-        len = len + 1   -- add the NUL back
-        s = s.."\0"     -- was removed by LoadString
+    local function DescString(str, pos)
+      local len = str.len
+      local s = str.val
+      if str.islngstr then
+        FormatLine(1 + config.size_size_t, string.format("long string size (%d)", len), pos)
+        pos = pos + 1 + config.size_size_t
+      else
+        FormatLine(1, string.format("string size (%d)", len), pos)
+        pos = pos + 1
       end
-      FormatLine(config.size_size_t, string.format("string size (%s)", len), pos)
       if len == 0 then return end
-      pos = pos + config.size_size_t
+      len = len - 1
       if len <= config.WIDTH_HEX then
         FormatLine(len, EscapeString(s, 1), pos)
       else
@@ -1739,7 +1820,7 @@ function ChunkSpy(chunk_name, chunk)
       FormatLine(config.size_int, "sizelocvars ("..n..")", func.pos_locvars)
       for i = 1, n do
         local locvar = func.locvars[i]
-        DescString(locvar.varname, locvar.pos_varname)
+        DescString(locvar.varname53, locvar.pos_varname)
         DescLine("local ["..(i - 1).."]: "..EscapeString(locvar.varname))
         FormatLine(config.size_int, "  startpc ("..locvar.startpc..")", locvar.pos_startpc)
         FormatLine(config.size_int, "  endpc   ("..locvar.endpc..")",locvar.pos_endpc)
@@ -1791,14 +1872,14 @@ function ChunkSpy(chunk_name, chunk)
       for i = 1, n do
         local upvalue = func.upvalues[i]
         DescLine("upvalue ["..(i - 1).."]: "..EscapeString(upvalue.name))
-        DescString(upvalue.name, upvalue.pos_name)
+        DescString(upvalue.name53, upvalue.pos_name)
       end
     end
 
     -------------------------------------------------------------
     -- describe constants information (data)
     -------------------------------------------------------------
-    local function DescConstantKs()
+    local function DescConstants()
       local n = func.sizek
       local pos = func.pos_ks
       DescLine("* constants:")
@@ -1808,21 +1889,23 @@ function ChunkSpy(chunk_name, chunk)
         local CONST = "const ["..(i - 1).."]: "
         local CONSTB = config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1)
         local k = func.k[i]
-        if type(k) == "number" then
-          FormatLine(1, "const type "..config.LUA_TNUMBER, posk)
+        local typek = func.typek[i]
+        local typestrk = config.typestr[typek]
+        FormatLine(1, "const type "..typestrk, posk)
+        if typek == config.LUA_TNUMFLT then
           FormatLine(config.size_lua_Number, CONST.."("..k..")", posk + 1)
           BriefLine(".const"..config.DISPLAY_SEP..k..CONSTB)
-        elseif type(k) == "boolean" then
-          FormatLine(1, "const type "..config.LUA_TBOOLEAN, posk)
+        elseif typek == config.LUA_TNUMINT then
+          FormatLine(config.size_lua_Integer, CONST.."("..k..")", posk + 1)
+          BriefLine(".const"..config.DISPLAY_SEP..k..CONSTB)
+        elseif typek == config.LUA_TBOOLEAN then
           FormatLine(1, CONST.."("..tostring(k)..")", posk + 1)
           BriefLine(".const"..config.DISPLAY_SEP..tostring(k)..CONSTB)
-        elseif type(k) == "string" then
-          FormatLine(1, "const type "..config.LUA_TSTRING, posk)
+        elseif typek == config.LUA_TSHRSTR or typek == config.LUA_TLNGSTR then
           DescString(k, posk + 1)
-          DescLine(CONST..EscapeString(k, 1))
-          BriefLine(".const"..config.DISPLAY_SEP..EscapeString(k, 1)..CONSTB)
-        elseif type(k) == "nil" then
-          FormatLine(1, "const type "..config.LUA_TNIL, posk)
+          DescLine(CONST..EscapeString(k.val, 1))
+          BriefLine(".const"..config.DISPLAY_SEP..EscapeString(k.val, 1)..CONSTB)
+        elseif typek == config.LUA_TNIL then
           DescLine(CONST.."nil")
           BriefLine(".const"..config.DISPLAY_SEP.."nil"..CONSTB)
         end
@@ -1832,7 +1915,7 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     -- describe constants information (local functions)
     -------------------------------------------------------------
-    local function DescConstantPs()
+    local function DescProtos()
       local n = func.sizep
       DescLine("* functions:")
       FormatLine(config.size_int, "sizep ("..n..")", func.pos_ps)
@@ -1877,7 +1960,7 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     local function DescSource()
       -- source file name
-      DescString(func.source, func.pos_source)
+      DescString(func.source53, func.pos_source)
       if func.source == nil then
         DescLine("source name: (none)")
       else
@@ -1897,6 +1980,8 @@ function ChunkSpy(chunk_name, chunk)
 
     -- optionally initialize source listing merging
     SourceInit(func.source)
+
+    DescSource()
 
     -- line where the function was defined
     local pos = func.pos_linedefined
@@ -1919,16 +2004,15 @@ function ChunkSpy(chunk_name, chunk)
       -- brief displays 'declarations' first
       DescLocals()
       DescUpvaluesAll()
-      DescConstantKs()
+      DescConstants()
       DescCode()
-      DescConstantPs()
+      DescProtos()
     else
       -- normal displays positional order
       DescCode()
-      DescConstantKs()
-      DescConstantPs()
+      DescConstants()
       DescUpvalues()  
-      DescSource()
+      DescProtos()
       DescLines()
       DescLocals()
       DescUpvalueNames()
@@ -2508,13 +2592,13 @@ function main()
   -- check Lua version
   ---------------------------------------------------------------
   if _VERSION ~= "Lua 5.3" then
-    if _VERSION < "Lua 5.1" then
-      error("this version of ChunkSpy requires Lua 5.1 or 5.2 or 5.3")
-    end
-    print("using ".._VERSION..", process binary chunk only")
+    error("this version of ChunkSpy requires Lua 5.3")
   end
-  if _VERSION > "Lua 5.1" then
-    loadstring = load
+  loadstring = load
+  if math.ldexp == nil then
+    math.ldexp = function(x, exp)
+      return x * 2^exp
+    end
   end
   ---------------------------------------------------------------
   -- handle arguments
