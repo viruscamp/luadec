@@ -1605,7 +1605,7 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
-    if TestChunk(4, idx, "function header") then return end
+    if TestChunk(3, idx, "function header") then return end
     func.numparams = LoadByte()
     func.is_vararg = LoadByte()
     func.maxstacksize = LoadByte()
