@@ -559,14 +559,14 @@ function DecodeInit()
   ---------------------------------------------------------------
   config.SIZE_Bx = config.SIZE_B + config.SIZE_C
   config.SIZE_Ax = config.SIZE_A + config.SIZE_B + config.SIZE_C
-  local MASK_OP = math.ldexp(1, config.SIZE_OP)
-  local MASK_A  = math.ldexp(1, config.SIZE_A)
-  local MASK_B  = math.ldexp(1, config.SIZE_B)
-  local MASK_C  = math.ldexp(1, config.SIZE_C)
-  local MASK_Bx = math.ldexp(1, config.SIZE_Bx)
-  local MASK_Ax = math.ldexp(1, config.SIZE_Ax)
-  config.MAXARG_sBx = math.floor((MASK_Bx - 1) / 2)
-  config.BITRK = math.ldexp(1, config.SIZE_B - 1)
+  local MASK_OP = 1 << config.SIZE_OP
+  local MASK_A  = 1 << config.SIZE_A
+  local MASK_B  = 1 << config.SIZE_B
+  local MASK_C  = 1 << config.SIZE_C
+  local MASK_Bx = 1 << config.SIZE_Bx
+  local MASK_Ax = 1 << config.SIZE_Ax
+  config.MAXARG_sBx = (MASK_Bx - 1) >> 1
+  config.BITRK = 1 << (config.SIZE_B - 1)
 
   ---------------------------------------------------------------
   -- iABC instruction segment tables
@@ -698,12 +698,12 @@ function DecodeInst(code, iValues)
   for i = 1, #iSeq do
     -- if need more bits, suck in a byte at a time
     while cBits < iSeq[i] do
-      cValue = string.byte(code, cPos) * 2 ^ cBits + cValue
+      cValue = string.byte(code, cPos) * (1 << cBits) + cValue
       cPos = cPos + 1; cBits = cBits + 8
     end
     -- extract and set an instruction field
     iValues[config.nABC[i]] = cValue % iMask[i]
-    cValue = math.floor(cValue / iMask[i])
+    cValue = cValue // iMask[i]
     cBits = cBits - iSeq[i]
   end
   iValues.opname = config.opnames[iValues.OP]   -- get mnemonic
@@ -780,9 +780,10 @@ function DescribeInst(inst, pos, func)
     return (r >= config.BITRK)
   end
   local function Kst(index, quoted)
+    local typec = func.typek[index + 1]
     local c = func.k[index + 1]
-    if type(c) == "string" then
-      return EscapeString(c, quoted)
+    if typec == config.LUA_TSHRSTR or typec == config.LUA_TLNGSTR then
+      return EscapeString(c.val, quoted)
     elseif type(c) == "number" or type(c) == "boolean" then
       return tostring(c)
     else
