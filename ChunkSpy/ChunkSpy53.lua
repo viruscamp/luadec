@@ -887,7 +887,7 @@ function DescribeInst(inst, pos, func)
   -- * see the descriptions in lopcodes.h for more information
   ---------------------------------------------------------------
   if inst.prev then -- continuation of SETLIST
-    Operand = string.format(config.FORMAT_Bx, func.code[pos])..config.PAD_Bx
+    Operand = string.format(config.FORMAT_Ax, inst.Ax)..config.PAD_Ax
   ---------------------------------------------------------------
   elseif isop("MOVE") then -- MOVE A B
     Operand = OperandAB(inst)
@@ -897,13 +897,13 @@ function DescribeInst(inst, pos, func)
     Operand = OperandABx(inst)
     Comment = string.format("%s := %s",R(a),K(bx))
   ---------------------------------------------------------------
-  elseif isop("LOADKX") then -- LOADK A
+  elseif isop("LOADKX") then -- LOADKX A
     Operand = OperandA1(inst)
     Comment = string.format("%s :=",R(a))
   ---------------------------------------------------------------
-  elseif isop("EXTRAARG") then -- LOADK Ax
+  elseif isop("EXTRAARG") then -- EXTRAARG Ax
     Operand = OperandAx(inst)
-    Comment = Kst(ax)
+    Comment = K(ax)
   ---------------------------------------------------------------
   elseif isop("LOADBOOL") then -- LOADBOOL A B C
     Operand = OperandABC(inst)
@@ -1048,7 +1048,9 @@ function DescribeInst(inst, pos, func)
     -- R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B
     if c == 0 then
       -- grab next inst when index position is large
-      c = func.code[pos + 1]
+      local ninst = {}
+      DecodeInst(func.code[pos + 1], ninst)
+      c = ninst.Ax
       func.inst[pos + 1].prev = true
     end
     local start = (c - 1) * config.FPF + 1

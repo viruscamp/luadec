@@ -231,7 +231,7 @@ LUANUMBER_ID = {
 -- Converts an 8-byte little-endian string to a IEEE754 double number
 -- * NOTE: see warning about accuracy in the header comments!
 -----------------------------------------------------------------------
-convert_from["double"] = function(x)
+local function convert_from_double(x)
   local sign = 1
   local mantissa = string.byte(x, 7) % 16
   for i = 6, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
@@ -242,12 +242,13 @@ convert_from["double"] = function(x)
   mantissa = (math.ldexp(mantissa, -52) + 1) * sign
   return math.ldexp(mantissa, exponent - 1023)
 end
+convert_from["double"] = convert_from_double
 
 -----------------------------------------------------------------------
 -- Converts a 4-byte little-endian string to a IEEE754 single number
 -- * TODO UNTESTED!!! *
 -----------------------------------------------------------------------
-convert_from["single"] = function(x)
+local function convert_from_single(x)
   local sign = 1
   local mantissa = string.byte(x, 3) % 128
   for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
@@ -258,28 +259,31 @@ convert_from["single"] = function(x)
   mantissa = (math.ldexp(mantissa, -23) + 1) * sign
   return math.ldexp(mantissa, exponent - 127)
 end
+convert_from["single"] = convert_from_single
 
 -----------------------------------------------------------------------
 -- Converts a little-endian integer string to a number
 -- * TODO UNTESTED!!! *
 -----------------------------------------------------------------------
-convert_from["int"] = function(x)
+local function convert_from_int(x, size_int)
+  size_int = size_int or config.size_lua_Number or 4
   local sum = 0
-  for i = config.size_lua_Number, 1, -1 do
+  for i = size_int, 1, -1 do
     sum = sum * 256 + string.byte(x, i)
   end
   -- test for negative number
-  if string.byte(x, config.size_lua_Number) > 127 then
-    sum = sum - math.ldexp(1, 8 * config.size_lua_Number)
+  if string.byte(x, size_int) > 127 then
+    sum = sum - math.ldexp(1, 8 * size_int)
   end
   return sum
 end
+convert_from["int"] = convert_from_int
 
 -----------------------------------------------------------------------
 -- * WARNING this will fail for large long longs (64-bit numbers)
 --   because long longs exceeds the precision of doubles.
 -----------------------------------------------------------------------
-convert_from["long long"] = convert_from["int"]
+convert_from["long long"] = convert_from_int
 
 -----------------------------------------------------------------------
 -- Converts a IEEE754 double number to an 8-byte little-endian string
@@ -817,7 +821,8 @@ function DescribeInst(inst, pos, func)
   -- * see the descriptions in lopcodes.h for more information
   ---------------------------------------------------------------
   if inst.prev then -- continuation of SETLIST
-    Operand = string.format(config.FORMAT_Bx, func.code[pos])..config.PAD_Bx
+    inst.opname = ""
+    Operand = string.format("%d", convert_from_int(func.code[pos], config.size_Instruction))
   ---------------------------------------------------------------
   elseif isop("MOVE") then -- MOVE A B
     Operand = OperandAB(inst)
@@ -963,7 +968,7 @@ function DescribeInst(inst, pos, func)
     -- R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B
     if c == 0 then
       -- grab next inst when index position is large
-      c = func.code[pos + 1]
+      c = convert_from_int(func.code[pos + 1], config.size_Instruction)
       func.inst[pos + 1].prev = true
     end
     local start = (c - 1) * config.FPF + 1
