@@ -25,7 +25,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd &quot;$(OutDir)&quot;&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd &quot;$(OutDir)&quot; allopcodes-5.1.lua&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
@@ -102,7 +102,7 @@
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
-				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd &quot;$(OutDir)&quot;&#x0D;&#x0A;"
+				CommandLine="cd ..\luadec&#x0D;&#x0A;cmd /c gen-allopcodes-h.cmd &quot;$(OutDir)&quot; allopcodes-5.1.lua&#x0D;&#x0A;"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"

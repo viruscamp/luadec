@@ -67,10 +67,10 @@ luareplace.o: luareplace.c
 luareplace: luareplace.o $(LIBDIR)/liblua.a
 	$(CC) -o $@ $(LDFLAGS) $^ $(LIBS)
 
-allopcodes_lua.h: $(BINDIR)/allopcodes.lua
-	$(BIN2C) $(BINDIR)/allopcodes.lua allopcodes_lua > allopcodes_lua.h
-allopcodes.luac: $(BINDIR)/allopcodes.lua
-	$(LUAC) -o allopcodes.luac $(BINDIR)/allopcodes.lua
+allopcodes_lua.h: $(BINDIR)/allopcodes-$(LUAVER).lua
+	$(BIN2C) $(BINDIR)/allopcodes-$(LUAVER).lua allopcodes_lua > allopcodes_lua.h
+allopcodes.luac: $(BINDIR)/allopcodes-$(LUAVER).lua
+	$(LUAC) -o allopcodes.luac $(BINDIR)/allopcodes-$(LUAVER).lua
 allopcodes_luac.h: allopcodes.luac
 	$(BIN2C) allopcodes.luac allopcodes_luac > allopcodes_luac.h
 
