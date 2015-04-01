@@ -1,3 +1,4 @@
+-- allopcodes-5.2.lua
 -- loadkx extraarg lacks
 local u1,u2,u3
 function f1(a1,a2,...)

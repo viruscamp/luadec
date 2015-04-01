@@ -76,6 +76,7 @@ static void usage(const char* message, const char* arg) {
 		" Swap the opcodes in <input.luac> using method in [opcodes.txt]\n"
 		" Default [opcodes.txt] is '"OPCODES_TXT"'.\n"
 		" Available options are:\n"
+		"  -lua     output allopcodes.lua to stdout and exit\n"
 		"  -o name  output to file 'name' (default is \"%s\")\n"
 		"  -gs      compare <input.luac> with x86-standard allopcodes.luac to generate a opcodes.txt\n"
 		"  -gf      compare <input.luac> with a fresh compiled allopcodes.lua to generate a opcodes.txt\n"
@@ -99,6 +100,10 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("--")) {		/* end of options; skip it */
 			++i;
 			break;
+		}
+		else if (IS("-lua")) {		/* output allopcodes.lua */
+			fwrite(allopcodes_lua, sizeof(unsigned char), allopcodes_lua_len, stdout);
+			exit(EXIT_SUCCESS);
 		}
 		else if (IS("-o")) {		/* output file */
 			output = argv[++i];

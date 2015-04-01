@@ -1,3 +1,4 @@
+-- allopcodes-5.1.lua
 local u1,u2,u3
 function f1(a1,a2,...)
 	local l0 = a1; -- move
