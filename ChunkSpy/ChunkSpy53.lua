@@ -1422,7 +1422,7 @@ function ChunkSpy(chunk_name, chunk)
   ---------------------------------------------------------------
   TestChunk(8, idx, "endianness bytes")
   local endianness_bytes = LoadBlock(8)
-  local endianness_value = convert_from["long long"](endianness_bytes, 8)
+  local endianness_value = convert_from_int(endianness_bytes, 8)
   --[[
   if not config.AUTO_DETECT then
     if endianness ~= config.endianness then
@@ -1440,16 +1440,12 @@ function ChunkSpy(chunk_name, chunk)
   ---------------------------------------------------------------
   TestChunk(8, idx, "float format bytes")
   local float_format_bytes = LoadBlock(8)
-  local float_format_value = convert_from["double"](float_format_bytes)
+  local float_format_value = convert_from_double(float_format_bytes)
   FormatLine(8, "float format "..float_format_value, previdx)
-  
-  ---------------------------------------------------------------
-  -- test endianness
-  -- LUAC_NUM = cast_num(370.5) in lua 5.3
-  ---------------------------------------------------------------
-  TestChunk(1, idx, "global closure additional size")
-  local global_closure_additional_size = LoadByte()
-  FormatLine(1, "global closure additional size "..global_closure_additional_size, previdx)
+
+  TestChunk(1, idx, "global closure nupvalues")
+  local global_closure_nupvalues = LoadByte()
+  FormatLine(1, "global closure nupvalues "..global_closure_nupvalues, previdx)
 
   -- end of global header
   stat.header = idx - 1
@@ -1977,7 +1973,7 @@ function ChunkSpy(chunk_name, chunk)
     DescLine("")
     BriefLine("")
     FormatLine(0, "** function ["..num.."] definition (level "..level..") "..funcnumstr,
-               func.pos_linedefined)
+               func.pos_source)
     BriefLine("; function ["..num.."] definition (level "..level..") "..funcnumstr)
     DescLine("** start of function "..funcnumstr.." **")
 
