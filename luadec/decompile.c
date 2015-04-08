@@ -1709,6 +1709,20 @@ AstStatement* LeaveBlock(Function* F, AstStatement* currStmt, StatementType type
 	}
 }
 
+void PrintLoopTree(LoopItem* li, int indent) {
+	int i = 0;
+	for (i = 0; i < indent; i++) {
+		fprintf(stderr, "  ");
+	}
+	fprintf(stderr, "%s=0x%x prep=%d start=%d body=%d end=%d out=%d block=0x%x \n"
+		,stmttype[li->type], li, li->prep, li->start, li->body, li->end, li->out, li->block);
+	LoopItem* child = li->child;
+	while(child) {
+		PrintLoopTree(child, indent+1);
+		child = child->next;
+	}
+}
+
 char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int i = 0;
 
@@ -1887,6 +1901,11 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 
 	F->loop_ptr = F->loop_tree;
 	next_child = F->loop_tree->child;
+
+	if (debug) {
+		fprintf(stderr, "LoopTree of function %s\n", funcnumstr);
+		PrintLoopTree(F->loop_ptr, 0);
+	}
 
 	for (pc = 0; pc < n; pc++) {
 		Instruction i = code[pc];
@@ -2482,10 +2501,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+2+c;
 
-				if (F->loop_ptr->type != TFORLOOP_STMT) {
-					fprintf(stderr, "F->loop_ptr->type != TFORLOOP_STMT");
+				if (next_child->type != TFORLOOP_STMT) {
+					fprintf(stderr, "next_child->type != TFORLOOP_STMT\n");
 				}
-				tforstmt = F->loop_ptr->block; // TODO check TFORLOOP_STMT
+				tforstmt = next_child->block; // TODO check TFORLOOP_STMT
 				tforstmt->code = StringBuffer_getBuffer(str);
 				AddAstStatement(F, tforstmt);
 				F->currStmt = tforstmt;
@@ -2890,10 +2909,10 @@ LOGIC_NEXT_JMP:
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+3;
 
-				if (F->loop_ptr->type != FORLOOP_STMT) {
-					fprintf(stderr, "F->loop_ptr->type != FORLOOP_STMT");
+				if (next_child->type != FORLOOP_STMT) {
+					fprintf(stderr, "next_child->type != FORLOOP_STMT\n");
 				}
-				forstmt = F->loop_ptr->block; // TODO check FORLOOP_STMT
+				forstmt = next_child->block; // TODO check FORLOOP_STMT
 				forstmt->code = StringBuffer_getBuffer(str);
 				AddAstStatement(F, forstmt);
 				F->currStmt = forstmt;
