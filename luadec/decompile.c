@@ -1043,7 +1043,7 @@ Function* NewFunction(const Proto* f) {
 	InitList(&(self->vpend));
 	self->tpend = NewIntSet(0);
 
-	self->loop_tree = NewLoopItem(FUNCTION_STMT,-1,-1,0,f->sizecode-1,f->sizecode);
+	self->loop_tree = NewLoopItem(FUNCTION_STMT,-1,0,0,f->sizecode-1,f->sizecode);
 	self->loop_ptr = self->loop_tree;
 
 	self->funcBlock = self->loop_tree->block;
@@ -1710,13 +1710,13 @@ AstStatement* LeaveBlock(Function* F, AstStatement* currStmt, StatementType type
 }
 
 void PrintLoopTree(LoopItem* li, int indent) {
+	LoopItem* child = li->child;
 	int i = 0;
 	for (i = 0; i < indent; i++) {
 		fprintf(stderr, "  ");
 	}
 	fprintf(stderr, "%s=0x%x prep=%d start=%d body=%d end=%d out=%d block=0x%x \n"
 		,stmttype[li->type], li, li->prep, li->start, li->body, li->end, li->out, li->block);
-	LoopItem* child = li->child;
 	while(child) {
 		PrintLoopTree(child, indent+1);
 		child = child->next;
@@ -1892,7 +1892,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					}
 				} else {
 					// WHILE jump back
-					LoopItem* item = NewLoopItem(WHILE_STMT, dest, dest, -1, pc, real_end);
+					LoopItem* item = NewLoopItem(WHILE_STMT, dest, dest, dest, pc, real_end);
 					AddToLoopTree(F, item);
 				}
 			}
@@ -2435,7 +2435,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				AstStatement* ifstmt = F->currStmt->parent;
 				F->currStmt = ElseStmt(ifstmt);
 				ElseStart(ifstmt) = GetJmpAddr(F, dest);
-			} else if (GET_OPCODE(idest) == LUADEC_TFORLOOP) { // jmp of generic for
+			} else if (next_child && next_child->type == TFORLOOP_STMT
+				&& next_child->prep == pc ) { // jmp of generic for
 				// TODO 5.2 OP_TFORCALL
 				/*
 				* generic 'for'
@@ -2444,6 +2445,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				const char *generator, *control, *state;
 				const char* vname[40];
 				AstStatement* tforstmt = NULL;
+
+				if (GET_OPCODE(idest) != LUADEC_TFORLOOP) {
+					fprintf(stderr, "error JMP at %d of TFORLOOP_STMT : GET_OPCODE(idest) != LUADEC_TFORLOOP\n", pc);
+				}
 
 				a = GETARG_A(idest);
 				c = GETARG_C(idest);
@@ -2501,9 +2506,6 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				F->intbegin[F->intspos] = a;
 				F->intend[F->intspos] = a+2+c;
 
-				if (next_child->type != TFORLOOP_STMT) {
-					fprintf(stderr, "next_child->type != TFORLOOP_STMT\n");
-				}
 				tforstmt = next_child->block; // TODO check TFORLOOP_STMT
 				tforstmt->code = StringBuffer_getBuffer(str);
 				AddAstStatement(F, tforstmt);
