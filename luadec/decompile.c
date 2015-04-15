@@ -1061,8 +1061,6 @@ Function* NewFunction(const Proto* f) {
 
 	InitList(&(self->bools));
 
-	self->intspos = 0;
-
 	self->funcnumstr = NULL;
 
 	return self;
@@ -2453,7 +2451,6 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				a = GETARG_A(idest);
 				c = GETARG_C(idest);
 
-				F->intspos++;
 				generator = GetR(F, a);
 				control = GetR(F, a + 2);
 				state = GetR(F, a + 1);
@@ -2503,10 +2500,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				F->Rinternal[a + 1] = 1;
 				F->Rinternal[a + 2] = 1;
 
-				F->intbegin[F->intspos] = a;
-				F->intend[F->intspos] = a+2+c;
-
-				tforstmt = next_child->block; // TODO check TFORLOOP_STMT
+				tforstmt = next_child->block;
 				tforstmt->code = StringBuffer_getBuffer(str);
 				AddAstStatement(F, tforstmt);
 				F->currStmt = tforstmt;
@@ -2793,16 +2787,20 @@ LOGIC_NEXT_JMP:
 		}
 		case OP_FORLOOP: //Lua5.1 specific. TODO: CHECK
 		{
-			int i;
 			AstStatement* currStmt = F->currStmt;
 
-			for (i=F->intbegin[F->intspos]; i<=F->intend[F->intspos]; i++)
+			int i, r_begin, r_end;
+			Instruction i_forprep = code[pc + sbc];
+			int a_forprep = GETARG_A(i_forprep);
+			assert(GET_OPCODE(i_forprep)==OP_FORPREP);
+			r_begin = a_forprep;
+			r_end = a_forprep+3;
+			for (i=r_begin; i<=r_end; i++)
 			{
-				//fprintf(stderr,"X %d\n",i);
 				IS_VARIABLE(i)=0;
 				F->Rinternal[i] = 0;
 			}
-			F->intspos--;
+
 			F->ignore_for_variables = 0;
 
 			F->currStmt = LeaveBlock(F, currStmt, FORLOOP_STMT);
@@ -2817,14 +2815,16 @@ LOGIC_NEXT_JMP:
 			// 5.2 OP_TFORCALL	A C		R(A+3), ... ,R(A+2+C) := R(A)(R(A+1), R(A+2));
 			// 5.2 OP_TFORLOOP	A sBx	if R(A+1) ~= nil then { R(A)=R(A+1); pc += sBx }
 
-			int i;
 			AstStatement* currStmt = F->currStmt;
-			for (i=F->intbegin[F->intspos]; i<=F->intend[F->intspos]; i++)
+
+			int i, r_begin, r_end;
+			r_begin = a;
+			r_end = a+2+c;
+			for (i=r_begin; i<=r_end; i++)
 			{
 				IS_VARIABLE(i)=0;
 				F->Rinternal[i] = 0;
 			}
-			F->intspos--;
 
 			F->ignore_for_variables = 0;
 
@@ -2848,7 +2848,7 @@ LOGIC_NEXT_JMP:
 				const char *initial, *a1str, *endstr;
 				int stepLen;
 				AstStatement* forstmt = NULL;
-				F->intspos++;
+
 				TRY(initial = GetR(F, a));
 				TRY(endstr = GetR(F, a+2));
 				TRY(a1str = GetR(F, a+1));
@@ -2908,8 +2908,6 @@ LOGIC_NEXT_JMP:
 				F->Rinternal[a + 1] = 1;
 				F->Rinternal[a + 2] = 1;
 				F->Rinternal[a + 3] = 1;
-				F->intbegin[F->intspos] = a;
-				F->intend[F->intspos] = a+3;
 
 				if (next_child->type != FORLOOP_STMT) {
 					fprintf(stderr, "next_child->type != FORLOOP_STMT\n");

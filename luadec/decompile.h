@@ -95,11 +95,6 @@ struct Function_ {
 	/* indent */
 	int indent;
 
-	/* internal variable stack */
-	int intspos;
-	int intbegin[100];
-	int intend[100];
-
 	char* funcnumstr;
 };
 
