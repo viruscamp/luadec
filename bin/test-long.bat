@@ -12,8 +12,8 @@ for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -fc -ns %%f 2>>error_fc_ns.txt 
 for /r ..\test %%f in (*.lua) do @luadec -fc -fn 0_3 %%f 2>>error_fc_fn.txt | findstr /r /c:"-- function check" >>result_fc_fn.txt
 for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -fc -fn 0_3 %%f 2>>error_fc_fn.txt | findstr /r /c:"-- function check" >>result_fc_fn.txt
 
-for /r ..\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
-for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
+rem for /r ..\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
+rem for /r ..\lua-5.1\test %%f in (*.lua) do @luadec -s -fc %%f 2>>error_fc_s.txt | findstr /r /c:"-- function check" >>result_fc_s.txt
 
 
 del error_dis.txt
