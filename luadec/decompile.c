@@ -2385,8 +2385,8 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		case OP_JMP:
 		{
 			// instead OP_CLOSE in 5.2 : if (A) close all upvalues >= R(A-1)
-			int dest = sbc + pc + 2;
-			Instruction idest = code[dest - 1];
+			int dest = sbc + pc + 1;
+			Instruction idest = code[dest];
 			IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
 			if (foundInt != NULL) { // break
 				free(foundInt);
@@ -2417,10 +2417,11 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					}
 				}
 				F->currStmt = LeaveBlock(F, F->currStmt, WHILE_STMT);
-			} else if (F->currStmt->type == IF_THEN_STMT && ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc + 1)) { // jmp before 'else'
+			} else if (F->currStmt->type == IF_THEN_STMT && ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc + 1)) {
+				// jmp before 'else'
 				AstStatement* ifstmt = F->currStmt->parent;
 				F->currStmt = ElseStmt(ifstmt);
-				ElseStart(ifstmt) = GetJmpAddr(F, dest);
+				ElseStart(ifstmt) = GetJmpAddr(F, dest); // reuse ElseStart as pc of endif
 			} else if (next_child && next_child->type == TFORLOOP_STMT
 				&& next_child->prep == pc ) { // jmp of generic for
 				// TODO 5.2 OP_TFORCALL
@@ -2495,6 +2496,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				break;
 			} else if (sbc == 2 && GET_OPCODE(code[pc+2]) == OP_LOADBOOL) {
 				/*
+				* y = (a > b or c) -- assigne statement may be bool or value
 				* JMP 2
 				* LOADBOOL Ra 0 1 must mark one as useful
 				* LOADBOOL Ra 1 0
@@ -2524,6 +2526,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				}
 			} else if (GET_OPCODE(idest) == OP_LOADBOOL) { // WHY
 				/*
+				* y = (a or b==c) -- assigne statement may be bool (calucate at last)
 				* constant boolean value
 				* JMP 
 				* ....skipped , not decompiled
@@ -2537,7 +2540,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 				fprintf(stderr, "\n");
 				fprintf(stderr, " at lua function %s pc=%d\n\n", funcnumstr, pc);
 				fflush(stderr);
-				pc = dest - 2;
+				//pc = dest - 2;
 			} else if (sbc == 0) {
 				/* dummy jump -- ignore it */
 				break;
@@ -2567,12 +2570,15 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 					pc = nextpc-1;
 					break;
 				}
+
+				/*
 				if (F->indent > baseIndent) {
 					StringBuffer_printf(str, "do return end");
+					TRY(AddStatement(F, str));
 				} else {
 					pc = dest-2;
 				}
-				TRY(AddStatement(F, str));
+				*/
 				}
 			}
 			break;
@@ -3034,21 +3040,7 @@ LOGIC_NEXT_JMP:
 			TRY(ShowState(F));
 		}
 
-		// TODO Check, should not do this
-		if ((F->currStmt->type == IF_THEN_STMT || F->currStmt->type == IF_THEN_STMT)
-			&& ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc - 1)) {
-			AstStatement* ifstmt = F->currStmt->parent;
-			F->currStmt = ifstmt->parent;
-		}
-
 		TRY(OutputAssignments(F));
-	}
-
-	// TODO Check, should not do this
-	if ((F->currStmt->type == IF_THEN_STMT || F->currStmt->type == IF_THEN_STMT)
-		&& ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc)) {
-		AstStatement* ifstmt = F->currStmt->parent;
-		F->currStmt = ifstmt->parent;
 	}
 
 	TRY(FlushBoolean(F));
