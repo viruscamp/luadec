@@ -36,7 +36,7 @@ void luadec_disassembleSubFunction(Proto* f, int dflag, const char* funcnumstr) 
 }
 
 char* RegOrConst(const Proto* f, int r) {
-	if (IS_CONSTANT(r)) {
+	if (ISK(r)) {
 		return DecompileConstant(f, INDEXK(r));
 	} else {
 		char* tmp = (char*)calloc(10, sizeof(char*));

@@ -16,7 +16,6 @@
 #define ENCODINGS "ASCII GB2312 GBK GB18030 BIG5 UTF8"
 
 #define GLOBAL(r) ((char*)svalue(&f->k[r]))
-#define IS_CONSTANT(r) (ISK(r))
 #define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
 #define invopstr(o) ((o)==OP_EQ?"~=":(o)==OP_LE?">":(o)==OP_LT?">=":(((o)==OP_TEST)||((o)==OP_TESTSET))?"not":"?") // Lua5.1 specific
 #define IsMain(f) ((f)==glproto)
@@ -26,6 +25,22 @@ extern const char* operators[];
 extern int priorities[];
 
 extern int string_encoding;
+
+typedef struct Inst_ Inst;
+struct Inst_ {
+	OpCode op;
+	int a;
+	int b;
+	int c;
+	int bx;
+	int sbx;
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+	int ax;
+#endif
+};
+
+Inst extractInstruction(Instruction i);
+Instruction assembleInstruction(Inst inst);
 
 void InitOperators();
 

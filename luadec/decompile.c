@@ -1359,7 +1359,7 @@ char* PrintFunction(Function* F) {
 */
 
 char* RegisterOrConstant(Function* F, int r) {
-	if (IS_CONSTANT(r)) {
+	if (ISK(r)) {
 		return DecompileConstant(F->f, INDEXK(r));
 	} else {
 		return luadec_strdup(GetR(F, r));
@@ -1603,27 +1603,15 @@ int CompareProto(const Proto* fleft, const Proto* fright, StringBuffer* str) {
 		if (ileft == iright) {
 			sizesame++;
 		} else {
-			OpCode opleft = GET_OPCODE(ileft);
-			int aleft = GETARG_A(ileft);
-			int bleft = GETARG_B(ileft);
-			int cleft = GETARG_C(ileft);
-			int bcleft = GETARG_Bx(ileft);
-			int sbcleft = GETARG_sBx(ileft);
-			OpCode opright = GET_OPCODE(iright);
-			int aright = GETARG_A(iright);
-			int bright = GETARG_B(iright);
-			int cright = GETARG_C(iright);
-			int bcright = GETARG_Bx(iright);
-			int sbcright = GETARG_sBx(iright);
-
-			if (opleft == opright) {
-				if (opleft == OP_EQ && aleft == aright &&
-					bleft == cright && cleft == bright) {
+			Inst left = extractInstruction(ileft);
+			Inst right = extractInstruction(iright);
+			if (left.op == OP_EQ && right.op == OP_EQ) {
+				if (left.a == right.a && left.b == right.c && left.c == right.b) {
 					sizesame++;
 				}
-			} else if ((opleft == OP_LT && opright == OP_LE) ||
-				(opleft == OP_LE && opright == OP_LT)) {
-				if (aleft == !aright &&	bleft == cright && cleft == bright) {
+			} else if ((left.op == OP_LT && right.op == OP_LE) ||
+				(left.op == OP_LE && right.op == OP_LT)) {
+				if (left.a == !right.a && left.b == right.c && left.c == right.b) {
 					sizesame++;
 				}
 			}
@@ -1933,11 +1921,11 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			switch (o) {
 #if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 				case OP_SETTABUP:
-					if (!IS_CONSTANT(b)) {
+					if (!ISK(b)) {
 						num_nil = b;
 					}
 				case OP_GETTABUP:
-					if (!IS_CONSTANT(c)) {
+					if (!ISK(c)) {
 						num_nil = MAX(num_nil,c);
 					}
 					break;
@@ -2190,7 +2178,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			const char *upvstr = UPVALUE(b);
 			char *keystr = RegisterOrConstant(F, c);
 			StringBuffer_set(str, "");
-			if (strcmp(upvstr, "_ENV")==0 && IS_CONSTANT(c)) {
+			if (strcmp(upvstr, "_ENV")==0 && ISK(c)) {
 				if (MakeIndex(F, str, keystr, TABLE)!=TABLE) {
 					StringBuffer_prepend(str, upvstr);
 				}
@@ -2239,7 +2227,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			char *keystr = RegisterOrConstant(F, b);
 			char *cstr = RegisterOrConstant(F, c);
 			StringBuffer_set(str, "");
-			if (strcmp(upvstr, "_ENV")==0 && IS_CONSTANT(b)) {
+			if (strcmp(upvstr, "_ENV")==0 && ISK(b)) {
 				if (MakeIndex(F, str, keystr, TABLE)!=TABLE) {
 					StringBuffer_prepend(str, upvstr);
 				}
@@ -2594,7 +2582,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		case OP_LE:
 		{
 			// WHY can't we remove it
-			if (IS_CONSTANT(b)) {
+			if (ISK(b)) {
 				int swap = b;
 				b = c;
 				c = swap;

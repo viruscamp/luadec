@@ -4,8 +4,8 @@
 #include "lua.h"
 #include "lobject.h"
 
-#define CC(r) (IS_CONSTANT((r)) ? 'K' : 'R')
-#define CV(r) (IS_CONSTANT((r)) ? INDEXK(r) : r)
+#define CC(r) (ISK((r)) ? 'K' : 'R')
+#define CV(r) (ISK((r)) ? INDEXK(r) : r)
 
 #define RK(r) (RegOrConst(f, r))
 

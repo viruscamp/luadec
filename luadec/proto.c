@@ -16,6 +16,41 @@
 const char* operators[NUM_OPCODES];
 int priorities[NUM_OPCODES];
 
+Inst extractInstruction(Instruction i) {
+	Inst inst;
+	inst.op = GET_OPCODE(i);
+	inst.a = GETARG_A(i);
+	inst.b = GETARG_B(i);
+	inst.c = GETARG_C(i);
+	inst.bx = GETARG_Bx(i);
+	inst.sbx = GETARG_sBx(i);
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+	inst.ax = GETARG_Ax(i);
+#endif
+	return inst;
+}
+
+Instruction assembleInstruction(Inst inst) {
+	Instruction i;
+	switch (getOpMode(inst.op)) {
+	case iABC:
+		i = CREATE_ABC(inst.op, inst.a, inst.b, inst.c);
+		break;
+	case iABx:
+		i = CREATE_ABx(inst.op, inst.a, inst.bx);
+		break;
+	case iAsBx:
+		i = CREATE_ABx(inst.op, inst.a, inst.sbx);
+		break;
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+	case iAx:
+		i = CREATE_Ax(inst.op, inst.ax);
+		break;
+#endif
+	}
+	return i;
+}
+
 void InitOperators() {
 	int i;
 	for (i = 0; i < NUM_OPCODES; i++) {

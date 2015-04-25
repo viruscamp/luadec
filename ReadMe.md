@@ -16,7 +16,7 @@ cd luadec
 git submodule update --init lua-5.1
 cd lua-5.1
 make linux
-cd ..\luadec
+cd ../luadec
 make LUAVER=5.1
 ```
 

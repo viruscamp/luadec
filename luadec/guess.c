@@ -160,7 +160,7 @@ int luaU_guess_locals(Proto* f, int main) {
 		case OP_UNM:
 		case OP_NOT:
 		case OP_LEN:
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 					num_nil = b;
 			}
 			break;
@@ -177,10 +177,10 @@ int luaU_guess_locals(Proto* f, int main) {
 		case OP_EQ:
 		case OP_LT:
 		case OP_LE:
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 				num_nil = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				num_nil = MAX(num_nil, c);
 			}
 			break;
@@ -268,7 +268,7 @@ int luaU_guess_locals(Proto* f, int main) {
 		case OP_GETTABLE:
 			setreg = a;
 			loadreg = b;
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				loadreg2 = c;
 			}
 			break;
@@ -280,10 +280,10 @@ int luaU_guess_locals(Proto* f, int main) {
 			break;
 #if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 		case OP_SETTABUP:
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 				loadreg2 = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				if (loadreg2==-1) {
 					loadreg2 = c;
 				} else {
@@ -294,10 +294,10 @@ int luaU_guess_locals(Proto* f, int main) {
 #endif
 		case OP_SETTABLE:
 			loadreg = a;
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 				loadreg2 = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				if (loadreg2==-1) {
 					loadreg2 = c;
 				} else {
@@ -319,10 +319,10 @@ int luaU_guess_locals(Proto* f, int main) {
 		case OP_POW:
 		case OP_MOD:
 			setreg = a;
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 				loadreg = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				if (loadreg==-1) {
 					loadreg = c;
 				} else {
@@ -389,17 +389,17 @@ int luaU_guess_locals(Proto* f, int main) {
 				intlocfrom = 0;
 				intlocto = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				loadreg2 = c;
 			}
 			break;
 		case OP_EQ:
 		case OP_LT:
 		case OP_LE:
-			if (!IS_CONSTANT(b)) {
+			if (!ISK(b)) {
 				loadreg = b;
 			}
-			if (!IS_CONSTANT(c)) {
+			if (!ISK(c)) {
 				if (loadreg==-1) {
 					loadreg = c;
 				} else {
