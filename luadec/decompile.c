@@ -2936,7 +2936,7 @@ LOGIC_NEXT_JMP:
 			int uvn;
 			int cfnum = functionnum;
 			Proto* cf = f->p[c];
-			char* tmpname = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
+			char* tmpname = (char*)calloc(strlen(funcnumstr) + 64, sizeof(char));
 
 			uvn = NUPS(cf);
 
@@ -2979,7 +2979,7 @@ LOGIC_NEXT_JMP:
 							// no need to test after FixLocalNames
 							upvalname = f->locvars[b].varname;
 						} else {
-							sprintf(tmpname, "l_%d_%d", funcnumstr, b);
+							sprintf(tmpname, "l_%s_%d", funcnumstr, b);
 							upvalname = luaS_new(glstate, tmpname);
 						}
 #if LUA_VERSION_NUM == 501
