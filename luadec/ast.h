@@ -9,6 +9,8 @@
 typedef enum StatementType_ StatementType;
 enum StatementType_ {
 	SIMPLE_STMT,
+	BREAK_STMT,
+	RETURN_STMT,
 	FUNCTION_STMT,
 	DO_STMT,
 	WHILE_STMT,
@@ -32,6 +34,7 @@ struct AstStatement_ {
 	List* sub;
 	int line;
 	int sub_print_count;
+	int comment_print_count;
 };
 
 AstStatement* MakeStatement(StatementType type, char* code);

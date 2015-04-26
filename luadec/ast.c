@@ -47,6 +47,7 @@ AstStatement* MakeStatement(StatementType type, char* code) {
 	stmt->code = code;
 	stmt->sub = NULL;
 	stmt->sub_print_count = 0;
+	stmt->comment_print_count = 0;
 	return stmt;
 }
 
@@ -84,6 +85,7 @@ void ClearAstStatement(AstStatement* stmt, void* dummy) {
 		stmt->sub = NULL;
 	}
 	stmt->sub_print_count = 0;
+	stmt->comment_print_count = 0;
 }
 
 void DeleteAstStatement(AstStatement* stmt) {
@@ -92,15 +94,41 @@ void DeleteAstStatement(AstStatement* stmt) {
 }
 
 void PrintSimpleStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
-	// not the first statement of the block , and start with '('
-	if (stmt->parent->sub_print_count > 0 && stmt->code[0] == '(') {
+	AstStatement* parent = stmt->parent;
+	// start with '(' and not the first statement of the block
+	if (parent->sub_print_count > 0 && stmt->code[0] == '(') {
 		PrintIndent(buff, indent);
 		StringBuffer_addPrintf(buff, ";\n");
 	}
 	PrintIndent(buff, indent);
 	StringBuffer_addPrintf(buff, "%s\n", stmt->code);
 	if (strncmp("--", stmt->code, 2) == 0) {
-		stmt->parent->sub_print_count--;
+		parent->sub_print_count --;
+		parent->comment_print_count ++;
+	}
+}
+
+void PrintBreakStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
+	AstStatement* parent = stmt->parent;
+	// "break;" and not the last statement of the block
+	if ((parent->sub_print_count + parent->comment_print_count + 1) < parent->sub->size) {
+		PrintIndent(buff, indent);
+		StringBuffer_addPrintf(buff, "do break end\n", stmt->code);
+	} else {
+		PrintIndent(buff, indent);
+		StringBuffer_addPrintf(buff, "break\n", stmt->code);
+	}
+}
+
+void PrintReturnStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
+	AstStatement* parent = stmt->parent;
+	// "return" and not the last statement of the block
+	if ((parent->sub_print_count + parent->comment_print_count + 1) < parent->sub->size) {
+		PrintIndent(buff, indent);
+		StringBuffer_addPrintf(buff, "do return %s end\n", stmt->code);
+	} else {
+		PrintIndent(buff, indent);
+		StringBuffer_addPrintf(buff, "return %s\n", stmt->code);
 	}
 }
 
@@ -211,6 +239,12 @@ void PrintAstStatement(AstStatement* stmt, StringBuffer* buff, int indent) {
 	switch (stmt->type) {
 	case SIMPLE_STMT:
 		PrintSimpleStatement(stmt, buff, indent);
+		break;
+	case BREAK_STMT:
+		PrintBreakStatement(stmt, buff, indent);
+		break;
+	case RETURN_STMT:
+		PrintReturnStatement(stmt, buff, indent);
 		break;
 	case DO_STMT:
 	case FUNCTION_STMT:

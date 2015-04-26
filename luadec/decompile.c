@@ -2389,9 +2389,9 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 			Instruction idest = code[dest];
 			IntListItem* foundInt = (IntListItem*)RemoveFromList(&(F->breaks), FindFromListTail(&(F->breaks), (ListItemCmpFn)MatchIntListItem, &pc));
 			if (foundInt != NULL) { // break
+				AstStatement* breakstmt = MakeStatement(BREAK_STMT, NULL);
 				free(foundInt);
-				StringBuffer_printf(str, "do break end");
-				TRY(AddStatement(F, str));
+				TRY(AddAstStatement(F, breakstmt));
 			} else if (F->loop_ptr->end == pc) { // until jmp has been processed, tforloop has ignored the jmp, forloop does not have a jmp
 				if (F->currStmt->type == IF_THEN_STMT && ElseStart(F->currStmt->parent) == GetJmpAddr(F, pc + 1)) {
 					// Change 'while 1 do if' to 'while'
@@ -2689,10 +2689,6 @@ LOGIC_NEXT_JMP:
 				limit = a + b;
 			}
 			StringBuffer_prune(str);
-			if (o == OP_TAILCALL) {
-				StringBuffer_set(str, "return ");
-				ignoreNext = 1;
-			}
 			TRY(astr = GetR(F, a));
 			if (isIdentifier(astr)) {
 				StringBuffer_addPrintf(str, "%s(", astr);
@@ -2732,9 +2728,9 @@ LOGIC_NEXT_JMP:
 				c += GETARG_B(code[pc+1]) - GETARG_A(code[pc+1]) + 1;
 				// ignoreNext = 1;
 			}
-			if (o == OP_TAILCALL || c == 1) {
+			if (o == OP_CALL && c == 1) {
 				TRY(AddStatement(F, str));
-			} else if (c == 0) {
+			} else if (o == OP_TAILCALL || c == 0) {
 				IS_VARIABLE(a) = 0; PENDING(a) = 0;
 				TRY(AssignReg(F, a, StringBuffer_getRef(str), 0, 0));
 				CALL(a) = 1;
@@ -2756,6 +2752,7 @@ LOGIC_NEXT_JMP:
 			* Return call. The RETURN opcode works like this: return
 			* R(A),...,R(A+B-2)
 			*/
+			AstStatement* returnstmt = MakeStatement(RETURN_STMT, NULL);
 			int i, limit;
 
 			/* skip the last RETURN */
@@ -2767,7 +2764,7 @@ LOGIC_NEXT_JMP:
 			}
 			else
 				limit = a + b - 1;
-			StringBuffer_set(str, "return ");
+			StringBuffer_prune(str);
 			for (i = a; i < limit; i++) {
 				const char* istr = GetR(F, i);
 				if (strcmp(istr,".end") == 0)
@@ -2776,7 +2773,8 @@ LOGIC_NEXT_JMP:
 					StringBuffer_add(str, ", ");
 				TRY(StringBuffer_add(str, istr));
 			}
-			TRY(AddStatement(F, str));
+			returnstmt->code = StringBuffer_getBuffer(str);
+			TRY(AddAstStatement(F, returnstmt));
 			break;
 		}
 		case OP_FORLOOP: //Lua5.1 specific. TODO: CHECK
