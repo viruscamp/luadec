@@ -1,6 +1,6 @@
 --  OP_SETTABLE MakeIndex( DOT )
 -- DECOMPILER ERROR: Confused about usage of registers!
-;(1+a).f3 = x
+(1+a).f3 = x
 -- DECOMPILER ERROR: Confused about usage of registers!
 ;({2,3,4}+5)[6] =x
 -- DECOMPILER ERROR: Overwrote pending register.
