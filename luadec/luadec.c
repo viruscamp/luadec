@@ -79,7 +79,7 @@ static void usage(const char* message, const char* arg) {
 		"  -        process stdin\n"
 		"  -d       output information for debugging the decompiler\n"
 		"  -dis     don't decompile, just disassemble\n"
-		"  -fn num  decompile only specific function, use -pn option to get available num\n"
+		"  -f num   decompile only specific function, use -pn option to get available num\n"
 		"  -ns      donot process sub functions\n"
 		"  -pn      print all sub function numbers and exit\n"
 		"  -l LDS   declare locals as defined by LDS\n"
@@ -245,10 +245,10 @@ static int doargs(int argc, char* argv[]) {
 			disassemble=1;
 		else if (IS("-d"))			/* list */
 			debug=1;
-		else if (IS("-fn")) {
+		else if (IS("-f")) {
 			++i;
 			if (argv[i]==NULL || *argv[i]==0) {
-				usage("'-fn' needs an argument",NULL);
+				usage("'-f' needs an argument",NULL);
 			} else {
 				funcnumstr=argv[i];
 			}
