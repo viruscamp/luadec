@@ -45,7 +45,7 @@ luadec -pn test.lua
 * -f decompile only specific nested function  
     luadec -f 0_1 test.lua  
 * -ns donot process sub functions  
-    luadec -ns -fn 0_1 test.lua  
+    luadec -ns -f 0_1 test.lua  
 * -fc perform a instruction-by-instruction compare for each function  
     luadec -fc test.lua  
 outputs:  
