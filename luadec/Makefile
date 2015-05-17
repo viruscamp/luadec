@@ -41,8 +41,8 @@ MYLIBS=
 MYOBJS=
 
 INCS= -I$(LUASRC)
-OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o ast.o macro-array.o
-SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c ast.c macro-array.c
+OBJS= guess.o luadec.o decompile.o disassemble.o proto.o StringBuffer.o structs.o ast.o macro-array.o expression.o
+SRCS= guess.c luadec.c decompile.c disassemble.c proto.c StringBuffer.c structs.c ast.c macro-array.c expression.c
 
 T= luadec
 

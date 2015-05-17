@@ -216,6 +216,10 @@
 				RelativePath="..\luadec\structs.c"
 				>
 			</File>
+			<File
+				RelativePath="..\luadec\expression.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -256,6 +260,10 @@
 			</File>
 			<File
 				RelativePath="..\luadec\structs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\luadec\expression.h"
 				>
 			</File>
 		</Filter>
