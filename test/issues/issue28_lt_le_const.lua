@@ -18,3 +18,10 @@ function eq_const(a,b,c)
 	b = a==3
 	b = 3==a
 end
+
+function lt_function(a,b,c)
+	a = b()>c()
+	a = c()<b()
+	a = not (b()<=c())
+	a = not (c()>=b())
+end
