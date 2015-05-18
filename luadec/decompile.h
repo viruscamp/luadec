@@ -3,7 +3,7 @@
 
 #include "structs.h"
 #include "StringBuffer.h"
-#include "ast.h"
+#include "statement.h"
 
 typedef struct BoolOp_ BoolOp;
 struct BoolOp_ {
