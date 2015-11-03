@@ -76,14 +76,22 @@ static void usage(const char* message, const char* arg) {
 		" Swap the opcodes in <input.luac> using method in [opcodes.txt]\n"
 		" Default [opcodes.txt] is '"OPCODES_TXT"'.\n"
 		" Available options are:\n"
-		"  -lua     output allopcodes.lua to stdout and exit\n"
-		"  -o name  output to file 'name' (default is \"%s\")\n"
-		"  -gs      compare <input.luac> with x86-standard allopcodes.luac to generate a opcodes.txt\n"
-		"  -gf      compare <input.luac> with a fresh compiled allopcodes.lua to generate a opcodes.txt\n"
-		"  -v       show version information\n"
-		"  --       stop handling options\n",
+		"  -template output "OPCODES_TXT" template to stdout and exit\n"
+		"  -lua      output allopcodes.lua to stdout and exit\n"
+		"  -o name   output to file 'name' (default is \"%s\")\n"
+		"  -gs       compare <input.luac> with x86-standard allopcodes.luac to generate a "OPCODES_TXT"\n"
+		"  -gf       compare <input.luac> with a fresh compiled allopcodes.lua to generate a "OPCODES_TXT"\n"
+		"  -v        show version information\n"
+		"  --        stop handling options\n",
 		progname, Output);
 	exit(EXIT_FAILURE);
+}
+
+static void outputTemplate(FILE *f) {
+	int i;
+	for (i = 0; i < NUM_OPCODES; i++) {
+		fprintf(f, "%d %s\n", i, luaP_opnames[i]);
+	}
 }
 
 #define	IS(s) (strcmp(argv[i],s)==0)
@@ -100,6 +108,10 @@ static int doargs(int argc, char* argv[]) {
 		else if (IS("--")) {		/* end of options; skip it */
 			++i;
 			break;
+		}
+		else if (IS("-template")) {		/* output OPCODES_TXT template */
+			outputTemplate(stdout);
+			exit(EXIT_SUCCESS);
 		}
 		else if (IS("-lua")) {		/* output allopcodes.lua */
 			fwrite(allopcodes_lua, sizeof(unsigned char), allopcodes_lua_len, stdout);
@@ -217,15 +229,11 @@ int PrintOp2op() {
 		int j = op2op[i];
 		if (i != j) {
 			count++;
-			if (i < NUM_OPCODES && j < NUM_OPCODES) {
-				printf("%s %s\n", luaP_opnames[i], luaP_opnames[j]);
-			} else if (i < NUM_OPCODES) {
-				printf("%s %d\n", luaP_opnames[i], j);
-			} else if (j < NUM_OPCODES) {
+			if (j < NUM_OPCODES) {
 				printf("%d %s\n", i, luaP_opnames[j]);
 			} else {
-				printf("%d %ds\n", i, j);
-			}			
+				printf("%d %d\n", i, j);
+			}
 		}
 	}
 	return count;
