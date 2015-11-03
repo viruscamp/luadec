@@ -266,6 +266,9 @@ char* DecompileConstant(const Proto* f, int i) {
 		return ret;
 	}
 	case LUA_TSTRING:
+#ifdef LUA_TLNGSTR
+	case LUA_TLNGSTR:
+#endif
 		return DecompileString(o);
 #endif
 #if LUA_VERSION_NUM == 503
