@@ -99,6 +99,7 @@ int luaU_guess_locals(Proto* f, int main) {
 	int lastfree;
 	int i,i2,x,pc;
 	int func_endpc = FUNC_BLOCK_END(f);
+	int ignoreNext = 0;
 
 	if (f->lineinfo != NULL) {
 		return 0;
@@ -205,6 +206,7 @@ int luaU_guess_locals(Proto* f, int main) {
 #endif
 
 	// start code checking
+	ignoreNext = 0;
 	for (pc = 0; pc < f->sizecode; pc++) {
 		Instruction instr = f->code[pc];
 		OpCode o = GET_OPCODE(instr);
@@ -223,6 +225,12 @@ int luaU_guess_locals(Proto* f, int main) {
 		int loadregto = -1;
 		int intlocfrom = -1;
 		int intlocto = -1;
+
+		if (ignoreNext) {
+			ignoreNext--;
+			continue;
+		}
+
 		if ((o==OP_JMP) || (o==OP_FORPREP)) {
 			dest = pc + sbc + 2;
 		} else if ((pc+1!=f->sizecode) && (GET_OPCODE(f->code[pc+1])==OP_JMP)) {
@@ -420,6 +428,9 @@ int luaU_guess_locals(Proto* f, int main) {
 				loadregto = f->maxstacksize;
 			} else {
 				loadregto = a+b;
+			}
+			if (c == 0) {
+				ignoreNext = 1;
 			}
 			break;
 		case OP_FORLOOP:

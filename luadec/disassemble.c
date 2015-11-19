@@ -57,6 +57,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	Proto* f = fwork;
 	int pc;
 	int name_len = name ? strlen(name) : 0;
+	int ignoreNext = 0;
 
 	printf("; Function:        %s\n", name);
 	printf("; Defined at line: %d\n", f->linedefined);
@@ -66,6 +67,7 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 	printf("; Max Stack Size:  %d\n", f->maxstacksize);
 	printf("\n");
 
+	ignoreNext = 0;
 	for (pc=0; pc<f->sizecode; pc++) {
 		Instruction i = f->code[pc];
 		OpCode o = GET_OPCODE(i);
@@ -77,6 +79,12 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		int dest;
 		sprintf(line,"");
 		StringBuffer_set(lend,"");
+
+		if (ignoreNext) {
+			ignoreNext--;
+			printf("%5d [-]: %u\n", pc, i);
+			continue;
+		}
 		switch (o) {
 		case OP_MOVE:
 			/*	A B	R(A) := R(B)					*/
@@ -96,14 +104,14 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 			int ax = GETARG_Ax(f->code[pc+1]);
 			sprintf(line,"R%d",a);
 			tmpconstant1 = DecompileConstant(f,ax);
-			StringBuffer_printf(lend,"R%d := %s",a,tmpconstant1);
+			StringBuffer_printf(lend,"R%d := K%d , %s",a,ax,tmpconstant1);
 			break;
 		}
 		case OP_EXTRAARG:
 		{
 			/*	Ax	extra (larger) argument for previous opcode	*/
 			int ax = GETARG_Ax(i);
-			sprintf(line,"K%d",ax);
+			sprintf(line,"%d",ax);
 			break;
 		}
 #endif
@@ -380,18 +388,44 @@ void luadec_disassemble(Proto* fwork, int dflag, const char* name) {
 		case OP_SETLIST:
 		{
 			/*	A B C	R(A)[(C-1)*FPF+i] := R(A+i), 1 <= i <= B	*/
-			int startindex = (c-1)*LFIELDS_PER_FLUSH;
-			sprintf(line,"R%d %d %d",a,b,c);
-			if (b == 0) {
-				StringBuffer_printf(lend, "R%d[%d] to R%d[top] := R%d to top",
-					a, startindex, a, a+1);
-			} else if (b == 1) {
-				StringBuffer_printf(lend, "R%d[%d] := R%d",a,startindex,a+1);
-			} else if (b > 1) {
-				StringBuffer_printf(lend, "R%d[%d] to R%d[%d] := R%d to R%d",
-					a, startindex, a, startindex+b-1, a+1, a+b);
+			int next_is_extraarg = 1;
+			unsigned int realc = c, startindex;
+			if (c == 0) {
+				Instruction i_next_arg = f->code[pc + 1];
+#if LUA_VERSION_NUM == 501
+				realc = i_next_arg;
+				ignoreNext = 1;
+#endif
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+				if (GET_OPCODE(i_next_arg) == OP_EXTRAARG) {
+					realc = GETARG_Ax(i_next_arg);
+				} else {
+					next_is_extraarg = 0;
+				}
+#endif
 			}
-			StringBuffer_addPrintf(lend, " ; R(a)[(c-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, FPF=%d", a, b, c, LFIELDS_PER_FLUSH);
+			startindex = (realc - 1)*LFIELDS_PER_FLUSH;
+			sprintf(line, "R%d %d %d", a, b, c);
+			if (b == 0) {
+				StringBuffer_printf(lend, "R%d[%d] to R%d[top] := R%d to top", a, startindex, a, a + 1);
+			} else if (b == 1) {
+				StringBuffer_printf(lend, "R%d[%d] := R%d", a, startindex, a + 1);
+			} else if (b > 1) {
+				StringBuffer_printf(lend, "R%d[%d] to R%d[%d] := R%d to R%d", a, startindex, a, startindex + b - 1, a + 1, a + b);
+			}
+			if (c != 0) {
+				StringBuffer_addPrintf(lend, " ; R(a)[(c-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, FPF=%d", a, b, c, LFIELDS_PER_FLUSH);
+			} else {
+				StringBuffer_addPrintf(lend, " ; R(a)[(realc-1)*FPF+i] := R(a+i), 1 <= i <= b, a=%d, b=%d, c=%d, realc=%u, FPF=%d", a, b, c, realc, LFIELDS_PER_FLUSH);
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+				if (!next_is_extraarg) {
+					StringBuffer_add(lend, " ; Error: SETLIST with c==0, but not followed by EXTRAARG.");
+				}
+#endif
+				if (realc == 0) {
+					StringBuffer_add(lend, " ; Error: SETLIST with c==0, but realc==0.");
+				}
+			}
 			break;
 		}
 #if LUA_VERSION_NUM == 501

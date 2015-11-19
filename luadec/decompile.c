@@ -1779,17 +1779,29 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		OpCode o = GET_OPCODE(i);
 		int a = GETARG_A(i);
 		int sbc = GETARG_sBx(i);
-		int dest = sbc + pc + 1;
-		int real_end = GetJmpAddr(F,pc + 1);
+		int dest;
+		int real_end;
 
+		Instruction i_1 = 0;
 		OpCode o_1 = OP_VARARG + 1;
 		if (pc > 0) {
-			o_1 = GET_OPCODE(code[pc-1]);
+			i_1 = code[pc-1];
+			o_1 = GET_OPCODE(i_1);
 		}
 
 		while (pc < F->loop_ptr->start) {
 			F->loop_ptr = F->loop_ptr->parent;
 		}
+
+		if (pc > 0 && o_1 == OP_SETLIST && GETARG_C(i_1) == 0) {
+			continue;
+		}
+		if (o == OP_SETLIST && GETARG_C(i) == 0) {
+			continue;
+		}
+
+		dest = sbc + pc + 1;
+		real_end = GetJmpAddr(F, pc + 1);
 
 #if LUA_VERSION_NUM == 501
 		if (o == OP_CLOSE) {
@@ -1893,6 +1905,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		PrintLoopTree(F->loop_ptr, 0);
 	}
 
+	ignoreNext = 0;
 	for (pc = 0; pc < n; pc++) {
 		Instruction i = code[pc];
 		OpCode o = GET_OPCODE(i);
@@ -2912,6 +2925,20 @@ LOGIC_NEXT_JMP:
 			}
 		case OP_SETLIST:
 		{
+			if (c == 0) {
+				Instruction i_next_arg = code[pc + 1];
+				ignoreNext = 1;
+#if LUA_VERSION_NUM == 501
+				c = i_next_arg;
+#endif
+#if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
+				if (GET_OPCODE(i_next_arg) == OP_EXTRAARG) {
+					c = GETARG_Ax(i_next_arg);
+				} else {
+					SET_ERROR(F, "SETLIST with c==0, but not followed by EXTRAARG.");
+				}
+#endif
+			}
 			TRY(SetList(F, a, b, c));
 			break;
 		}
