@@ -19,7 +19,7 @@
 #include "StringBuffer.h"
 #include "structs.h"
 #include "proto.h"
-#include "ast.h"
+#include "statement.h"
 #include "decompile.h"
 
 #define DEBUG_PRINT
