@@ -52,7 +52,7 @@ void FixLocalNames(Proto* f, const char* funcnumstr) {
 
 	if (f->sizelocvars < f->numparams + need_arg) {
 		f->locvars = luaM_reallocvector(glstate, f->locvars, f->sizelocvars, f->numparams + need_arg, LocVar);
-		for (i = f->sizelocvars; i < f->numparams; i++) {
+		for (i = 0; i < f->numparams; i++) {
 			sprintf(tmpname, "p_%s_%d", funcnumstr, i);
 			f->locvars[i].varname = luaS_new(glstate, tmpname);
 			f->locvars[i].startpc = 0;
@@ -106,8 +106,6 @@ char* luadec_strdup(const char* src) {
 
 #define UPVALUE(i) (getUpvalName(F->f,i))
 #define LOCAL(i) (getLocalName(F->f,i))
-#define LOCAL_STARTPC(i) F->f->locvars[i].startpc
-#define LOCAL_ENDPC(i) F->f->locvars[i].endpc
 #define REGISTER(r) F->R[r]
 #define PRIORITY(r) (r>=MAXSTACK ? 0 : F->Rprio[r])
 #define PENDING(r) F->Rpend[r]
@@ -1709,6 +1707,78 @@ void PrintLoopTree(LoopItem* li, int indent) {
 	}
 }
 
+/*
+** from lfunc.c : const char *luaF_getlocalname (const Proto *f, int local_number, int pc)
+** local_number and pc are 1-based not 0-based
+** Look for n-th local variable at line `line' in function `func'.
+** Returns -1 if not found.
+*/
+int getLocVarIndex(const Proto* f, int local_number, int pc) {
+	int i;
+	for (i = 0; i < f->sizelocvars && f->locvars[i].startpc <= pc; i++) {
+		if (pc <= f->locvars[i].endpc) {
+			local_number--;
+			if (local_number == 0)
+				return i;
+		}
+	}
+	return -1;
+}
+
+int testLocVarIndex(const Proto* f, int reg, int pc, int Rvar[], int RvarTop, int func_checking, char* funcnumstr) {
+	int locVarIndex = getLocVarIndex(f, reg + 1, pc + 1);
+	int currLocVar = (reg < RvarTop) ? Rvar[reg] : -1;
+
+	if (currLocVar < 0) {
+		if (locVarIndex < 0) {
+			if (!func_checking) {
+				fprintf(stderr, "currLocVar < 0 && locVarIndex < 0 : f=%s pc=%d r=%d RvarTop=%d currLocVar=%d locVarIndex==%d at ",
+					funcnumstr, pc, reg, RvarTop, currLocVar, locVarIndex);
+				printFileNames(stderr);
+				fprintf(stderr, "\n");
+			}
+			return -1;
+		} else {
+			if (!func_checking) {
+				fprintf(stderr, "currLocVar < 0 && locVarIndex >= 0 : f=%s pc=%d r=%d RvarTop=%d currLocVar=%d locVarIndex=%d varname=%s startpc=%d endpc=%d at ",
+					funcnumstr, pc, reg, RvarTop, currLocVar, locVarIndex,
+					getstr(f->locvars[locVarIndex].varname), f->locvars[locVarIndex].startpc, f->locvars[locVarIndex].endpc);
+				printFileNames(stderr);
+				fprintf(stderr, "\n");
+			}
+			return locVarIndex;
+		}
+	} else if (locVarIndex < 0) {
+		if (!func_checking) {
+			fprintf(stderr, "currLocVar >= 0 && locVarIndex < 0 : f=%s pc=%d r=%d locVarIndex=%d currLocVar=%d varname=%s startpc=%d endpc=%d at ",
+				funcnumstr, pc, reg, locVarIndex, currLocVar,
+				getstr(f->locvars[currLocVar].varname), f->locvars[currLocVar].startpc, f->locvars[currLocVar].endpc);
+			printFileNames(stderr);
+			fprintf(stderr, "\n");
+		}
+		return currLocVar;
+	} else if (currLocVar != locVarIndex) {
+		if (!func_checking) {
+			fprintf(stderr, "currLocVar != locVarIndex : f=%s pc=%d r=%d currLocVar=%d locVarIndex=%d varname=%s startpc=%d endpc=%d at ",
+				funcnumstr, pc, reg, currLocVar, locVarIndex,
+				getstr(f->locvars[locVarIndex].varname), f->locvars[locVarIndex].startpc, f->locvars[locVarIndex].endpc);
+			printFileNames(stderr);
+			fprintf(stderr, "\n");
+		}
+		return locVarIndex;
+	} else {
+		// correct routine , currLocVar == locVarIndex >= 0
+		return currLocVar;
+	}
+}
+
+#define TestLocVarIndex(reg, pc) testLocVarIndex(f, reg, pc, Rvar, RvarTop, func_checking, funcnumstr)
+//#define TestLocVarIndex(reg, pc) do { } while(0)
+
+#define GetLocVarIndex(reg, pc) testLocVarIndex(f, reg, pc, Rvar, RvarTop, func_checking, funcnumstr)
+//#define GetLocVarIndex(reg, pc) getLocVarIndex(f, reg + 1, pc + 1)
+//#define GetLocVarIndex(reg, pc) ((reg < RvarTop) ? Rvar[reg] : -1)
+
 char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int i = 0;
 
@@ -1722,6 +1792,10 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	int baseIndent = indent;
 
 	char* output;
+
+	int currLocVar = 0;
+	int RvarTop = 0;
+	int Rvar[MAXARG_A];
 
 	LoopItem* next_child;
 
@@ -1737,7 +1811,7 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 	* Function parameters are stored in registers from 0 on.
 	*/
 	for (i = 0; i < f->numparams; i++) {
-		TRY(DeclareVariable(F, LOCAL(i), i));
+		TRY(DeclareVariable(F, getLocalName(F->f, i), i));
 		IS_VARIABLE(i) = 1;
 	}
 	F->freeLocal = f->numparams;
@@ -1915,8 +1989,21 @@ char* ProcessCode(Proto* f, int indent, int func_checking, char* funcnumstr) {
 		int bc = GETARG_Bx(i);
 		int sbc = GETARG_sBx(i);
 
-
 		F->pc = pc;
+
+		// pop 所有 endpc < pc 的
+		while (RvarTop > 0 && f->locvars[Rvar[RvarTop-1]].endpc < pc + 1) {
+			RvarTop--;
+			Rvar[RvarTop] = -1;
+		}
+		// push 所有 startpc <= pc 的，移到下一个未使用的变量
+		while (currLocVar < f->sizelocvars && f->locvars[currLocVar].startpc <= pc + 1) {
+			Rvar[RvarTop] = currLocVar;
+			RvarTop++;
+			currLocVar++;
+			TestLocVarIndex(RvarTop-1, pc);
+		}
+		// 那么此时 vars[r] 即对应 reg[r] 的变量
 
 		if (pc > F->loop_ptr->end) {
 			next_child = F->loop_ptr->next;
@@ -2998,15 +3085,17 @@ LOGIC_NEXT_JMP:
 #if LUA_VERSION_NUM == 502 || LUA_VERSION_NUM == 503
 					if (upval.instack == 1) {
 #endif
-						// TODO completely wrong, f->locvars[b] is not R[b]
-						// Get name from local name
-						if (f->locvars && b < f->sizelocvars) {
+						// Rvar[b] is enough
+						int locVarIndex = GetLocVarIndex(b, pc);
+
+						if (f->locvars && locVarIndex >=0 && locVarIndex < f->sizelocvars) {
 							// no need to test after FixLocalNames
-							upvalname = f->locvars[b].varname;
+							upvalname = f->locvars[locVarIndex].varname;
 						} else {
-							sprintf(tmpname, "l_%s_%d", funcnumstr, b);
+							sprintf(tmpname, "l_%s_r%d", funcnumstr, b);
 							upvalname = luaS_new(glstate, tmpname);
 						}
+
 #if LUA_VERSION_NUM == 501
 					} else if (op == OP_GETUPVAL) {
 #endif
@@ -3031,7 +3120,7 @@ LOGIC_NEXT_JMP:
 			/* upvalue determinition end */
 			free(tmpname);
 
-			if (func_checking == 1) {
+			if (func_checking) {
 				char* code = NULL;
 				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
 				functionnum = c;
