@@ -8,8 +8,10 @@ extern int debug;
 
 const char* const stmttype[] = {
 	"SIMPLE_STMT",
+	"BREAK_STMT",
+	"RETURN_STMT",
 	"FUNCTION_STMT",
-	"BLOCK_STMT",
+	"DO_STMT",
 	"WHILE_STMT",
 	"REPEAT_STMT",
 	"FORLOOP_STMT",

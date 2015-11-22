@@ -23,7 +23,7 @@ enum StatementType_ {
 	JMP_DEST_STMT // virtual statement, mark for JMP destination, some of the statements will be printed as label in 5.2
 };
 
-const char* const stmttype[];
+extern const char* const stmttype[];
 
 typedef struct AstStatement_ AstStatement;
 struct AstStatement_ {

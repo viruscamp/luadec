@@ -96,10 +96,16 @@ void ClearExpression(Expression* exp, void* dummy) {
 	exp->left = NULL;
 	exp->right = NULL;
 	exp->args = NULL;
-	DeleteExpression(left);
-	DeleteExpression(right);
-	ClearList(args, (ListItemFn)ClearExpression);
-	free(args);
+	if (left) {
+		DeleteExpression(left);
+	}
+	if (right) {
+		DeleteExpression(right);
+	}
+	if (args) {
+		ClearList(args, (ListItemFn)ClearExpression);
+		free(args);
+	}
 }
 
 void DeleteExpression(Expression* exp) {
