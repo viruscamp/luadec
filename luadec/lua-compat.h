@@ -37,7 +37,12 @@
 #endif
 #if LUA_VERSION_NUM == 503
 	#define rawtsvalue(o) tsvalue(o)
-	#define LUA_STRLEN(ts) ((ts)->len)
+
+	#ifdef tsslen
+		#define LUA_STRLEN(ts) tsslen(ts)
+	#else
+		#define LUA_STRLEN(ts) ((ts)->len)
+	#endif
 
 	#define MAXREGS 250
 	#define MAXSTACK MAXREGS
