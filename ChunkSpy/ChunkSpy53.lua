@@ -1350,11 +1350,11 @@ function ChunkSpy(chunk_name, chunk)
     FormatLine(1, string.format("size of %s (%s)", sizename, typename), previdx)
   end
   -- byte sizes
-  TestSize("size int", "int", "bytes")
-  TestSize("size size_t", "size_t", "bytes")
-  TestSize("size Instruction", "Instruction", "bytes")
-  TestSize("size lua_Integer", "Integer", "bytes")
-  TestSize("size lua_Number", "Number", "bytes")
+  TestSize("size_int", "int", "bytes")
+  TestSize("size_size_t", "size_t", "bytes")
+  TestSize("size_Instruction", "Instruction", "bytes")
+  TestSize("size_lua_Integer", "Integer", "bytes")
+  TestSize("size_lua_Number", "Number", "bytes")
 
   -- initialize decoder (see the 5.0.2 script if you want to customize
   -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
