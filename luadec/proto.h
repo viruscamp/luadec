@@ -12,8 +12,9 @@
 #define GB18030 54936
 #define BIG5 950
 #define UTF8 65001
+#define CP949 949
 
-#define ENCODINGS "ASCII GB2312 GBK GB18030 BIG5 UTF8"
+#define ENCODINGS "ASCII GB2312 GBK GB18030 BIG5 UTF8 CP949"
 
 #define GLOBAL(r) ((char*)svalue(&f->k[r]))
 #define opstr(o) ((o)==OP_EQ?"==":(o)==OP_LE?"<=":(o)==OP_LT?"<":(((o)==OP_TEST)||((o)==OP_TESTSET))?NULL:"?") // Lua5.1 specific
