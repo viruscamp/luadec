@@ -81,7 +81,10 @@ void InitOperators() {
 char* convertToUpper(const char* str) {
 	char *newstr, *p;
 	p = newstr = strdup(str);
-	while (*p++ = toupper(*p));
+	while (*p) {
+		*p = toupper(*p);
+		p++;
+	}
 	return newstr;
 }
 
@@ -100,6 +103,8 @@ int getEncoding(const char* enc) {
 		ret = BIG5;
 	} else 	if (strcmp(src, "UTF8") == 0) {
 		ret = UTF8;
+	} else 	if (strcmp(src, "CP949") == 0) {
+		ret = CP949;
 	}
 	free(src);
 	return ret;
@@ -204,7 +209,7 @@ char* DecompileString(const TValue* o) {
 				ret[p++] = *s;
 				i++; s++;
 				ret[p++] = *s;
-			} else if ((string_encoding == GBK || string_encoding == GB18030) && i+1 < len
+			} else if ((string_encoding == GBK || string_encoding == GB18030 || string_encoding == CP949) && i+1 < len
 				&& *s >= 0x81 && *s <= 0xFE
 				&& *(s+1) >= 0x40 && *(s+1) <= 0xFE && *(s+1) != 0x7F
 				) {
