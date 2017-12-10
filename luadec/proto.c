@@ -81,7 +81,10 @@ void InitOperators() {
 char* convertToUpper(const char* str) {
 	char *newstr, *p;
 	p = newstr = strdup(str);
-	while (*p++ = toupper(*p));
+	while (*p) {
+		*p = toupper(*p);
+		p++;
+	}
 	return newstr;
 }
 

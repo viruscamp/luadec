@@ -48,7 +48,7 @@ int localdeclare[255][255];
 int functionnum;
 int process_sub = 1;            /* process sub functions? */
 int func_check=0;				/* compile decompiled function and compare? */
-int string_encoding=GBK;
+int string_encoding=UTF8;
 int guess_locals=1;
 lua_State* glstate;
 Proto* glproto;
