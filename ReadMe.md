@@ -10,6 +10,15 @@ LuaDec is free software and uses the same license as the original LuaDec.
 
 Compiling
 ---------
+
+### Prerequisites
+
+```
+sudo apt-get install build-essential libreadline-dev 
+```
+
+### Building
+
 ```
 git clone https://github.com/viruscamp/luadec
 cd luadec
