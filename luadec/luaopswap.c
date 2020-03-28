@@ -142,6 +142,7 @@ static int doargs(int argc, char* argv[]) {
 
 int getOpIndex(const char* str) {
 	char* endptr;
+	errno = 0;
 	long val = strtol(str, &endptr, 10);
 	if (errno || endptr == str) {
 		int i;
