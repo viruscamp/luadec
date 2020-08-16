@@ -3047,7 +3047,7 @@ LOGIC_NEXT_JMP:
 			int i;
 			int uvn;
 			int cfnum = functionnum;
-			Proto* cf = f->p[c];
+			Proto* cf = f->p[bc];
 			char* tmpname = (char*)calloc(strlen(funcnumstr) + 64, sizeof(char));
 
 			uvn = NUPS(cf);
@@ -3123,17 +3123,17 @@ LOGIC_NEXT_JMP:
 			if (func_checking) {
 				char* code = NULL;
 				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
-				functionnum = c;
-				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
+				functionnum = bc;
+				sprintf(newfuncnumstr, "%s_%d", funcnumstr, functionnum);
 				code = PrintFunctionOnlyParamsAndUpvalues(cf, F->indent, newfuncnumstr);
 				StringBuffer_setBuffer(str, code);
 			} else if (!process_sub) {
-				StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, c);
+				StringBuffer_printf(str, "DecompiledFunction_%s_%d", funcnumstr, bc);
 			} else {
 				char* code = NULL;
 				char* newfuncnumstr = (char*)calloc(strlen(funcnumstr) + 12, sizeof(char));
-				functionnum = c;
-				sprintf(newfuncnumstr, "%s_%d", funcnumstr, c);
+				functionnum = bc;
+				sprintf(newfuncnumstr, "%s_%d", funcnumstr, functionnum);
 				code = ProcessCode(cf, F->indent, 0, newfuncnumstr);
 				StringBuffer_setBuffer(str, code);
 			}
