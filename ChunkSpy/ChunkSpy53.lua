@@ -1824,7 +1824,8 @@ function ChunkSpy(chunk_name, chunk)
         FormatLine(config.size_int, "  startpc ("..locvar.startpc..")", locvar.pos_startpc)
         FormatLine(config.size_int, "  endpc   ("..locvar.endpc..")",locvar.pos_endpc)
         BriefLine(".local"..config.DISPLAY_SEP..EscapeString(locvar.varname, 1)
-                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1))
+                  ..config.DISPLAY_SEP..config.DISPLAY_COMMENT..(i - 1)
+                  ..config.DISPLAY_SEP..locvar.startpc.."-"..locvar.endpc)
       end
     end
 
