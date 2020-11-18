@@ -1583,7 +1583,7 @@ function ChunkSpy(chunk_name, chunk)
     -------------------------------------------------------------
     local function BriefLine(desc)
       if not config.DISPLAY_FLAG or not config.DISPLAY_BRIEF then return end
-      if DISPLAY_INDENT then
+      if config.DISPLAY_INDENT then
         WriteLine(string.rep(config.DISPLAY_SEP, level - 1)..desc)
       else
         WriteLine(desc)
