@@ -929,13 +929,11 @@ void AddToTable(Function* F, DecTable* tbl, const char* value, const char* key) 
 	AddToList(list, (ListItem*)item);
 }
 
-void SetList(Function* F, int a, int b, int c) {
-	int i;
+int SetList(Function* F, int a, int b, int c) {
+	int i = 1, j;
 	DecTable* tbl = (DecTable*)FindFromListTail(&(F->tables), (ListItemCmpFn)MatchTable, &a);
 	if (tbl == NULL) {
-		sprintf(errortmp, "No list found for R%d , SetList fails", a);
-		SET_ERROR(F, errortmp);
-		return;
+		UnsetPending(F, a);
 	}
 	if (b == 0) {
 		const char* rstr;
@@ -943,20 +941,26 @@ void SetList(Function* F, int a, int b, int c) {
 		while (1) {
 			rstr = GetR(F, a + i);
 			if (error)
-				return;
+				return tbl ? 0 : i;
 			if (strcmp(rstr,".end") == 0)
 				break;
-			AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
+			if (tbl) {
+				AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
+			}
 			i++;
 		};
 	} //should be {...} or func(func()) ,when b == 0, that will use all avaliable reg from R(a)
 
-	for (i = 1; i <= b; i++) {
-		const char* rstr = GetR(F, a + i);
+	for (j = 1; j <= b; j++) {
+		const char* rstr = GetR(F, a + j);
 		if (error)
-			return;
-		AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
+			return tbl ? 0 : i + j - 2;
+		if (tbl) {
+			AddToTable(F, tbl, rstr, NULL); // Lua5.1 specific TODO: it's not really this :(
+		}
 	}
+
+	return tbl ? 0 : i + j - 2;
 }
 
 void UnsetPending(Function* F, int r) {
@@ -3026,7 +3030,31 @@ LOGIC_NEXT_JMP:
 				}
 #endif
 			}
-			TRY(SetList(F, a, b, c));
+
+			const char *astr;
+			const char *cstr;
+			int setlist;
+			/*
+			* first try to add into a list
+			*/
+			TRY(setlist = SetList(F, a, b, c));
+			if (setlist) {
+				/*
+				* if failed, just output an assignment
+				*/
+				for (int i = setlist; i >= 1; i--) {
+					TRY(astr = GetR(F, a));
+					if (isIdentifier(astr)) {
+						StringBuffer_set(str, astr);
+					} else {
+						StringBuffer_printf(str, "(%s)", astr);
+					}
+					StringBuffer_addPrintf(str, "[%d]", (c-1)*50+i); // todo: s/50/LFS_SIZE or w/e
+					PENDING(a+i) = 1;
+					TRY(cstr = GetR(F, a+i));
+					TRY(AssignGlobalOrUpvalue(F, StringBuffer_getRef(str), cstr));
+				}
+			}
 			break;
 		}
 #if LUA_VERSION_NUM == 501
