@@ -11,6 +11,8 @@ LuaDec is free software and uses the same license as the original LuaDec.
 Compiling
 ---------
 ```
+sudo apt install libreadline6-dev
+sudo apt install libncurses5-dev
 git clone https://github.com/viruscamp/luadec
 cd luadec
 git submodule update --init lua-5.1
